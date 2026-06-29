@@ -23,10 +23,13 @@ images, links, and to-dos on an infinite board.
 
 ### Docker
 \`\`\`bash
-git clone https://github.com/you/milaclone
+git clone https://github.com/ellshep/milaclone
 cd milaclone
 docker compose up -d
 \`\`\`
+
+# For local-only access, run with:
+HOST=127.0.0.1 node server.js
 
 Access at http://localhost:4321 or via Tailscale.
 
