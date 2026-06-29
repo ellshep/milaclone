@@ -1,4 +1,4 @@
-# Milaclone (or your new name)
+# Milaclone
 
 A lightweight, self-hosted visual canvas app for organizing notes, 
 images, links, and to-dos on an infinite board.
