@@ -29,7 +29,7 @@ on disk, so it's trivial to back up and fully yours.
 
 ```bash
 npm install
-node server.js
+npm start
 ```
 
 Then open <http://localhost:4321>.
