@@ -5,7 +5,9 @@
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test",
+    "test:e2e": "playwright test"
   },
   "engines": {
     "node": ">=18"
@@ -14,5 +16,8 @@
     "better-sqlite3": "^13.0.1",
     "express": "^4.21.2",
     "multer": "^2.1.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
   }
 }

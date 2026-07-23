@@ -378,7 +378,7 @@ let pan = null;    // active background pan
 function onItemPointerDown(e, it, el) {
   if (e.button !== 0) return;
   if (armed) return;                                          // let the stage place the new item
-  if (e.target.closest('[data-nodrag]')) return;              // let controls work
+  if (e.target.closest('[data-nodrag]')) { e.stopPropagation(); return; } // let controls work, don't let the stage deselect/pan
   if (el.classList.contains('editing') && e.target.closest('[data-edit]')) return; // typing
   e.stopPropagation();
   select(it.id);
