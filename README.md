@@ -1,4 +1,4 @@
-# Milaclone — a self-hosted Milanote-style canvas board
+# Milaclone: a self-hosted Milanote-style canvas board
 
 An infinite visual canvas for notes, to-do lists, links, images, columns, and
 nested boards. Runs as a small Node.js app with **no frontend build step** —
