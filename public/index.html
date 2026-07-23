@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Canvas Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div id="topbar">
+  <div class="dots"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+  <nav id="crumbs"></nav>
+  <div class="top-right">
+    <span class="ghost" id="exportBtn">Export</span>
+    <div class="zoomwrap">
+      <button id="zoomOut" title="Zoom out">−</button>
+      <span class="lvl" id="zoomLvl">100%</span>
+      <button id="zoomIn" title="Zoom in">+</button>
+      <button id="zoomReset" title="Reset view">⤢</button>
+    </div>
+  </div>
+</div>
+
+<aside id="rail">
+  <button class="tool" data-tool="note" title="Note (N)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5h14M5 10h14M5 15h9" stroke-linecap="round"/></svg>
+    Note
+  </button>
+  <button class="tool" data-tool="link" title="Link (L)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9.5 14.5l5-5M8 13l-2 2a3 3 0 104.2 4.2l2-2M16 11l2-2a3 3 0 10-4.2-4.2l-2 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Link
+  </button>
+  <button class="tool" data-tool="todo" title="To-do (T)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6.5l1.6 1.6L8.5 5M4 13l1.6 1.6L8.5 11M4 19.5l1.6 1.6L8.5 18M12 6.5h8M12 13h8M12 19.5h8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    To-do
+  </button>
+  <button class="tool" data-tool="board" title="Board (B)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/></svg>
+    Board
+  </button>
+  <button class="tool" data-tool="column" title="Column (C)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="4" width="14" height="5" rx="1.5"/><rect x="5" y="11" width="14" height="5" rx="1.5"/><rect x="5" y="18" width="14" height="2.5" rx="1.2"/></svg>
+    Column
+  </button>
+  <div class="rail-sep"></div>
+  <button class="tool" data-tool="image" title="Image">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M5 17l4.5-4.5L13 16l3-3 3 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Image
+  </button>
+</aside>
+
+<div id="stage">
+  <div id="world"></div>
+</div>
+
+<div id="hint">
+  <h2>This board is empty</h2>
+  <p>Pick a tool on the left, then click the canvas to add it.</p>
+</div>
+
+<div id="palette"></div>
+<input type="file" id="fileInput" accept="image/*">
+<div class="toast" id="toast"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

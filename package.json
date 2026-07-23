@@ -1,0 +1,17 @@
+{
+  "name": "canvas-board",
+  "version": "1.0.0",
+  "description": "A self-hosted visual board / Milanote-style workspace",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^2.1.1"
+  }
+}
