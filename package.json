@@ -11,6 +11,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.1",
     "express": "^4.21.2",
     "multer": "^2.1.1"
   }
