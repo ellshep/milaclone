@@ -123,6 +123,9 @@ test('Enter renames the selected board and the name persists', async ({ page }) 
   await page.locator('.item.type-board .tile').click();   // select without editing
 
   await page.keyboard.press('Enter');                     // renameSelected -> edit title
+  // focus lands on the title input a frame later (rAF); wait for it before
+  // typing so keystrokes aren't dropped on the way in.
+  await expect(page.locator('.item.type-board .btitle')).toBeFocused();
   const saved = page.waitForResponse(PATCH);
   await page.keyboard.type('Renamed');
   await saved;
