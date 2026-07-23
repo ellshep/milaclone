@@ -3,17 +3,20 @@
 /* =========================================================================
    Canvas Board — front-end engine
    - infinite pan/zoom canvas
-   - cards: note, to-do, link, image, board (nested), column (container)
+   - cards: note, to-do, link, image, file, comment, board, column
    - drag to move, drag into/out of columns, resize, inline edit
+   - context menu: copy/cut/paste/duplicate/rename/trash/lock
    - everything persists to the Node backend
    ========================================================================= */
 
 const COLORS = ['slate','gray','teal','green','brown','yellow','orange','red','pink','purple','blue','indigo'];
 const colorVar = c => `var(--c-${COLORS.includes(c) ? c : 'slate'})`;
 
-const ICONS = {
-  board: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/></svg>'
-};
+const BOARD_ICONS = [
+  'layout-grid', 'book-open', 'monitor', 'clock', 'heart', 'house', 'lightbulb',
+  'palette', 'briefcase', 'sparkles', 'glasses', 'landmark', 'compass', 'camera',
+  'music', 'pen-tool', 'layers', 'folder', 'star', 'zap', 'globe', 'cpu', 'leaf', 'target'
+];
 
 const api = {
   async root() { return (await fetch('/api/root')).json(); },
@@ -26,28 +29,39 @@ const api = {
   async upload(file) { const fd = new FormData(); fd.append('file', file); return (await fetch('/api/upload', { method:'POST', body:fd })).json(); }
 };
 
-// ---- DOM refs ----
 const stage = document.getElementById('stage');
 const world = document.getElementById('world');
 const crumbs = document.getElementById('crumbs');
 const hint = document.getElementById('hint');
 const palette = document.getElementById('palette');
+const ctxmenu = document.getElementById('ctxmenu');
 const fileInput = document.getElementById('fileInput');
+const uploadInput = document.getElementById('uploadInput');
 const zoomLvl = document.getElementById('zoomLvl');
 const toastEl = document.getElementById('toast');
 
-// ---- state ----
 let rootCanvasId = null;
 let view = { canvas: null, items: [], breadcrumb: [] };
 let cam = { x: 80, y: 60, scale: 1 };
-let armed = null;          // tool name awaiting a canvas click
+let armed = null;
 let selectedId = null;
 let editingId = null;
-const elMap = new Map();   // itemId -> root element
+const elMap = new Map();
+let clipboard = null;
+let pendingImageWorld = null;
+let pendingUploadWorld = null;
 
-// ===========================================================================
-// transforms
-// ===========================================================================
+function lucideEl(name) {
+  const i = document.createElement('i');
+  i.setAttribute('data-lucide', name);
+  return i;
+}
+function refreshIcons(root) {
+  if (typeof lucide !== 'undefined' && lucide.createIcons) {
+    lucide.createIcons(root ? { nodes: [root] } : undefined);
+  }
+}
+
 function applyCam() {
   world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.scale})`;
   zoomLvl.textContent = Math.round(cam.scale * 100) + '%';
@@ -63,14 +77,12 @@ function loadCam(id) {
   return { x: 80, y: 60, scale: 1 };
 }
 
-// ===========================================================================
-// load + render a canvas
-// ===========================================================================
 async function openCanvas(id) {
   view = await api.canvas(id);
   if (view.error) { if (id !== rootCanvasId) return openCanvas(rootCanvasId); toast('Board not found'); return; }
   cam = loadCam(id);
   selectedId = null; editingId = null;
+  closeCtx();
   renderCrumbs();
   render();
   applyCam();
@@ -106,11 +118,9 @@ function render() {
     elMap.set(it.id, el);
   }
   hint.style.display = view.items.length ? 'none' : 'block';
+  refreshIcons(world);
 }
 
-// ===========================================================================
-// item element factory
-// ===========================================================================
 function makeField(tag, cls, value, placeholder) {
   const f = document.createElement(tag === 'area' ? 'textarea' : 'input');
   if (tag === 'area') f.rows = 1;
@@ -121,12 +131,14 @@ function makeField(tag, cls, value, placeholder) {
   return f;
 }
 function autoGrow(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
+function isLocked(it) { return !!(it.data && it.data.locked); }
 
 function renderItem(it) {
   const el = document.createElement('div');
   el.className = 'item type-' + it.type;
   el.dataset.id = it.id;
   if (it.id === selectedId) el.classList.add('selected');
+  if (isLocked(it)) el.classList.add('locked');
   if (!it.parentItemId) {
     el.style.left = it.x + 'px'; el.style.top = it.y + 'px';
     el.style.width = (it.w || 240) + 'px';
@@ -139,10 +151,11 @@ function renderItem(it) {
   else if (it.type === 'todo') buildTodo(el, it);
   else if (it.type === 'link') buildLink(el, it);
   else if (it.type === 'image') buildImage(el, it);
+  else if (it.type === 'file') buildFile(el, it);
+  else if (it.type === 'comment') buildComment(el, it);
   else if (it.type === 'board') buildBoard(el, it);
   else if (it.type === 'column') buildColumn(el, it);
 
-  // selection toolbar
   const tools = document.createElement('div');
   tools.className = 'card-tools';
   const colorBtn = document.createElement('div');
@@ -153,20 +166,27 @@ function renderItem(it) {
   colorBtn.onclick = (e) => { e.stopPropagation(); openPalette(it, colorBtn); };
   const delBtn = document.createElement('button');
   delBtn.setAttribute('data-nodrag', '');
-  delBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  delBtn.appendChild(lucideEl('trash-2'));
   delBtn.title = 'Delete';
   delBtn.onclick = (e) => { e.stopPropagation(); deleteItem(it.id); };
   tools.appendChild(colorBtn); tools.appendChild(delBtn);
+  if (isLocked(it)) {
+    const lockBadge = document.createElement('span');
+    lockBadge.className = 'lock-badge';
+    lockBadge.appendChild(lucideEl('lock'));
+    lockBadge.title = 'Position locked';
+    tools.appendChild(lockBadge);
+  }
   el.appendChild(tools);
 
-  // resize handle (not for board / column-children)
-  if (it.type !== 'board' && !it.parentItemId) {
+  if (it.type !== 'board' && !it.parentItemId && !isLocked(it)) {
     const rz = document.createElement('div'); rz.className = 'resize'; rz.setAttribute('data-nodrag', '');
     rz.addEventListener('pointerdown', (e) => startResize(e, it, el));
     el.appendChild(rz);
   }
 
   el.addEventListener('pointerdown', (e) => onItemPointerDown(e, it, el));
+  el.addEventListener('contextmenu', (e) => openCtx(e, it));
   return el;
 }
 
@@ -179,6 +199,18 @@ function buildNote(el, it) {
   b.addEventListener('input', () => saveData(it, { body: b.value }));
   el.appendChild(t); el.appendChild(b);
   requestAnimationFrame(() => { autoGrow(t); autoGrow(b); });
+}
+
+function buildComment(el, it) {
+  el.classList.add('comment');
+  const mark = document.createElement('div');
+  mark.className = 'cmark';
+  mark.appendChild(lucideEl('message-circle'));
+  el.appendChild(mark);
+  const b = makeField('area', 'cbody', it.data.body, 'Add a comment…');
+  b.addEventListener('input', () => saveData(it, { body: b.value }));
+  el.appendChild(b);
+  requestAnimationFrame(() => autoGrow(b));
 }
 
 function buildTodo(el, it) {
@@ -210,7 +242,7 @@ function buildTodo(el, it) {
   };
   renderTasks();
   const add = document.createElement('button'); add.className = 'add'; add.setAttribute('data-nodrag', '');
-  add.innerHTML = '<span style="font-size:16px;line-height:0">+</span> Add item';
+  add.textContent = '+ Add item';
   add.onclick = (e) => { e.stopPropagation(); tasks.push({ id: rid(), text: '', done: false }); saveData(it, { tasks }); renderTasks(); enterEdit(el); const f = list.querySelectorAll('.txt'); f[f.length - 1].focus(); };
   el.appendChild(add);
 }
@@ -235,11 +267,24 @@ function buildImage(el, it) {
   el.appendChild(img);
 }
 
+function buildFile(el, it) {
+  el.classList.add('file');
+  const icon = document.createElement('div'); icon.className = 'ficon';
+  icon.appendChild(lucideEl('file-text'));
+  const name = document.createElement('div'); name.className = 'fname';
+  name.textContent = it.data.name || 'File';
+  name.title = it.data.name || '';
+  const open = document.createElement('a'); open.className = 'fopen'; open.setAttribute('data-nodrag', '');
+  open.href = it.data.src || '#'; open.target = '_blank'; open.rel = 'noopener'; open.download = it.data.name || '';
+  open.textContent = 'Open ↗';
+  el.appendChild(icon); el.appendChild(name); el.appendChild(open);
+}
+
 function buildBoard(el, it) {
   el.classList.add('board');
   const tile = document.createElement('div'); tile.className = 'tile';
   tile.style.background = colorVar(it.color || it._childColor || 'slate');
-  tile.innerHTML = ICONS.board;
+  tile.appendChild(lucideEl(it._childIcon || 'layout-grid'));
   el.appendChild(tile);
   const title = makeField('input', 'btitle', it._childTitle || 'Untitled board', 'Board name');
   title.setAttribute('data-nodrag', '');
@@ -273,9 +318,6 @@ function buildColumn(el, it) {
   for (const k of kids) { const ke = renderItem(k); body.appendChild(ke); elMap.set(k.id, ke); }
 }
 
-// ===========================================================================
-// editing
-// ===========================================================================
 function enterEdit(el) {
   if (editingId && editingId !== el.dataset.id) exitEdit();
   editingId = el.dataset.id;
@@ -288,10 +330,15 @@ function exitEdit() {
   if (el) { el.classList.remove('editing'); el.querySelectorAll('[data-edit]').forEach(f => { f.readOnly = true; f.tabIndex = -1; f.blur(); }); }
   editingId = null;
 }
+function renameSelected() {
+  if (!selectedId) return;
+  const el = elMap.get(selectedId);
+  if (!el || !el.querySelector('[data-edit]')) return;
+  enterEdit(el);
+  const f = el.querySelector('[data-edit]');
+  requestAnimationFrame(() => { f?.focus(); if (f && f.select) f.select(); });
+}
 
-// ===========================================================================
-// selection + palette
-// ===========================================================================
 function select(id) {
   if (selectedId === id) return;
   if (editingId && editingId !== id) exitEdit();
@@ -299,23 +346,49 @@ function select(id) {
   selectedId = id;
   if (id && elMap.get(id)) elMap.get(id).classList.add('selected');
   closePalette();
+  closeCtx();
 }
 function deselect() { select(null); if (editingId) exitEdit(); }
 
 function openPalette(it, anchor) {
   palette.innerHTML = '';
+  palette.className = it.type === 'board' ? 'open board-palette' : 'open';
+
   COLORS.forEach(c => {
     const sw = document.createElement('div'); sw.className = 'sw' + ((it.color || it._childColor) === c ? ' sel' : '');
     sw.style.background = colorVar(c);
     sw.onclick = () => { it.color = c; if (it.type === 'board') it._childColor = c; api.patch(it.id, { color: c }); refreshItem(it); closePalette(); };
     palette.appendChild(sw);
   });
+
+  if (it.type === 'board') {
+    const sep = document.createElement('div'); sep.className = 'pal-sep'; palette.appendChild(sep);
+    const grid = document.createElement('div'); grid.className = 'icon-grid';
+    const current = it._childIcon || 'layout-grid';
+    BOARD_ICONS.forEach(name => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'icon-pick' + (name === current ? ' sel' : '');
+      btn.title = name;
+      btn.appendChild(lucideEl(name));
+      btn.onclick = () => {
+        it._childIcon = name;
+        api.patch(it.id, { data: { icon: name } });
+        refreshItem(it);
+        closePalette();
+      };
+      grid.appendChild(btn);
+    });
+    palette.appendChild(grid);
+  }
+
   const r = anchor.getBoundingClientRect();
-  palette.style.left = Math.min(r.left, window.innerWidth - 210) + 'px';
+  const w = it.type === 'board' ? 280 : 210;
+  palette.style.left = Math.min(r.left, window.innerWidth - w) + 'px';
   palette.style.top = (r.bottom + 8) + 'px';
-  palette.classList.add('open');
+  refreshIcons(palette);
 }
-function closePalette() { palette.classList.remove('open'); }
+function closePalette() { palette.classList.remove('open', 'board-palette'); palette.innerHTML = ''; }
 
 function refreshItem(it) {
   const old = elMap.get(it.id);
@@ -323,15 +396,136 @@ function refreshItem(it) {
   const fresh = renderItem(it);
   old.replaceWith(fresh);
   elMap.set(it.id, fresh);
+  refreshIcons(fresh);
+  if (it.type === 'column') {
+    for (const k of childrenOf(it.id)) {
+      const ke = fresh.querySelector(`[data-id="${k.id}"]`);
+      if (ke) elMap.set(k.id, ke);
+    }
+  }
 }
 
-// ===========================================================================
-// persistence helpers
-// ===========================================================================
+function clonePayload(it) {
+  return {
+    type: it.type,
+    w: it.w,
+    h: it.h,
+    color: it.color,
+    data: JSON.parse(JSON.stringify(it.data || {})),
+    _childTitle: it._childTitle,
+    _childIcon: it._childIcon,
+    _childColor: it._childColor
+  };
+}
+
+function copySelected(cut) {
+  if (!selectedId) return;
+  const it = view.items.find(x => x.id === selectedId);
+  if (!it) return;
+  clipboard = { items: [clonePayload(it)], cut: !!cut, cutIds: cut ? [it.id] : [] };
+  toast(cut ? 'Cut' : 'Copied');
+  closeCtx();
+}
+
+async function pasteClipboard(wx, wy) {
+  if (!clipboard || !clipboard.items.length) return;
+  const base = clipboard.items[0];
+  const sel = selectedId ? view.items.find(i => i.id === selectedId) : null;
+  const x = Math.round(wx != null ? wx : ((sel && sel.x) || 80) + 24);
+  const y = Math.round(wy != null ? wy : ((sel && sel.y) || 80) + 24);
+  const data = Object.assign({}, base.data);
+  delete data.locked;
+  if (base.type === 'board') {
+    data.title = (base._childTitle || 'Untitled board') + ' copy';
+    if (base._childIcon) data.icon = base._childIcon;
+    delete data.childCanvasId;
+  }
+  const body = {
+    canvasId: view.canvas.id,
+    type: base.type,
+    x, y,
+    w: base.w || defaultsFor(base.type).w,
+    color: base.color || base._childColor || null,
+    data
+  };
+  const it = await api.create(body);
+  if (clipboard.cut && clipboard.cutIds.length) {
+    for (const id of clipboard.cutIds) await api.remove(id);
+    view.items = view.items.filter(x => !clipboard.cutIds.includes(x.id) && !clipboard.cutIds.includes(x.parentItemId));
+    clipboard = null;
+  }
+  view.items.push(it);
+  render();
+  select(it.id);
+  toast('Pasted');
+  closeCtx();
+}
+
+async function duplicateSelected() {
+  if (!selectedId) return;
+  const it = view.items.find(x => x.id === selectedId);
+  if (!it) return;
+  clipboard = { items: [clonePayload(it)], cut: false, cutIds: [] };
+  await pasteClipboard((it.x || 0) + 28, (it.y || 0) + 28);
+}
+
+async function toggleLock() {
+  if (!selectedId) return;
+  const it = view.items.find(x => x.id === selectedId);
+  if (!it) return;
+  const locked = !isLocked(it);
+  it.data = Object.assign({}, it.data, { locked });
+  await api.patch(it.id, { data: { locked } });
+  refreshItem(it);
+  toast(locked ? 'Position locked' : 'Position unlocked');
+  closeCtx();
+}
+
+function openCtx(e, it) {
+  e.preventDefault();
+  e.stopPropagation();
+  select(it.id);
+  const locked = isLocked(it);
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+  const mod = mac ? '\u2318' : 'Ctrl+';
+  const rows = [
+    { label: 'Cut', hint: mod + 'X', fn: () => copySelected(true) },
+    { label: 'Copy', hint: mod + 'C', fn: () => copySelected(false) },
+    { label: 'Paste', hint: mod + 'V', fn: () => pasteClipboard(), disabled: !clipboard },
+    { label: 'Duplicate', hint: mod + 'D', fn: () => duplicateSelected() },
+    { sep: true },
+    { label: 'Rename', hint: 'Return', fn: () => renameSelected() },
+    { label: locked ? 'Unlock Position' : 'Lock Position', fn: () => toggleLock() },
+    { sep: true },
+    { label: 'Move to Trash', hint: 'Delete', danger: true, fn: () => deleteItem(it.id) }
+  ];
+  ctxmenu.innerHTML = '';
+  rows.forEach(r => {
+    if (r.sep) { const s = document.createElement('div'); s.className = 'ctx-sep'; ctxmenu.appendChild(s); return; }
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ctx-item' + (r.danger ? ' danger' : '');
+    if (r.disabled) b.disabled = true;
+    const lab = document.createElement('span'); lab.textContent = r.label; b.appendChild(lab);
+    if (r.hint) { const k = document.createElement('kbd'); k.textContent = r.hint; b.appendChild(k); }
+    b.onclick = () => r.fn();
+    ctxmenu.appendChild(b);
+  });
+  ctxmenu.classList.add('open');
+  const mw = 220, mh = ctxmenu.offsetHeight || 280;
+  let left = e.clientX, top = e.clientY;
+  if (left + mw > window.innerWidth) left = window.innerWidth - mw - 8;
+  if (top + mh > window.innerHeight) top = window.innerHeight - mh - 8;
+  ctxmenu.style.left = left + 'px';
+  ctxmenu.style.top = top + 'px';
+}
+function closeCtx() { ctxmenu.classList.remove('open'); ctxmenu.innerHTML = ''; }
+
 const saveTimers = new Map();
 function saveData(it, patch) {
   Object.assign(it.data, patch);
   if (it.type === 'board' && patch.title != null) it._childTitle = patch.title;
+  if (it.type === 'board' && patch.icon != null) it._childIcon = patch.icon;
   clearTimeout(saveTimers.get(it.id));
   saveTimers.set(it.id, setTimeout(() => {
     api.patch(it.id, { data: patch });
@@ -342,20 +536,20 @@ async function deleteItem(id) {
   await api.remove(id);
   view.items = view.items.filter(x => x.parentItemId !== id && x.id !== id);
   if (selectedId === id) selectedId = null;
+  closeCtx();
   render();
 }
 
-// ===========================================================================
-// item creation
-// ===========================================================================
 function defaultsFor(type) {
   switch (type) {
-    case 'note':   return { w: 240, data: { title: '', body: '' } };
-    case 'todo':   return { w: 240, data: { title: 'To-do', tasks: [{ id: rid(), text: '', done: false }] } };
-    case 'link':   return { w: 240, color: 'blue', data: { url: '', title: '' } };
-    case 'column': return { w: 252, data: { title: 'Column' } };
-    case 'board':  return { w: 152, data: { title: 'Untitled board' } };
-    default:       return { w: 240, data: {} };
+    case 'note':    return { w: 240, data: { title: '', body: '' } };
+    case 'todo':    return { w: 240, data: { title: 'To-do', tasks: [{ id: rid(), text: '', done: false }] } };
+    case 'link':    return { w: 240, color: 'blue', data: { url: '', title: '' } };
+    case 'column':  return { w: 252, data: { title: 'Column' } };
+    case 'board':   return { w: 152, data: { title: 'Untitled board' } };
+    case 'comment': return { w: 220, data: { body: '' } };
+    case 'file':    return { w: 220, data: {} };
+    default:        return { w: 240, data: {} };
   }
 }
 async function createAt(type, wx, wy) {
@@ -365,32 +559,29 @@ async function createAt(type, wx, wy) {
   view.items.push(it);
   render();
   select(it.id);
-  if (type !== 'board' && type !== 'image') { const el = elMap.get(it.id); enterEdit(el); el.querySelector('[data-edit]')?.focus(); }
+  if (type !== 'board' && type !== 'image' && type !== 'file') {
+    const el = elMap.get(it.id); enterEdit(el); el.querySelector('[data-edit]')?.focus();
+  }
   hint.style.display = 'none';
 }
 
-// ===========================================================================
-// pointer interactions: pan, drag, resize
-// ===========================================================================
-let drag = null;   // active item drag
-let pan = null;    // active background pan
+let drag = null;
+let pan = null;
 
 function onItemPointerDown(e, it, el) {
   if (e.button !== 0) return;
-  if (armed) return;                                          // let the stage place the new item
-  if (e.target.closest('[data-nodrag]')) { e.stopPropagation(); return; } // let controls work, don't let the stage deselect/pan
-  if (el.classList.contains('editing') && e.target.closest('[data-edit]')) return; // typing
+  if (armed) return;
+  if (e.target.closest('[data-nodrag]')) { e.stopPropagation(); return; }
+  if (el.classList.contains('editing') && e.target.closest('[data-edit]')) return;
   e.stopPropagation();
   select(it.id);
+  if (isLocked(it)) return;
 
   const start = { sx: e.clientX, sy: e.clientY };
   const fromColumn = !!it.parentItemId;
   let moved = false;
-
-  // figure out current world position of the element (handles column children too)
   const rect = el.getBoundingClientRect();
   const startWorld = screenToWorld(rect.left, rect.top);
-
   drag = { it, el, start, startWorld, fromColumn, moved: false, dropCol: null };
   el.setPointerCapture(e.pointerId);
 
@@ -400,7 +591,6 @@ function onItemPointerDown(e, it, el) {
     if (!moved) {
       moved = true; drag.moved = true;
       el.classList.add('dragging');
-      // pop a column child out into the world so it can float
       if (fromColumn) {
         world.appendChild(el);
         el.classList.remove('in-column');
@@ -411,7 +601,6 @@ function onItemPointerDown(e, it, el) {
     const wx = startWorld.x + dx / cam.scale;
     const wy = startWorld.y + dy / cam.scale;
     el.style.left = wx + 'px'; el.style.top = wy + 'px';
-    // detect column drop targets under pointer
     highlightColumn(ev, it);
   };
 
@@ -420,7 +609,7 @@ function onItemPointerDown(e, it, el) {
     document.removeEventListener('pointermove', move);
     document.removeEventListener('pointerup', up);
     el.classList.remove('dragging');
-    if (!moved) {                       // it was a click → maybe enter edit
+    if (!moved) {
       if (it.type !== 'board') maybeEdit(el, ev);
       drag = null; return;
     }
@@ -431,7 +620,6 @@ function onItemPointerDown(e, it, el) {
 }
 
 function maybeEdit(el, ev) {
-  // a second click on an already-selected non-board card opens editing
   if (!el.querySelector('[data-edit]')) return;
   if (!el.classList.contains('editing')) {
     enterEdit(el);
@@ -451,7 +639,7 @@ function columnBodyUnder(clientX, clientY, excludeId) {
 }
 function highlightColumn(ev, it) {
   world.querySelectorAll('.column.drop-target').forEach(c => c.classList.remove('drop-target'));
-  if (it.type === 'column') { drag.dropCol = null; return; } // columns can't nest in columns
+  if (it.type === 'column') { drag.dropCol = null; return; }
   const body = columnBodyUnder(ev.clientX, ev.clientY, it.id);
   drag.dropCol = body ? body.dataset.colbody : null;
   if (body) body.closest('.column').classList.add('drop-target');
@@ -460,27 +648,22 @@ function highlightColumn(ev, it) {
 async function finishDrag(ev) {
   const { it, el } = drag;
   world.querySelectorAll('.column.drop-target').forEach(c => c.classList.remove('drop-target'));
-
   if (drag.dropCol) {
-    // dropping into a column
-    const kids = childrenOf(drag.dropCol).filter(k => k.id !== it.id);
     const order = insertOrder(drag.dropCol, ev.clientY, it.id);
     it.parentItemId = drag.dropCol;
     it.y = order;
-    // renumber siblings
     const sibs = view.items.filter(k => k.parentItemId === drag.dropCol).sort((a, b) => a.y - b.y);
     sibs.forEach((s, i) => s.y = i);
     await api.patch(it.id, { parentItemId: it.parentItemId, canvasId: view.canvas.id });
     await api.patchMany(sibs.map(s => ({ id: s.id, y: s.y })));
     render();
   } else {
-    // free placement
     const wx = Math.round(parseFloat(el.style.left));
     const wy = Math.round(parseFloat(el.style.top));
     const wasChild = drag.fromColumn;
     it.x = wx; it.y = wy; it.parentItemId = null;
     await api.patch(it.id, { x: wx, y: wy, parentItemId: null });
-    if (wasChild) render();   // reflow the column it left
+    if (wasChild) render();
   }
   drag = null;
 }
@@ -493,7 +676,6 @@ function insertOrder(colId, clientY, selfId) {
   return rows.length;
 }
 
-// resize (width; images keep aspect)
 function startResize(e, it, el) {
   e.preventDefault(); e.stopPropagation();
   const startX = e.clientX, startW = it.w || el.offsetWidth;
@@ -513,20 +695,16 @@ function startResize(e, it, el) {
   document.addEventListener('pointerup', up);
 }
 
-// ===========================================================================
-// stage: pan / zoom / placement / deselect
-// ===========================================================================
 stage.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 && e.button !== 1) return;
-  // placement of an armed tool
   if (armed) {
     const w = screenToWorld(e.clientX, e.clientY);
     const t = armed; disarm();
     if (t === 'image') { pendingImageWorld = w; fileInput.click(); }
+    else if (t === 'upload') { pendingUploadWorld = w; uploadInput.click(); }
     else createAt(t, w.x - defaultsFor(t).w / 2, w.y - 20);
     return;
   }
-  // begin panning
   deselect();
   pan = { sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y };
   stage.classList.add('panning');
@@ -563,9 +741,6 @@ document.getElementById('zoomOut').onclick = () => zoomBy(1 / 1.2);
 document.getElementById('zoomReset').onclick = () => { cam = { x: 80, y: 60, scale: 1 }; applyCam(); };
 document.getElementById('exportBtn').onclick = () => toast('Tip: your boards auto-save to the server');
 
-// ===========================================================================
-// toolbar
-// ===========================================================================
 document.querySelectorAll('.tool').forEach(btn => {
   btn.addEventListener('click', () => {
     const t = btn.dataset.tool;
@@ -584,8 +759,6 @@ function disarm() {
   document.querySelectorAll('.tool.armed').forEach(b => b.classList.remove('armed'));
 }
 
-// image upload
-let pendingImageWorld = null;
 fileInput.addEventListener('change', async () => {
   const file = fileInput.files[0]; fileInput.value = '';
   if (!file) return;
@@ -602,38 +775,56 @@ fileInput.addEventListener('change', async () => {
   view.items.push(it); render(); select(it.id); toast('Image added');
   pendingImageWorld = null;
 });
+
+uploadInput.addEventListener('change', async () => {
+  const file = uploadInput.files[0]; uploadInput.value = '';
+  if (!file) return;
+  toast('Uploading file…');
+  const res = await api.upload(file);
+  if (res.error) { toast('Upload failed'); return; }
+  const w = pendingUploadWorld || screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
+  const it = await api.create({
+    canvasId: view.canvas.id, type: 'file',
+    x: Math.round(w.x - 110), y: Math.round(w.y - 40), w: 220,
+    data: { src: res.src, name: res.name, mime: res.mime || file.type }
+  });
+  view.items.push(it); render(); select(it.id); toast('File added');
+  pendingUploadWorld = null;
+});
+
 function imageSize(src) { return new Promise(r => { const i = new Image(); i.onload = () => r({ w: i.naturalWidth, h: i.naturalHeight }); i.onerror = () => r({ w: 1, h: 1 }); i.src = src; }); }
 
-// ===========================================================================
-// keyboard
-// ===========================================================================
 document.addEventListener('keydown', (e) => {
   const typing = document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName) && !document.activeElement.readOnly;
-  if (e.key === 'Escape') { disarm(); deselect(); closePalette(); }
+  if (e.key === 'Escape') { disarm(); deselect(); closePalette(); closeCtx(); }
   if (typing) return;
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && e.key.toLowerCase() === 'c') { e.preventDefault(); copySelected(false); return; }
+  if (mod && e.key.toLowerCase() === 'x') { e.preventDefault(); copySelected(true); return; }
+  if (mod && e.key.toLowerCase() === 'v') { e.preventDefault(); pasteClipboard(); return; }
+  if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(); return; }
+  if (e.key === 'Enter' && selectedId && !mod) { e.preventDefault(); renameSelected(); return; }
   if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) { e.preventDefault(); deleteItem(selectedId); }
-  const map = { n: 'note', l: 'link', t: 'todo', b: 'board', c: 'column' };
-  if (map[e.key.toLowerCase()]) {
+  const map = { n: 'note', l: 'link', t: 'todo', b: 'board', c: 'column', m: 'comment' };
+  if (map[e.key.toLowerCase()] && !mod) {
     const btn = document.querySelector(`.tool[data-tool="${map[e.key.toLowerCase()]}"]`);
     if (btn) arm(map[e.key.toLowerCase()], btn);
   }
 });
 
-// click anywhere outside cards/palette closes palette + edit
 document.addEventListener('pointerdown', (e) => {
   if (!e.target.closest('#palette') && !e.target.closest('.swatch')) closePalette();
+  if (!e.target.closest('#ctxmenu') && !e.target.closest('.item')) closeCtx();
   if (editingId && !e.target.closest('.item')) exitEdit();
 }, true);
 
-// ===========================================================================
-// utils + boot
-// ===========================================================================
 function rid() { return Math.random().toString(36).slice(2, 10); }
 function normalizeUrl(u) { if (!u) return '#'; return /^https?:\/\//.test(u) ? u : 'https://' + u; }
 let toastTimer;
 function toast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200); }
 
 (async function boot() {
+  refreshIcons();
   const r = await api.root();
   rootCanvasId = r.rootCanvasId;
   const startId = location.hash.slice(1) || rootCanvasId;

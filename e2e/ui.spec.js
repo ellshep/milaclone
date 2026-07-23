@@ -145,3 +145,52 @@ test('drag a note into a column', async ({ page }) => {
 
   await expect(page.locator('.col-body .item.type-note')).toHaveCount(1);
 });
+
+test('comment and upload tools exist on the rail', async ({ page }) => {
+  await freshCanvas(page);
+  await expect(page.locator('.tool[data-tool="comment"]')).toBeVisible();
+  await expect(page.locator('.tool[data-tool="image"]')).toBeVisible();
+  await expect(page.locator('.tool[data-tool="upload"]')).toBeVisible();
+});
+
+test('place a comment via the toolbar', async ({ page }) => {
+  await freshCanvas(page);
+  await place(page, 'comment');
+  await expect(page.locator('.item.type-comment')).toHaveCount(1);
+});
+
+test('board tile has a lucide icon', async ({ page }) => {
+  await freshCanvas(page);
+  await place(page, 'board');
+  const tile = page.locator('.item.type-board .tile');
+  await expect(tile.locator('svg')).toHaveCount(1);
+});
+
+test('context menu duplicates a note', async ({ page }) => {
+  await freshCanvas(page);
+  await place(page, 'note');
+  await leaveEdit(page);
+  const note = page.locator('.item.type-note');
+  await note.click({ button: 'right' });
+  await expect(page.locator('#ctxmenu.open')).toBeVisible();
+  await page.locator('#ctxmenu .ctx-item', { hasText: 'Duplicate' }).click();
+  await expect(page.locator('.item.type-note')).toHaveCount(2);
+});
+
+test('lock position blocks drag', async ({ page }) => {
+  await freshCanvas(page);
+  await place(page, 'note');
+  await leaveEdit(page);
+  const note = page.locator('.item.type-note');
+  await note.click({ button: 'right' });
+  await page.locator('#ctxmenu .ctx-item', { hasText: 'Lock Position' }).click();
+  await expect(note).toHaveClass(/locked/);
+  const before = await note.boundingBox();
+  await page.mouse.move(before.x + before.width / 2, before.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(before.x + 120, before.y + 80, { steps: 8 });
+  await page.mouse.up();
+  const after = await note.boundingBox();
+  expect(Math.abs(after.x - before.x)).toBeLessThan(4);
+  expect(Math.abs(after.y - before.y)).toBeLessThan(4);
+});

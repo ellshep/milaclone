@@ -13,6 +13,26 @@ const {
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+const BOARD_ICONS = [
+  'layout-grid', 'book-open', 'monitor', 'clock', 'heart', 'house', 'lightbulb',
+  'palette', 'briefcase', 'sparkles', 'glasses', 'landmark', 'compass', 'camera',
+  'music', 'pen-tool', 'layers', 'folder', 'star', 'zap', 'globe', 'cpu', 'leaf', 'target'
+];
+const randomBoardIcon = () => BOARD_ICONS[Math.floor(Math.random() * BOARD_ICONS.length)];
+
+const ALLOWED_UPLOAD = (mime) =>
+  /^image\//.test(mime) ||
+  /^text\//.test(mime) ||
+  mime === 'application/pdf' ||
+  mime === 'application/msword' ||
+  mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+  mime === 'application/vnd.ms-excel' ||
+  mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+  mime === 'application/vnd.ms-powerpoint' ||
+  mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+  mime === 'application/zip' ||
+  mime === 'application/json';
+
 const router = express.Router();
 
 const storage = multer.diskStorage({
@@ -25,7 +45,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => cb(null, /^image\//.test(file.mimetype))
+  fileFilter: (req, file, cb) => cb(null, ALLOWED_UPLOAD(file.mimetype))
 });
 
 // ---- Canvas ----------------------------------------------------------------
@@ -38,7 +58,12 @@ router.get('/api/canvas/:id', (req, res) => {
     if (it.type === 'board' && it.data && it.data.childCanvasId) {
       const child = stmt.getCanvas.get(it.data.childCanvasId);
       const count = stmt.childCount.get(it.data.childCanvasId).c;
-      return Object.assign({}, it, { _childTitle: child ? child.title : 'Board', _childCount: count, _childColor: child ? child.color : 'slate' });
+      return Object.assign({}, it, {
+        _childTitle: child ? child.title : 'Board',
+        _childCount: count,
+        _childColor: child ? child.color : 'slate',
+        _childIcon: child ? (child.icon || 'layout-grid') : 'layout-grid'
+      });
     }
     return it;
   });
@@ -48,9 +73,10 @@ router.get('/api/canvas/:id', (req, res) => {
 router.patch('/api/canvas/:id', (req, res) => {
   const canvas = stmt.getCanvas.get(req.params.id);
   if (!canvas) return res.status(404).json({ error: 'not found' });
-  const { title, color } = req.body || {};
+  const { title, color, icon } = req.body || {};
   if (typeof title === 'string') canvas.title = title.slice(0, 200);
   if (typeof color === 'string') canvas.color = color;
+  if (typeof icon === 'string') canvas.icon = icon;
   stmt.updateCanvas.run(canvas);
   res.json(canvas);
 });
@@ -79,17 +105,29 @@ router.post('/api/item', (req, res) => {
     // A board item owns a freshly created child canvas.
     if (item.type === 'board') {
       const childId = id('c_');
+      const icon = (item.data && item.data.icon) || randomBoardIcon();
       stmt.insertCanvas.run({
         id: childId,
         title: item.data.title || 'Untitled board',
         parentCanvasId: item.canvasId,
         color: item.color || 'slate',
+        icon,
         createdAt: Date.now()
       });
       item.data = { childCanvasId: childId };
     }
     stmt.insertItem.run(Object.assign({}, item, { data: JSON.stringify(item.data) }));
   })();
+
+  if (item.type === 'board' && item.data.childCanvasId) {
+    const child = stmt.getCanvas.get(item.data.childCanvasId);
+    Object.assign(item, {
+      _childTitle: child ? child.title : 'Board',
+      _childCount: 0,
+      _childColor: child ? child.color : 'slate',
+      _childIcon: child ? (child.icon || 'layout-grid') : 'layout-grid'
+    });
+  }
 
   res.json(item);
 });
@@ -113,12 +151,17 @@ router.patch('/api/item/:id', (req, res) => {
       const c = stmt.getCanvas.get(it.data.childCanvasId);
       if (c) { c.color = b.color; stmt.updateCanvas.run(c); }
     }
-    // keep nested board canvas title in sync with the card label
-    if (isBoard && b.data && b.data.title != null) {
+    // keep nested board canvas title/icon in sync with the card
+    if (isBoard && b.data && (b.data.title != null || b.data.icon != null)) {
       const c = stmt.getCanvas.get(it.data.childCanvasId);
-      if (c) { c.title = String(b.data.title).slice(0, 200); stmt.updateCanvas.run(c); }
-      // store title only on the canvas; card reads it from there
+      if (c) {
+        if (b.data.title != null) c.title = String(b.data.title).slice(0, 200);
+        if (b.data.icon != null) c.icon = String(b.data.icon);
+        stmt.updateCanvas.run(c);
+      }
+      // store title/icon only on the canvas; card reads them from there
       delete it.data.title;
+      delete it.data.icon;
     }
     stmt.updateItem.run({
       id: it.id,
@@ -164,8 +207,12 @@ router.delete('/api/item/:id', (req, res) => {
 
 // ---- Upload ----------------------------------------------------------------
 router.post('/api/upload', upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'no image' });
-  res.json({ src: '/uploads/' + req.file.filename, name: req.file.originalname });
+  if (!req.file) return res.status(400).json({ error: 'no file' });
+  res.json({
+    src: '/uploads/' + req.file.filename,
+    name: req.file.originalname,
+    mime: req.file.mimetype
+  });
 });
 
 router.get('/api/health', (req, res) => res.json({ ok: true }));

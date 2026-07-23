@@ -46,10 +46,18 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="4" width="14" height="5" rx="1.5"/><rect x="5" y="11" width="14" height="5" rx="1.5"/><rect x="5" y="18" width="14" height="2.5" rx="1.2"/></svg>
     Column
   </button>
+  <button class="tool" data-tool="comment" title="Comment (M)">
+    <i data-lucide="message-circle"></i>
+    Comment
+  </button>
   <div class="rail-sep"></div>
   <button class="tool" data-tool="image" title="Image">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M5 17l4.5-4.5L13 16l3-3 3 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     Image
+  </button>
+  <button class="tool" data-tool="upload" title="Upload">
+    <i data-lucide="upload"></i>
+    Upload
   </button>
 </aside>
 
@@ -63,9 +71,12 @@
 </div>
 
 <div id="palette"></div>
+<div id="ctxmenu" role="menu"></div>
 <input type="file" id="fileInput" accept="image/*">
+<input type="file" id="uploadInput" accept=".pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.json,text/*,application/pdf">
 <div class="toast" id="toast"></div>
 
+<script src="https://unpkg.com/lucide@0.469.0"></script>
 <script src="/app.js"></script>
 </body>
 </html>

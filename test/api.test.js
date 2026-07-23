@@ -86,12 +86,41 @@ test('board item creates + syncs a child canvas', async () => {
   assert.equal(card._childTitle, 'Sprint');
   assert.equal(card._childCount, 0);
   assert.equal(card._childColor, 'green');
+  assert.ok(card._childIcon, 'board gets a default Lucide icon');
 
-  // renaming/recoloring the card writes through to the child canvas
-  await send('PATCH', '/api/item/' + board.id, { color: 'red', data: { title: 'Renamed' } });
+  // renaming/recoloring/icon the card writes through to the child canvas
+  await send('PATCH', '/api/item/' + board.id, { color: 'red', data: { title: 'Renamed', icon: 'heart' } });
   const child = (await get('/api/canvas/' + childId)).body.canvas;
   assert.equal(child.title, 'Renamed');
   assert.equal(child.color, 'red');
+  assert.equal(child.icon, 'heart');
+  const view2 = (await get('/api/canvas/' + canvasId)).body;
+  assert.equal(view2.items.find(i => i.id === board.id)._childIcon, 'heart');
+});
+
+test('create comment and file items', async () => {
+  const canvasId = await root();
+  const comment = (await send('POST', '/api/item', { canvasId, type: 'comment', data: { body: 'hi' } })).body;
+  assert.equal(comment.type, 'comment');
+  assert.equal(comment.data.body, 'hi');
+  const file = (await send('POST', '/api/item', {
+    canvasId, type: 'file', data: { src: '/uploads/x.pdf', name: 'x.pdf', mime: 'application/pdf' }
+  })).body;
+  assert.equal(file.type, 'file');
+  assert.equal(file.data.name, 'x.pdf');
+});
+
+test('upload accepts pdf', async () => {
+  const canvasId = await root();
+  void canvasId;
+  const fd = new FormData();
+  fd.append('file', new Blob(['%PDF-1.4'], { type: 'application/pdf' }), 'doc.pdf');
+  const r = await fetch(base + '/api/upload', { method: 'POST', body: fd });
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  assert.match(body.src, /^\/uploads\//);
+  assert.equal(body.name, 'doc.pdf');
+  assert.equal(body.mime, 'application/pdf');
 });
 
 test('patch canvas clamps title, sets color', async () => {

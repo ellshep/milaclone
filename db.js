@@ -32,15 +32,19 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_items_parent ON items(parentItemId);
 `);
 
+// Additive column for existing DBs
+const cols = db.prepare("PRAGMA table_info(canvases)").all().map(c => c.name);
+if (!cols.includes('icon')) db.exec('ALTER TABLE canvases ADD COLUMN icon TEXT');
+
 // Prepared statements (created once, reused per request).
 const stmt = {
   getMeta: db.prepare(`SELECT value FROM meta WHERE key = ?`),
   setMeta: db.prepare(`INSERT INTO meta (key, value) VALUES (?, ?)
                        ON CONFLICT(key) DO UPDATE SET value = excluded.value`),
   getCanvas: db.prepare(`SELECT * FROM canvases WHERE id = ?`),
-  insertCanvas: db.prepare(`INSERT INTO canvases (id, title, parentCanvasId, color, createdAt)
-                            VALUES (@id, @title, @parentCanvasId, @color, @createdAt)`),
-  updateCanvas: db.prepare(`UPDATE canvases SET title = @title, color = @color WHERE id = @id`),
+  insertCanvas: db.prepare(`INSERT INTO canvases (id, title, parentCanvasId, color, icon, createdAt)
+                            VALUES (@id, @title, @parentCanvasId, @color, @icon, @createdAt)`),
+  updateCanvas: db.prepare(`UPDATE canvases SET title = @title, color = @color, icon = @icon WHERE id = @id`),
   deleteCanvas: db.prepare(`DELETE FROM canvases WHERE id = ?`),
   boardItemsOnCanvas: db.prepare(`SELECT * FROM items WHERE canvasId = ? AND type = 'board'`),
   getItem: db.prepare(`SELECT * FROM items WHERE id = ?`),
@@ -60,7 +64,7 @@ const stmt = {
 if (!stmt.getMeta.get('rootCanvasId')) {
   const rootId = id('c_');
   db.transaction(() => {
-    stmt.insertCanvas.run({ id: rootId, title: 'Home', parentCanvasId: null, color: 'slate', createdAt: Date.now() });
+    stmt.insertCanvas.run({ id: rootId, title: 'Home', parentCanvasId: null, color: 'slate', icon: null, createdAt: Date.now() });
     stmt.setMeta.run('rootCanvasId', rootId);
   })();
 }

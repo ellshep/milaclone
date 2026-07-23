@@ -8,19 +8,19 @@ plain JSON file on disk, so it's trivial to back up and fully yours.
 ## Features
 
 - Infinite pan/zoom canvas with a dotted grid
-- Cards: **Note** (serif title + body), **To-do** (checkable tasks), **Link**,
-  **Image** (drag-upload), **Column** (stack cards vertically), **Board**
-  (nested sub-canvas you can open into)
+- Cards: **Note**, **To-do**, **Link**, **Comment**, **Image**, **Upload** (files),
+  **Column**, **Board** (nested sub-canvas with Lucide icons)
 - Nested boards with clickable breadcrumb navigation (Home / … / …)
 - Drag cards freely, drag them in and out of columns, resize, recolor
-- 12-color palette for boards and columns
-- Everything autosaves to `data/board.json`
+- Customizable board icons (Lucide) + 12-color palette
+- Right-click menu: copy, cut, paste, duplicate, rename, lock position, trash
+- Everything autosaves to SQLite under `data/`
 - Per-board camera position remembered in your browser
 
 ## Requirements
 
 - Node.js 18 or newer (`node --version` to check)
-- That's it. No database, no compiler, no Python.
+- That's it. No database server, no compiler, no Python.
 
 ## Run it
 
@@ -91,13 +91,12 @@ sudo systemctl status canvas-board
 
 ## Your data & backups
 
-- Board content: `data/board.json`
-- Uploaded images: `public/uploads/`
+- Board content: `data/board.db` (SQLite)
+- Uploaded images/files: `public/uploads/`
 
 Back up those two paths and you've backed up everything. To reset to a blank
-canvas, stop the server and delete `data/board.json` (it'll be recreated on next
-start). A corrupt JSON file is automatically backed up to
-`data/board.corrupt-<timestamp>.json` rather than being overwritten.
+canvas, stop the server and delete `data/board.db` (it'll be recreated on next
+start).
 
 ## Configuration
 
@@ -107,19 +106,20 @@ All optional, via environment variables:
 |--------------|----------------------|----------------------------------|
 | `PORT`       | `4321`               | Port to listen on                |
 | `HOST`       | `0.0.0.0`            | Bind address                     |
-| `DATA_DIR`   | `./data`             | Where `board.json` is written    |
-| `UPLOAD_DIR` | `./public/uploads`   | Where uploaded images go         |
+| `DATA_DIR`   | `./data`             | Where the SQLite DB is written   |
+| `UPLOAD_DIR` | `./public/uploads`   | Where uploaded files go          |
 
 ## Not included (yet)
 
 These were left out to keep the first version solid and dependency-free; they're
-natural next additions: line/arrow connectors between cards, comments, freehand
+natural next additions: line/arrow connectors between cards, freehand
 drawing/sketch cards, multi-select, and real-time multi-user sync (the current
 model is single-document, last-write-wins — great for one person across their
 own devices).
 
 ## Keyboard shortcuts
 
-- `N` note · `L` link · `T` to-do · `B` board · `C` column
-- `Esc` deselect / cancel the armed tool
+- `N` note · `L` link · `T` to-do · `B` board · `C` column · `M` comment
+- `⌘/Ctrl+C` copy · `⌘/Ctrl+X` cut · `⌘/Ctrl+V` paste · `⌘/Ctrl+D` duplicate
+- `Enter` rename selected card · `Esc` deselect / cancel armed tool
 - `Delete` / `Backspace` remove the selected card (when not typing)
