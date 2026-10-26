@@ -7,7 +7,7 @@ const path = require('path');
 
 const {
   db, stmt, id, rootCanvasId,
-  rowToItem, breadcrumb, itemsForCanvas, deleteItemDeep
+  rowToItem, breadcrumb, itemsForCanvas, trashItemDeep, restoreItem, copyItemDeep, moveItemDeep
 } = require('./db');
 
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
@@ -34,6 +34,57 @@ const ALLOWED_UPLOAD = (mime) =>
   mime === 'application/json';
 
 const router = express.Router();
+
+// Uploads are served from the app's own origin, so anything a browser could run
+// (HTML, SVG, XML, …) is forced to download instead of rendering. Only file types
+// that are inert as documents are shown inline. <img> ignores Content-Disposition,
+// so SVG images still display on the canvas.
+// This keys off the file express.static actually resolved, not the request URL:
+// an encoded or re-cased URL (/%75ploads/x.html, /Uploads/… on a case-insensitive
+// disk) can miss the route mount yet still reach an upload through the generic
+// public/ handler, so server.js passes this same function to that handler too.
+// Whether a file is an upload is decided by directory identity (device + inode),
+// not by comparing path strings, so case folding, Unicode or symlinks can't dodge it.
+const INLINE_UPLOAD = /\.(png|jpe?g|gif|webp|avif|bmp|pdf|txt|csv|json)$/i;
+function isUpload(filePath) {
+  try {
+    const up = fs.statSync(UPLOAD_DIR);
+    for (let d = path.dirname(filePath), prev; d !== prev; prev = d, d = path.dirname(d)) {
+      const s = fs.statSync(d);
+      if (s.ino === up.ino && s.dev === up.dev) return true;
+    }
+    return false;
+  } catch (e) { return true; }   // can't tell: treat as untrusted
+}
+function setUploadHeaders(res, filePath) {
+  if (!isUpload(filePath)) return;
+  res.set('X-Content-Type-Options', 'nosniff');
+  if (!INLINE_UPLOAD.test(filePath)) res.set('Content-Disposition', 'attachment');
+}
+router.use('/uploads', express.static(UPLOAD_DIR, { setHeaders: setUploadHeaders }));
+
+// Three-way merge of a todo's task array. `base` is the list the client last got
+// from the server, `mine` its edited copy, `server` what is stored now (another
+// device or the Quick notes screen may have written since). Fields the client
+// changed win; everything else keeps the server's value, and tasks added or
+// deleted on either side stay added or deleted.
+function mergeTasks(base, server, mine) {
+  const byId = list => new Map(list.map(t => [t.id, t]));
+  const B = byId(base), S = byId(server), M = byId(mine);
+  const out = [];
+  for (const t of mine) {
+    const b = B.get(t.id), s = S.get(t.id);
+    if (b && !s) continue;                                   // deleted elsewhere
+    if (!b || !s) { out.push(t); continue; }                 // added here
+    const merged = Object.assign({}, s);
+    for (const k of new Set([...Object.keys(t), ...Object.keys(b)])) {
+      if (JSON.stringify(t[k]) !== JSON.stringify(b[k])) merged[k] = t[k];
+    }
+    out.push(merged);
+  }
+  for (const t of server) if (!B.has(t.id) && !M.has(t.id)) out.push(t);   // added elsewhere
+  return out;
+}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -143,7 +194,13 @@ router.patch('/api/item/:id', (req, res) => {
   if (b.color !== undefined) it.color = b.color;
   if (b.parentItemId !== undefined) it.parentItemId = b.parentItemId;
   if (b.canvasId && stmt.getCanvas.get(b.canvasId)) it.canvasId = b.canvasId;
-  if (b.data && typeof b.data === 'object') it.data = Object.assign({}, it.data, b.data);
+  if (b.data && typeof b.data === 'object') {
+    const stored = it.data.tasks;
+    it.data = Object.assign({}, it.data, b.data);
+    if (Array.isArray(b.baseTasks) && Array.isArray(b.data.tasks) && Array.isArray(stored)) {
+      it.data.tasks = mergeTasks(b.baseTasks, stored, b.data.tasks);
+    }
+  }
 
   const isBoard = it.type === 'board' && it.data && it.data.childCanvasId;
   db.transaction(() => {
@@ -199,10 +256,41 @@ router.patch('/api/items', (req, res) => {
   res.json({ ok: true });
 });
 
+// "Delete" moves the item and its whole subtree to the trash; restore undoes it.
 router.delete('/api/item/:id', (req, res) => {
   if (!stmt.getItem.get(req.params.id)) return res.status(404).json({ error: 'not found' });
-  db.transaction(() => deleteItemDeep(req.params.id, new Set()))();
+  db.transaction(() => trashItemDeep(req.params.id))();
   res.json({ ok: true });
+});
+
+router.post('/api/item/:id/restore', (req, res) => {
+  const restored = db.transaction(() => restoreItem(req.params.id))();
+  if (!restored) return res.status(404).json({ error: 'not in trash' });
+  res.json(rowToItem(stmt.getItem.get(req.params.id)));
+});
+
+// Copy (deep: column cards, nested boards and everything on them) or move an
+// item to { canvasId, x, y }. Used by paste, cut/paste and duplicate.
+function placeTarget(req, res) {
+  const b = req.body || {};
+  if (!stmt.getItem.get(req.params.id)) { res.status(404).json({ error: 'not found' }); return null; }
+  if (!stmt.getCanvas.get(b.canvasId)) { res.status(400).json({ error: 'bad canvasId' }); return null; }
+  return { canvasId: b.canvasId, x: Math.round(b.x || 0), y: Math.round(b.y || 0) };
+}
+
+router.post('/api/item/:id/copy', (req, res) => {
+  const t = placeTarget(req, res);
+  if (!t) return;
+  const newId = db.transaction(() => copyItemDeep(req.params.id, t.canvasId, t.x, t.y))();
+  res.json(rowToItem(stmt.getItem.get(newId)));
+});
+
+router.post('/api/item/:id/move', (req, res) => {
+  const t = placeTarget(req, res);
+  if (!t) return;
+  const ok = db.transaction(() => moveItemDeep(req.params.id, t.canvasId, t.x, t.y))();
+  if (!ok) return res.status(400).json({ error: 'cannot move a board inside itself' });
+  res.json(rowToItem(stmt.getItem.get(req.params.id)));
 });
 
 // ---- Quick notes -----------------------------------------------------------
@@ -239,3 +327,4 @@ router.post('/api/upload', upload.single('file'), (req, res) => {
 router.get('/api/health', (req, res) => res.json({ ok: true }));
 
 module.exports = router;
+module.exports.setUploadHeaders = setUploadHeaders;

@@ -16,7 +16,10 @@ process.env.DATA_DIR = TMP;
 const express = require('express');
 const app = express();
 app.use(express.json());
-app.use(require('../routes'));
+const routes = require('../routes');
+app.use(routes);
+// mirror server.js: the generic static handler sits behind the routes
+app.use(express.static(path.join(__dirname, '..', 'public'), { setHeaders: routes.setUploadHeaders }));
 
 let base;
 let server;
@@ -206,4 +209,138 @@ test('quick notes: task edits round-trip through PATCH /api/item', async () => {
   assert.deepEqual(saved.tasks, tasks);
   assert.deepEqual(saved.tags, ['life']);
   assert.equal(saved.title, 'Errands');          // shallow data merge keeps the title
+});
+
+// ---- Trash, copy, move, task merge, upload safety ---------------------------
+
+test('trash: delete hides the subtree and restore brings all of it back', async () => {
+  const canvasId = await root();
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Keep me' } })).body;
+  const childId = board.data.childCanvasId;
+  const inner = (await send('POST', '/api/item', { canvasId: childId, type: 'note', data: { body: 'inside' } })).body;
+  const col = (await send('POST', '/api/item', { canvasId: childId, type: 'column' })).body;
+  const card = (await send('POST', '/api/item', { canvasId: childId, type: 'note', parentItemId: col.id })).body;
+
+  await send('DELETE', '/api/item/' + board.id);
+  assert.equal((await get('/api/canvas/' + childId)).status, 404);
+
+  const r = await send('POST', '/api/item/' + board.id + '/restore');
+  assert.equal(r.status, 200);
+  const ids = (await get('/api/canvas/' + childId)).body.items.map(i => i.id);
+  assert.deepEqual(ids.sort(), [inner.id, col.id, card.id].sort());
+  assert.ok((await get('/api/canvas/' + canvasId)).body.items.some(i => i.id === board.id));
+  assert.equal((await send('POST', '/api/item/' + board.id + '/restore')).status, 404, 'nothing left to restore');
+});
+
+test('trash: restoring a column does not resurrect a card deleted on its own earlier', async () => {
+  const canvasId = await root();
+  const col = (await send('POST', '/api/item', { canvasId, type: 'column' })).body;
+  const keep = (await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: col.id })).body;
+  const gone = (await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: col.id })).body;
+  await send('DELETE', '/api/item/' + gone.id);
+  await send('DELETE', '/api/item/' + col.id);
+  await send('POST', '/api/item/' + col.id + '/restore');
+  const ids = (await get('/api/canvas/' + canvasId)).body.items.map(i => i.id);
+  assert.ok(ids.includes(keep.id));
+  assert.ok(!ids.includes(gone.id));
+});
+
+test('copy: a board is deep-copied, including into its own subtree', async () => {
+  const canvasId = await root();
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Src' } })).body;
+  const inside = board.data.childCanvasId;
+  await send('POST', '/api/item', { canvasId: inside, type: 'note', data: { body: 'deep' } });
+
+  const copy = (await send('POST', '/api/item/' + board.id + '/copy', { canvasId, x: 500, y: 40 })).body;
+  assert.notEqual(copy.id, board.id);
+  assert.equal(copy.x, 500);
+  assert.notEqual(copy.data.childCanvasId, inside, 'the copy owns a new canvas');
+  const copied = (await get('/api/canvas/' + copy.data.childCanvasId)).body;
+  assert.equal(copied.canvas.title, 'Src');
+  assert.deepEqual(copied.items.map(i => i.data.body), ['deep']);
+  assert.deepEqual(copied.breadcrumb.map(c => c.id), [canvasId, copy.data.childCanvasId]);
+
+  // pasting a board inside itself copies the original contents once and stops
+  const nested = (await send('POST', '/api/item/' + board.id + '/copy', { canvasId: inside, x: 0, y: 0 })).body;
+  const nestedView = (await get('/api/canvas/' + nested.data.childCanvasId)).body;
+  assert.deepEqual(nestedView.items.map(i => i.data.body), ['deep']);
+});
+
+test('copy: a column comes with its cards', async () => {
+  const canvasId = await root();
+  const col = (await send('POST', '/api/item', { canvasId, type: 'column', data: { title: 'Col' } })).body;
+  await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: col.id, data: { body: 'a' } });
+  const copy = (await send('POST', '/api/item/' + col.id + '/copy', { canvasId, x: 0, y: 0 })).body;
+  const kids = (await get('/api/canvas/' + canvasId)).body.items.filter(i => i.parentItemId === copy.id);
+  assert.deepEqual(kids.map(k => k.data.body), ['a']);
+});
+
+test('move: cut/paste relocates a board with its contents and refuses a cycle', async () => {
+  const canvasId = await root();
+  const a = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'A' } })).body;
+  const b = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'B' } })).body;
+  const note = (await send('POST', '/api/item', { canvasId: a.data.childCanvasId, type: 'note', data: { body: 'n' } })).body;
+
+  const moved = await send('POST', '/api/item/' + a.id + '/move', { canvasId: b.data.childCanvasId, x: 10, y: 20 });
+  assert.equal(moved.status, 200);
+  assert.equal(moved.body.canvasId, b.data.childCanvasId);
+  const inA = (await get('/api/canvas/' + a.data.childCanvasId)).body;
+  assert.deepEqual(inA.items.map(i => i.id), [note.id], 'contents survive the move');
+  assert.deepEqual(inA.breadcrumb.map(c => c.id), [canvasId, b.data.childCanvasId, a.data.childCanvasId]);
+
+  const cycle = await send('POST', '/api/item/' + b.id + '/move', { canvasId: a.data.childCanvasId, x: 0, y: 0 });
+  assert.equal(cycle.status, 400);
+});
+
+test('tasks: concurrent edits from two devices merge instead of overwriting', async () => {
+  const canvasId = await root();
+  const base = [{ id: 't1', text: 'Milk', done: false }, { id: 't2', text: 'Eggs', done: false }];
+  const list = (await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: base } })).body;
+
+  // phone: ticks Milk and adds Bread
+  await send('PATCH', '/api/item/' + list.id, {
+    baseTasks: base,
+    data: { tasks: [{ id: 't1', text: 'Milk', done: true }, base[1], { id: 't3', text: 'Bread', done: false }] }
+  });
+  // desktop, still holding the old list: renames Eggs and deletes nothing it didn't see
+  const r = await send('PATCH', '/api/item/' + list.id, {
+    baseTasks: base,
+    data: { tasks: [base[0], { id: 't2', text: 'Free-range eggs', done: false }] }
+  });
+  assert.deepEqual(r.body.data.tasks, [
+    { id: 't1', text: 'Milk', done: true },
+    { id: 't2', text: 'Free-range eggs', done: false },
+    { id: 't3', text: 'Bread', done: false }
+  ]);
+
+  // a delete on one side wins over an untouched copy on the other
+  const now = r.body.data.tasks;
+  await send('PATCH', '/api/item/' + list.id, { baseTasks: now, data: { tasks: now.filter(t => t.id !== 't3') } });
+  const stale = await send('PATCH', '/api/item/' + list.id, { baseTasks: now, data: { tasks: now.map(t => t.id === 't1' ? { ...t, text: 'Oat milk' } : t) } });
+  assert.deepEqual(stale.body.data.tasks.map(t => t.text), ['Oat milk', 'Free-range eggs']);
+});
+
+test('uploads: active content downloads instead of rendering on our origin', async () => {
+  const upload = async (body, type, name) => {
+    const fd = new FormData();
+    fd.append('file', new Blob([body], { type }), name);
+    return (await fetch(base + '/api/upload', { method: 'POST', body: fd })).json();
+  };
+  const html = await upload('<script>alert(1)</script>', 'text/html', 'evil.html');
+  const r = await fetch(base + html.src);
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-disposition'), 'attachment');
+  assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+
+  // an encoded path that skips the /uploads mount must not dodge the headers
+  const encoded = await fetch(base + html.src.replace('/uploads/', '/%75ploads/'));
+  assert.equal(encoded.status, 200);
+  assert.equal(encoded.headers.get('content-disposition'), 'attachment');
+  // on a case-insensitive disk (macOS) a re-cased directory resolves to the same folder
+  const recased = await fetch(base + html.src.replace('/uploads/', '/%55ploads/'));
+  if (recased.status === 200) assert.equal(recased.headers.get('content-disposition'), 'attachment');
+
+  const png = await upload('png', 'image/png', 'pic.png');
+  const p = await fetch(base + png.src);
+  assert.equal(p.headers.get('content-disposition'), null, 'images still display inline');
 });

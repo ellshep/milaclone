@@ -113,6 +113,7 @@ async function load() {
     color: l.color || null,
     tags: Array.isArray(l.tags) ? l.tags : [],
     tasks: (l.tasks || []).map(normTask),
+    baseTasks: l.tasks || [],       // as the server has it; sent with edits so they merge
     createdAt: l.createdAt
   }));
   qn.loaded = true;
@@ -131,17 +132,34 @@ function save(list, body) {
 
 // Writes are debounced while typing; anything still queued goes out as soon as
 // the user closes a sheet or leaves Quick notes, so nothing is lost.
-function flushSaves(only) {
+function flushSaves(only, keepalive = false) {
   const sent = [];
   for (const [id, body] of savePending) {
     if (only && id !== only) continue;
     clearTimeout(saveTimers.get(id));
     saveTimers.delete(id);
     savePending.delete(id);
-    sent.push(api.patch(id, { data: body }).catch(() => toast('Could not save')));
+    const list = listById(id);
+    const req = { data: body };
+    if (body.tasks && list) req.baseTasks = list.baseTasks || [];
+    sent.push(api.patch(id, req, keepalive).then(saved => adoptMerged(list, saved)));
   }
   return sent;
 }
+
+// The server merges task edits with changes made elsewhere (the canvas card,
+// another device); take its result as the new base and show it if it differs.
+function adoptMerged(list, saved) {
+  if (!saved || !list || !Array.isArray(saved.data.tasks)) return;
+  list.baseTasks = saved.data.tasks;
+  const merged = saved.data.tasks.map(normTask);
+  if (savePending.has(list.id) || JSON.stringify(merged) === JSON.stringify(list.tasks)) return;
+  list.tasks = merged;
+  render();
+}
+// Queued edits go out before the tab closes or the phone backgrounds the app.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSaves(null, true); });
+window.addEventListener('pagehide', () => flushSaves(null, true));
 const saveTasks = list => save(list, { tasks: list.tasks });
 const saveMeta = list => save(list, { title: list.title, tags: list.tags });
 
@@ -836,8 +854,9 @@ async function deleteList(list) {
   qn.lists = qn.lists.filter(l => l.id !== list.id);
   qn.dirty = true;
   goHome();
-  toast('List deleted');
-  try { await api.remove(list.id); } catch (e) { toast('Could not delete the list'); }
+  flushSaves(list.id);
+  try { await api.remove(list.id); } catch (e) { toast('Could not delete the list'); return; }
+  toast('List deleted', { label: 'Undo', fn: async () => { if (await api.restore(list.id)) { qn.dirty = true; await load(); } } });
 }
 
 function addTask(list, text) {

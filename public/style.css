@@ -299,6 +299,8 @@ input, textarea { font-family: var(--sans); }
 
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #2b2d31; color: #fff; padding: 9px 16px; border-radius: 10px; font-size: 13px; z-index: 80; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.show { opacity: 1; }
+.toast.show.has-action { pointer-events: auto; }
+.toast-action { margin-left: 14px; background: none; border: 0; padding: 0; color: #8ab4ff; font: inherit; font-weight: 600; cursor: pointer; }
 
 /* ---------- mobile chrome (header + footer, Milanote style) ---------- */
 /* Hidden on desktop; the media query below turns them on and hides the
