@@ -82,7 +82,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # The image has no compiler; better-sqlite3 ships prebuilt binaries, so
+      # skip the node-gyp rebuild npm would otherwise run for its binding.gyp.
+      - run: npm ci --ignore-scripts
 
       # A no-op when the image matches; fetches the right browsers (no apt) if a
       # dependency bump got ahead of the image tag.
