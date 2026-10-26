@@ -32,7 +32,7 @@ test('create a note via the toolbar and it persists across reload', async ({ pag
 
 test('keyboard shortcut arms the note tool', async ({ page }) => {
   await freshCanvas(page);
-  await page.mouse.click(600, 400);          // ensure nothing is focused
+  await page.mouse.click(600, 400); // ensure nothing is focused
   await page.keyboard.press('n');
   await page.mouse.click(650, 450);
   await expect(page.locator('.item.type-note')).toHaveCount(1);
@@ -74,7 +74,7 @@ test('delete a selected board with the Delete key', async ({ page }) => {
   await freshCanvas(page);
   await place(page, 'board');
   await expect(page.locator('.item.type-board')).toHaveCount(1);
-  await page.keyboard.press('Escape');                 // leave edit/selection
+  await page.keyboard.press('Escape'); // leave edit/selection
   await page.locator('.item.type-board .tile').click(); // select without editing
   await page.keyboard.press('Delete');
   await expect(page.locator('.item.type-board')).toHaveCount(0);
@@ -88,7 +88,7 @@ test('todo: add an item and check it off', async ({ page }) => {
 
   await todo.locator('button.add').click();
   const rows = todo.locator('.task');
-  await expect(rows).toHaveCount(2);                    // default empty + added
+  await expect(rows).toHaveCount(2); // default empty + added
 
   const first = rows.first();
   await first.locator('input[type="checkbox"]').check();
@@ -99,7 +99,7 @@ test('drag a note into a column', async ({ page }) => {
   await freshCanvas(page);
   await place(page, 'column', 450, 350);
   await place(page, 'note', 800, 350);
-  await leaveEdit(page);                                // so pointerdown grabs the card, not its textarea
+  await leaveEdit(page); // so pointerdown grabs the card, not its textarea
 
   const note = page.locator('.item.type-note');
   const colBody = page.locator('.col-body');

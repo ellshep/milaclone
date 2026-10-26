@@ -9,12 +9,46 @@
    mutated in place (never reassigned) are exported directly.
    ========================================================================= */
 
-export const COLORS = ['slate','gray','teal','green','brown','yellow','orange','red','pink','purple','blue','indigo'];
+export const COLORS = [
+  'slate',
+  'gray',
+  'teal',
+  'green',
+  'brown',
+  'yellow',
+  'orange',
+  'red',
+  'pink',
+  'purple',
+  'blue',
+  'indigo',
+];
 
 export const BOARD_ICONS = [
-  'layout-grid', 'book-open', 'monitor', 'clock', 'heart', 'house', 'lightbulb',
-  'palette', 'briefcase', 'sparkles', 'glasses', 'landmark', 'compass', 'camera',
-  'music', 'pen-tool', 'layers', 'folder', 'star', 'zap', 'globe', 'cpu', 'leaf', 'target'
+  'layout-grid',
+  'book-open',
+  'monitor',
+  'clock',
+  'heart',
+  'house',
+  'lightbulb',
+  'palette',
+  'briefcase',
+  'sparkles',
+  'glasses',
+  'landmark',
+  'compass',
+  'camera',
+  'music',
+  'pen-tool',
+  'layers',
+  'folder',
+  'star',
+  'zap',
+  'globe',
+  'cpu',
+  'leaf',
+  'target',
 ];
 
 // Mutable app state, shared live across every module.
@@ -30,7 +64,7 @@ export const state = {
   pendingUploadWorld: null,
   drag: null,
   pan: null,
-  pinching: false
+  pinching: false,
 };
 
 // Item id -> rendered DOM element. Cleared/repopulated on every render.
@@ -47,5 +81,5 @@ export const dom = {
   fileInput: document.getElementById('fileInput'),
   uploadInput: document.getElementById('uploadInput'),
   zoomLvl: document.getElementById('zoomLvl'),
-  toastEl: document.getElementById('toast')
+  toastEl: document.getElementById('toast'),
 };

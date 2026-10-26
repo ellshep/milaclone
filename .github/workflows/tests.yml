@@ -5,40 +5,97 @@ on:
   push:
     branches: [main]
 
+# A newer push to the same PR supersedes the running checks.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Job names are the required status checks in main's branch protection:
+# renaming one means updating the protection rule too.
 jobs:
-  unit:
-    name: Unit / API tests
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - run: npm ci
+      - run: npm run lint
 
-      - name: Install dependencies
-        run: npm ci
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
 
-      - name: Run unit tests
-        run: npm test
+  unit:
+    name: Unit / API tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Fails if line, branch or function coverage drops below 80%.
+      - run: npm test
+
+  ui:
+    name: UI unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Vitest + jsdom; fails if a unit-tested module drops below 80% coverage.
+      - run: npm run test:ui
 
   e2e:
     name: E2E tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - run: npm ci
 
-      - name: Install dependencies
-        run: npm ci
-
+      # Browser binaries are cached per Playwright version; system deps always come from apt.
+      - name: Read Playwright version
+        id: pw
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 8
         run: npx playwright install --with-deps chromium webkit
+      - name: Install Playwright system deps
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        timeout-minutes: 8
+        run: npx playwright install-deps chromium webkit
 
       - name: Run e2e tests
         run: npm run test:e2e
@@ -50,3 +107,25 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  docker:
+    name: Docker smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t milaclone:ci .
+      - name: Boot and exercise the API
+        run: |
+          docker run -d --name app -p 4321:4321 milaclone:ci
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:4321/api/health && break; sleep 1; done
+          curl -fs http://127.0.0.1:4321/api/health | grep -q '"ok":true'
+          root=$(curl -fs http://127.0.0.1:4321/api/root | node -pe 'JSON.parse(require("fs").readFileSync(0)).rootCanvasId')
+          curl -fs -X POST -H 'Content-Type: application/json' \
+            -d "{\"canvasId\":\"$root\",\"type\":\"note\",\"data\":{\"title\":\"smoke\"}}" \
+            http://127.0.0.1:4321/api/item | grep -q '"title":"smoke"'
+          curl -fs http://127.0.0.1:4321/ | grep -q '<div id="world"'
+      - name: Container logs
+        if: ${{ failure() }}
+        run: docker logs app

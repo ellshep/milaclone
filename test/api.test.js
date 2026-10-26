@@ -24,18 +24,29 @@ app.use(express.static(path.join(__dirname, '..', 'public'), { setHeaders: route
 let base;
 let server;
 test.before(async () => {
-  await new Promise(r => { server = app.listen(0, '127.0.0.1', r); });
+  await new Promise(r => {
+    server = app.listen(0, '127.0.0.1', r);
+  });
   base = 'http://127.0.0.1:' + server.address().port;
 });
-test.after(() => { server.close(); fs.rmSync(TMP, { recursive: true, force: true }); });
+test.after(() => {
+  server.close();
+  fs.rmSync(TMP, { recursive: true, force: true });
+});
 
 // tiny fetch helpers
-const get = (p) => fetch(base + p).then(async r => ({ status: r.status, body: await r.json() }));
-const send = (m, p, b) => fetch(base + p, {
-  method: m, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b)
-}).then(async r => ({ status: r.status, body: await r.json() }));
+const get = p => fetch(base + p).then(async r => ({ status: r.status, body: await r.json() }));
+const send = (m, p, b) =>
+  fetch(base + p, {
+    method: m,
+    headers: { 'Content-Type': 'application/json' },
+    // oxlint-disable-next-line unicorn/no-invalid-fetch-options -- m is never GET
+    body: JSON.stringify(b),
+  }).then(async r => ({ status: r.status, body: await r.json() }));
 
-async function root() { return (await get('/api/root')).body.rootCanvasId; }
+async function root() {
+  return (await get('/api/root')).body.rootCanvasId;
+}
 
 test('health + root seeded', async () => {
   assert.deepEqual((await get('/api/health')).body, { ok: true });
@@ -61,7 +72,7 @@ test('create note: rounds coords, assigns z, defaults', async () => {
   assert.match(body.id, /^i_/);
   assert.equal(body.x, 11);
   assert.equal(body.y, 20);
-  assert.equal(body.w, 240);      // default width
+  assert.equal(body.w, 240); // default width
   assert.ok(body.z >= 1);
   // item now shows up on the canvas
   const view = (await get('/api/canvas/' + canvasId)).body;
@@ -79,7 +90,9 @@ test('patch item moves and updates color', async () => {
 
 test('board item creates + syncs a child canvas', async () => {
   const canvasId = await root();
-  const board = (await send('POST', '/api/item', { canvasId, type: 'board', color: 'green', data: { title: 'Sprint' } })).body;
+  const board = (
+    await send('POST', '/api/item', { canvasId, type: 'board', color: 'green', data: { title: 'Sprint' } })
+  ).body;
   const childId = board.data.childCanvasId;
   assert.ok(childId, 'board owns a child canvas');
 
@@ -106,9 +119,13 @@ test('create comment and file items', async () => {
   const comment = (await send('POST', '/api/item', { canvasId, type: 'comment', data: { body: 'hi' } })).body;
   assert.equal(comment.type, 'comment');
   assert.equal(comment.data.body, 'hi');
-  const file = (await send('POST', '/api/item', {
-    canvasId, type: 'file', data: { src: '/uploads/x.pdf', name: 'x.pdf', mime: 'application/pdf' }
-  })).body;
+  const file = (
+    await send('POST', '/api/item', {
+      canvasId,
+      type: 'file',
+      data: { src: '/uploads/x.pdf', name: 'x.pdf', mime: 'application/pdf' },
+    })
+  ).body;
   assert.equal(file.type, 'file');
   assert.equal(file.data.name, 'x.pdf');
 });
@@ -138,7 +155,13 @@ test('bulk patch repositions many items', async () => {
   const canvasId = await root();
   const a = (await send('POST', '/api/item', { canvasId, type: 'note' })).body;
   const b = (await send('POST', '/api/item', { canvasId, type: 'note' })).body;
-  await send('PATCH', '/api/items', { updates: [{ id: a.id, x: 100 }, { id: b.id, y: 200 }, { id: 'ghost', x: 9 }] });
+  await send('PATCH', '/api/items', {
+    updates: [
+      { id: a.id, x: 100 },
+      { id: b.id, y: 200 },
+      { id: 'ghost', x: 9 },
+    ],
+  });
   const view = (await get('/api/canvas/' + canvasId)).body;
   assert.equal(view.items.find(i => i.id === a.id).x, 100);
   assert.equal(view.items.find(i => i.id === b.id).y, 200);
@@ -170,10 +193,17 @@ test('quick notes: lists every todo card with its canvas + tasks', async () => {
   const canvasId = await root();
   const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Nested' } })).body;
   const nested = board.data.childCanvasId;
-  const tasks = [{ id: 't1', text: 'Floss', done: false, starred: true, due: '2026-08-07', tags: ['routine'], note: 'nightly' }];
-  const a = (await send('POST', '/api/item', {
-    canvasId, type: 'todo', color: 'blue', data: { title: 'Nightly Routine', tags: ['routine'], tasks }
-  })).body;
+  const tasks = [
+    { id: 't1', text: 'Floss', done: false, starred: true, due: '2026-08-07', tags: ['routine'], note: 'nightly' },
+  ];
+  const a = (
+    await send('POST', '/api/item', {
+      canvasId,
+      type: 'todo',
+      color: 'blue',
+      data: { title: 'Nightly Routine', tags: ['routine'], tasks },
+    })
+  ).body;
   const b = (await send('POST', '/api/item', { canvasId: nested, type: 'todo', data: { title: 'Deep list' } })).body;
 
   const { status, body } = await get('/api/todos');
@@ -185,12 +215,12 @@ test('quick notes: lists every todo card with its canvas + tasks', async () => {
   assert.equal(first.canvasId, canvasId);
   assert.equal(first.color, 'blue');
   assert.deepEqual(first.tags, ['routine']);
-  assert.deepEqual(first.tasks, tasks);          // extra task fields survive the round trip
+  assert.deepEqual(first.tasks, tasks); // extra task fields survive the round trip
 
   // todo cards on nested canvases are listed too, and report the canvas they live on
   const deep = body.lists.find(l => l.id === b.id);
   assert.equal(deep.canvasTitle, 'Nested');
-  assert.deepEqual(deep.tasks, []);              // missing tasks default to an empty list
+  assert.deepEqual(deep.tasks, []); // missing tasks default to an empty list
 
   // non-todo cards never show up
   assert.ok(!body.lists.some(l => l.id === board.id));
@@ -198,17 +228,32 @@ test('quick notes: lists every todo card with its canvas + tasks', async () => {
 
 test('quick notes: task edits round-trip through PATCH /api/item', async () => {
   const canvasId = await root();
-  const list = (await send('POST', '/api/item', {
-    canvasId, type: 'todo', data: { title: 'Errands', tasks: [{ id: 't1', text: 'Milk', done: false }] }
-  })).body;
-  const tasks = [{ id: 't1', text: 'Milk', done: true, starred: true, due: '2026-08-07', tags: ['life'], note: 'oat', noteStyle: { b: true } }];
+  const list = (
+    await send('POST', '/api/item', {
+      canvasId,
+      type: 'todo',
+      data: { title: 'Errands', tasks: [{ id: 't1', text: 'Milk', done: false }] },
+    })
+  ).body;
+  const tasks = [
+    {
+      id: 't1',
+      text: 'Milk',
+      done: true,
+      starred: true,
+      due: '2026-08-07',
+      tags: ['life'],
+      note: 'oat',
+      noteStyle: { b: true },
+    },
+  ];
   await send('PATCH', '/api/item/' + list.id, { data: { tasks } });
   await send('PATCH', '/api/item/' + list.id, { data: { tags: ['life'] } });
 
   const saved = (await get('/api/todos')).body.lists.find(l => l.id === list.id);
   assert.deepEqual(saved.tasks, tasks);
   assert.deepEqual(saved.tags, ['life']);
-  assert.equal(saved.title, 'Errands');          // shallow data merge keeps the title
+  assert.equal(saved.title, 'Errands'); // shallow data merge keeps the title
 });
 
 // ---- Trash, copy, move, task merge, upload safety ---------------------------
@@ -257,13 +302,22 @@ test('copy: a board is deep-copied, including into its own subtree', async () =>
   assert.notEqual(copy.data.childCanvasId, inside, 'the copy owns a new canvas');
   const copied = (await get('/api/canvas/' + copy.data.childCanvasId)).body;
   assert.equal(copied.canvas.title, 'Src');
-  assert.deepEqual(copied.items.map(i => i.data.body), ['deep']);
-  assert.deepEqual(copied.breadcrumb.map(c => c.id), [canvasId, copy.data.childCanvasId]);
+  assert.deepEqual(
+    copied.items.map(i => i.data.body),
+    ['deep']
+  );
+  assert.deepEqual(
+    copied.breadcrumb.map(c => c.id),
+    [canvasId, copy.data.childCanvasId]
+  );
 
   // pasting a board inside itself copies the original contents once and stops
   const nested = (await send('POST', '/api/item/' + board.id + '/copy', { canvasId: inside, x: 0, y: 0 })).body;
   const nestedView = (await get('/api/canvas/' + nested.data.childCanvasId)).body;
-  assert.deepEqual(nestedView.items.map(i => i.data.body), ['deep']);
+  assert.deepEqual(
+    nestedView.items.map(i => i.data.body),
+    ['deep']
+  );
 });
 
 test('copy: a column comes with its cards', async () => {
@@ -272,21 +326,32 @@ test('copy: a column comes with its cards', async () => {
   await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: col.id, data: { body: 'a' } });
   const copy = (await send('POST', '/api/item/' + col.id + '/copy', { canvasId, x: 0, y: 0 })).body;
   const kids = (await get('/api/canvas/' + canvasId)).body.items.filter(i => i.parentItemId === copy.id);
-  assert.deepEqual(kids.map(k => k.data.body), ['a']);
+  assert.deepEqual(
+    kids.map(k => k.data.body),
+    ['a']
+  );
 });
 
 test('move: cut/paste relocates a board with its contents and refuses a cycle', async () => {
   const canvasId = await root();
   const a = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'A' } })).body;
   const b = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'B' } })).body;
-  const note = (await send('POST', '/api/item', { canvasId: a.data.childCanvasId, type: 'note', data: { body: 'n' } })).body;
+  const note = (await send('POST', '/api/item', { canvasId: a.data.childCanvasId, type: 'note', data: { body: 'n' } }))
+    .body;
 
   const moved = await send('POST', '/api/item/' + a.id + '/move', { canvasId: b.data.childCanvasId, x: 10, y: 20 });
   assert.equal(moved.status, 200);
   assert.equal(moved.body.canvasId, b.data.childCanvasId);
   const inA = (await get('/api/canvas/' + a.data.childCanvasId)).body;
-  assert.deepEqual(inA.items.map(i => i.id), [note.id], 'contents survive the move');
-  assert.deepEqual(inA.breadcrumb.map(c => c.id), [canvasId, b.data.childCanvasId, a.data.childCanvasId]);
+  assert.deepEqual(
+    inA.items.map(i => i.id),
+    [note.id],
+    'contents survive the move'
+  );
+  assert.deepEqual(
+    inA.breadcrumb.map(c => c.id),
+    [canvasId, b.data.childCanvasId, a.data.childCanvasId]
+  );
 
   const cycle = await send('POST', '/api/item/' + b.id + '/move', { canvasId: a.data.childCanvasId, x: 0, y: 0 });
   assert.equal(cycle.status, 400);
@@ -294,30 +359,39 @@ test('move: cut/paste relocates a board with its contents and refuses a cycle', 
 
 test('tasks: concurrent edits from two devices merge instead of overwriting', async () => {
   const canvasId = await root();
-  const base = [{ id: 't1', text: 'Milk', done: false }, { id: 't2', text: 'Eggs', done: false }];
+  const base = [
+    { id: 't1', text: 'Milk', done: false },
+    { id: 't2', text: 'Eggs', done: false },
+  ];
   const list = (await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: base } })).body;
 
   // phone: ticks Milk and adds Bread
   await send('PATCH', '/api/item/' + list.id, {
     baseTasks: base,
-    data: { tasks: [{ id: 't1', text: 'Milk', done: true }, base[1], { id: 't3', text: 'Bread', done: false }] }
+    data: { tasks: [{ id: 't1', text: 'Milk', done: true }, base[1], { id: 't3', text: 'Bread', done: false }] },
   });
   // desktop, still holding the old list: renames Eggs and deletes nothing it didn't see
   const r = await send('PATCH', '/api/item/' + list.id, {
     baseTasks: base,
-    data: { tasks: [base[0], { id: 't2', text: 'Free-range eggs', done: false }] }
+    data: { tasks: [base[0], { id: 't2', text: 'Free-range eggs', done: false }] },
   });
   assert.deepEqual(r.body.data.tasks, [
     { id: 't1', text: 'Milk', done: true },
     { id: 't2', text: 'Free-range eggs', done: false },
-    { id: 't3', text: 'Bread', done: false }
+    { id: 't3', text: 'Bread', done: false },
   ]);
 
   // a delete on one side wins over an untouched copy on the other
   const now = r.body.data.tasks;
   await send('PATCH', '/api/item/' + list.id, { baseTasks: now, data: { tasks: now.filter(t => t.id !== 't3') } });
-  const stale = await send('PATCH', '/api/item/' + list.id, { baseTasks: now, data: { tasks: now.map(t => t.id === 't1' ? { ...t, text: 'Oat milk' } : t) } });
-  assert.deepEqual(stale.body.data.tasks.map(t => t.text), ['Oat milk', 'Free-range eggs']);
+  const stale = await send('PATCH', '/api/item/' + list.id, {
+    baseTasks: now,
+    data: { tasks: now.map(t => (t.id === 't1' ? { ...t, text: 'Oat milk' } : t)) },
+  });
+  assert.deepEqual(
+    stale.body.data.tasks.map(t => t.text),
+    ['Oat milk', 'Free-range eggs']
+  );
 });
 
 test('uploads: active content downloads instead of rendering on our origin', async () => {
@@ -343,4 +417,60 @@ test('uploads: active content downloads instead of rendering on our origin', asy
   const png = await upload('png', 'image/png', 'pic.png');
   const p = await fetch(base + png.src);
   assert.equal(p.headers.get('content-disposition'), null, 'images still display inline');
+});
+
+test('upload mime allow-list: office docs, zip and json in; executables out', async () => {
+  const allowed = [
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/zip',
+    'application/json',
+    'text/plain',
+  ];
+  for (const type of allowed) {
+    const fd = new FormData();
+    fd.append('file', new Blob(['x'], { type }), 'f.bin');
+    const r = await fetch(base + '/api/upload', { method: 'POST', body: fd });
+    assert.equal(r.status, 200, type);
+    fs.rmSync(path.join(__dirname, '..', 'public', (await r.json()).src), { force: true });
+  }
+  const fd = new FormData();
+  fd.append('file', new Blob(['MZ'], { type: 'application/x-msdownload' }), 'evil.exe');
+  assert.equal((await fetch(base + '/api/upload', { method: 'POST', body: fd })).status, 400);
+});
+
+test('missing ids: 404 on canvas/item routes, 400 on a bad target canvas', async () => {
+  const canvasId = await root();
+  assert.equal((await get('/api/canvas/c_nope')).status, 404);
+  assert.equal((await send('PATCH', '/api/canvas/c_nope', { title: 'x' })).status, 404);
+  assert.equal((await send('PATCH', '/api/item/i_nope', { x: 1 })).status, 404);
+  assert.equal((await send('DELETE', '/api/item/i_nope')).status, 404);
+  assert.equal((await send('POST', '/api/item/i_nope/restore')).status, 404);
+  assert.equal((await send('POST', '/api/item/i_nope/copy', { canvasId })).status, 404);
+  const note = (await send('POST', '/api/item', { canvasId, type: 'note' })).body;
+  assert.equal((await send('POST', '/api/item/' + note.id + '/move', { canvasId: 'c_nope' })).status, 400);
+});
+
+test('board cards: create with icon/colour, patch colour and icon through to the child canvas', async () => {
+  const canvasId = await root();
+  const board = (
+    await send('POST', '/api/item', { canvasId, type: 'board', color: 'red', data: { title: 'B', icon: 'star' } })
+  ).body;
+  assert.equal(board._childColor, 'red');
+  assert.equal(board._childIcon, 'star');
+  await send('PATCH', '/api/item/' + board.id, { color: 'green', data: { icon: 'heart' } });
+  const child = (await get('/api/canvas/' + board.data.childCanvasId)).body.canvas;
+  assert.equal(child.color, 'green');
+  assert.equal(child.icon, 'heart');
+  const patched = (await send('PATCH', '/api/canvas/' + child.id, { icon: 'moon' })).body;
+  assert.equal(patched.icon, 'moon');
+});
+
+test('bulk patch skips unknown ids and accepts an empty body', async () => {
+  assert.deepEqual((await send('PATCH', '/api/items', { updates: [{ id: 'i_nope', x: 1 }] })).body, { ok: true });
+  assert.deepEqual((await send('PATCH', '/api/items', {})).body, { ok: true });
 });

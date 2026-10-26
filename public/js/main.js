@@ -21,9 +21,14 @@ import { initQuickNotes, isQuickNotesOpen } from './quicknotes.js';
 // boards. `replace` is for the initial load and fallbacks that shouldn't add one.
 export async function openCanvas(id, { replace = false } = {}) {
   state.view = await api.canvas(id);
-  if (state.view.error) { if (id !== state.rootCanvasId) return openCanvas(state.rootCanvasId, { replace: true }); toast('Board not found'); return; }
+  if (state.view.error) {
+    if (id !== state.rootCanvasId) return openCanvas(state.rootCanvasId, { replace: true });
+    toast('Board not found');
+    return;
+  }
   state.cam = loadCam(id);
-  state.selectedId = null; state.editingId = null;
+  state.selectedId = null;
+  state.editingId = null;
   closeCtx();
   renderCrumbs();
   updateMobileChrome();
@@ -43,20 +48,52 @@ export async function reloadView() {
   updateSelectionChrome();
 }
 
-document.addEventListener('keydown', (e) => {
-  if (isQuickNotesOpen()) return;   // Quick notes owns the keyboard while it's up
+document.addEventListener('keydown', e => {
+  if (isQuickNotesOpen()) return; // Quick notes owns the keyboard while it's up
   const ae = document.activeElement;
   const typing = ae && (ae.isContentEditable || (/^(INPUT|TEXTAREA)$/.test(ae.tagName) && !ae.readOnly));
-  if (e.key === 'Escape') { disarm(); deselect(); closePalette(); closeCtx(); }
+  if (e.key === 'Escape') {
+    disarm();
+    deselect();
+    closePalette();
+    closeCtx();
+  }
   if (typing) return;
   const mod = e.metaKey || e.ctrlKey;
-  if (mod && e.key.toLowerCase() === 'c') { e.preventDefault(); copySelected(false); return; }
-  if (mod && e.key.toLowerCase() === 'x') { e.preventDefault(); copySelected(true); return; }
-  if (mod && e.key.toLowerCase() === 'v') { e.preventDefault(); pasteClipboard(); return; }
-  if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(); return; }
-  if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undoDelete(); return; }
-  if (e.key === 'Enter' && state.selectedId && !mod) { e.preventDefault(); renameSelected(); return; }
-  if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedId) { e.preventDefault(); deleteItem(state.selectedId); }
+  if (mod && e.key.toLowerCase() === 'c') {
+    e.preventDefault();
+    copySelected(false);
+    return;
+  }
+  if (mod && e.key.toLowerCase() === 'x') {
+    e.preventDefault();
+    copySelected(true);
+    return;
+  }
+  if (mod && e.key.toLowerCase() === 'v') {
+    e.preventDefault();
+    pasteClipboard();
+    return;
+  }
+  if (mod && e.key.toLowerCase() === 'd') {
+    e.preventDefault();
+    duplicateSelected();
+    return;
+  }
+  if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+    e.preventDefault();
+    undoDelete();
+    return;
+  }
+  if (e.key === 'Enter' && state.selectedId && !mod) {
+    e.preventDefault();
+    renameSelected();
+    return;
+  }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedId) {
+    e.preventDefault();
+    deleteItem(state.selectedId);
+  }
   const map = { n: 'note', l: 'link', t: 'todo', b: 'board', c: 'column', m: 'comment' };
   if (map[e.key.toLowerCase()] && !mod) {
     const btn = document.querySelector(`.tool[data-tool="${map[e.key.toLowerCase()]}"]`);
@@ -64,12 +101,16 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-document.addEventListener('pointerdown', (e) => {
-  if (isQuickNotesOpen()) return;
-  if (!e.target.closest('#palette') && !e.target.closest('.swatch')) closePalette();
-  if (!e.target.closest('#ctxmenu') && !e.target.closest('.item')) closeCtx();
-  if (state.editingId && !e.target.closest('.item')) exitEdit();
-}, true);
+document.addEventListener(
+  'pointerdown',
+  e => {
+    if (isQuickNotesOpen()) return;
+    if (!e.target.closest('#palette') && !e.target.closest('.swatch')) closePalette();
+    if (!e.target.closest('#ctxmenu') && !e.target.closest('.item')) closeCtx();
+    if (state.editingId && !e.target.closest('.item')) exitEdit();
+  },
+  true
+);
 
 window.addEventListener('hashchange', () => {
   const id = location.hash.slice(1);

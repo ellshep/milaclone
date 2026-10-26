@@ -8,27 +8,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm start                     # run the app (default http://localhost:4321)
 docker compose up -d --build  # run in Docker on 127.0.0.1:8182
 PORT=8080 node server.js      # run on a different port
-npm test                      # backend + API tests (node --test, no framework)
+npm test                      # backend + API tests (node --test), fails under 80% line/branch/function coverage
 node --test test/api.test.js  # run a single test file
+npm run test:ui               # Vitest + jsdom unit tests for front-end modules (test/ui/*.test.mjs)
 npm run test:e2e              # Playwright end-to-end tests
 npx playwright test e2e/ui.spec.js -g "creates a note"  # single e2e test
 npx playwright install        # one-time: fetch browser binaries for Playwright
+npm run lint                  # oxlint; warnings fail CI
+npm run format                # prettier --write (CI runs format:check)
 ```
 
-Both test suites are self-isolating: `test/api.test.js` points `DATA_DIR` at a fresh `mkdtemp` before requiring `db.js`; `playwright.config.js` starts its own server on port 4322 with `DATA_DIR=.e2e-data` (wiped each run). Neither touches real board data — but note that `db.js` opens the SQLite handle on `require`, so any code that requires it must set `DATA_DIR` first if isolation matters.
+CI (`.github/workflows/tests.yml`) runs Lint, Format, Unit / API tests, UI unit tests, E2E tests and Docker smoke on every PR; all six are required checks on `main`, so job names must not change without updating branch protection. Coverage floors: `npm test` applies 80% to all backend files; Vitest applies 80% per file to the modules listed in `vitest.config.mjs` thresholds — add a module there when it gets unit tests. Modules that import `main.js` boot the whole app, so test them in Playwright instead.
+
+The backend and e2e suites are self-isolating: `test/api.test.js` points `DATA_DIR` at a fresh `mkdtemp` before requiring `db.js`; `playwright.config.js` starts its own server on port 4322 with `DATA_DIR=.e2e-data` (wiped each run). Neither touches real board data — but note that `db.js` opens the SQLite handle on `require`, so any code that requires it must set `DATA_DIR` first if isolation matters.
 
 ## Architecture
 
 Three-file Node backend + vanilla ES-module frontend, no build step.
 
 **Backend flow** (`server.js` → `routes.js` → `db.js`):
+
 - `db.js` opens `better-sqlite3` in WAL mode on import, creates schema on first run, and seeds a root `Home` canvas. It exports prepared statements (`stmt.*`) and helpers; **routes call the prepared statements directly** rather than going through a repository layer.
 - Schema: `canvases` (self-referential tree via `parentCanvasId`), `items` (belong to a `canvasId`, may nest under `parentItemId` for cards inside a column), `meta` (key/value; stores `rootCanvasId`).
 - `items.data` is a JSON string in SQLite but always an object at the API boundary — `rowToItem` parses on read, routes `JSON.stringify` on write.
 
-**The board/canvas duality is the trickiest invariant.** A `board`-type item on canvas A owns a freshly-created child canvas B (see `routes.js` POST `/api/item`). The card's title, color, and icon live on the child canvas row, not the item — GET `/api/canvas/:id` augments board items with `_childTitle`/`_childCount`/`_childColor`/`_childIcon`, and PATCH writes title/color/icon *through* to the child canvas and strips them off `item.data`. Deleting never removes rows: `trashItemDeep` in `db.js` tags the item and its whole subtree (column cards, nested canvases and their items) with `trashedBy = <item id>`, and every prepared statement filters `trashedBy IS NULL`, so trashed rows look deleted. `POST /api/item/:id/restore` clears that tag (toast Undo / cmd+Z). Copy and cut/paste are server-side too (`/copy` deep-copies via `collectSubtree`, `/move` re-parents and refuses moving a board inside itself).
+**The board/canvas duality is the trickiest invariant.** A `board`-type item on canvas A owns a freshly-created child canvas B (see `routes.js` POST `/api/item`). The card's title, color, and icon live on the child canvas row, not the item — GET `/api/canvas/:id` augments board items with `_childTitle`/`_childCount`/`_childColor`/`_childIcon`, and PATCH writes title/color/icon _through_ to the child canvas and strips them off `item.data`. Deleting never removes rows: `trashItemDeep` in `db.js` tags the item and its whole subtree (column cards, nested canvases and their items) with `trashedBy = <item id>`, and every prepared statement filters `trashedBy IS NULL`, so trashed rows look deleted. `POST /api/item/:id/restore` clears that tag (toast Undo / cmd+Z). Copy and cut/paste are server-side too (`/copy` deep-copies via `collectSubtree`, `/move` re-parents and refuses moving a board inside itself).
 
 **Frontend** (`public/js/*.js`, ES modules loaded via `<script type="module">` from `index.html`):
+
 - `state.js` is the shared mutable app state. Because ES module bindings can't be reassigned by importers, anything that mutates at runtime (`view`, `cam`, `selectedId`, `drag`, …) lives as a field on the exported `state` object; collections mutated in place (`elMap`) are exported directly.
 - `main.js` is the entry point: boots, wires global keyboard/pointer handlers, and owns `openCanvas(id)` — the single navigation primitive that fetches, resets selection, and updates `location.hash`.
 - `cards.js` owns all DOM rendering for items. `render()` clears `#world` and re-renders everything; `refreshItem(it)` swaps a single card. Cards inside a column render as children of the column's DOM, not directly under `#world`.

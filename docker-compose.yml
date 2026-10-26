@@ -10,7 +10,7 @@ services:
     # Tailscale Serve (see README) bridges it onto the tailnet over HTTPS.
     # 8181 is already taken by reflections, so this one sits on 8182.
     ports:
-      - "127.0.0.1:8182:4321"
+      - '127.0.0.1:8182:4321'
     volumes:
       - milaclone_data:/data
       # Uploads live under public/ so Express serves them at /uploads/*.
@@ -45,7 +45,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.50"
+          cpus: '0.50'
           memory: 256M
 
   # Own tailnet node, so the app answers on https://mila.<tailnet>.ts.net
@@ -69,7 +69,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.25"
+          cpus: '0.25'
           memory: 128M
 
 volumes:

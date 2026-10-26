@@ -31,10 +31,10 @@ const h = (tag, cls, text) => {
 };
 
 const SMART = {
-  today:     { label: 'Today',     color: '#4C7CBE', icon: 'calendar', f: t => t.due && daysUntil(t.due) === 0 && !t.done },
-  starred:   { label: 'Starred',   color: '#E8B94A', icon: 'star',     f: t => t.starred && !t.done },
-  all:       { label: 'All',       color: '#3D4A5C', icon: 'inbox',    f: t => !t.done },
-  completed: { label: 'Completed', color: '#6E8B74', icon: 'check',    f: t => t.done }
+  today: { label: 'Today', color: '#4C7CBE', icon: 'calendar', f: t => t.due && daysUntil(t.due) === 0 && !t.done },
+  starred: { label: 'Starred', color: '#E8B94A', icon: 'star', f: t => t.starred && !t.done },
+  all: { label: 'All', color: '#3D4A5C', icon: 'inbox', f: t => !t.done },
+  completed: { label: 'Completed', color: '#6E8B74', icon: 'check', f: t => t.done },
 };
 const SMART_KEYS = ['today', 'starred', 'all', 'completed'];
 
@@ -48,18 +48,18 @@ const FMT_BUTTONS = [
   { key: 'number', title: 'Numbered list', icon: 'list-ordered' },
   { key: 'b', title: 'Bold', glyph: 'B', cls: 'qn-fmt-b' },
   { key: 'i', title: 'Italic', glyph: 'I', cls: 'qn-fmt-i' },
-  { key: 'u', title: 'Underline', glyph: 'U', cls: 'qn-fmt-u' }
+  { key: 'u', title: 'Underline', glyph: 'U', cls: 'qn-fmt-u' },
 ];
 
 const SETTINGS_KEY = 'quicknotes.settings';
 
 const qn = {
   open: false,
-  desk: false,             // desktop phone popover (vs mobile fullscreen)
+  desk: false, // desktop phone popover (vs mobile fullscreen)
   loaded: false,
-  screen: 'home',          // 'home' | 'list' | 'task'
-  listId: null,            // a todo item id, or 'smart:<key>'
-  taskRef: null,           // { listId, taskId }
+  screen: 'home', // 'home' | 'list' | 'task'
+  listId: null, // a todo item id, or 'smart:<key>'
+  taskRef: null, // { listId, taskId }
   lists: [],
   rootCanvasId: null,
   homeTag: null,
@@ -68,17 +68,24 @@ const qn = {
   searchTag: null,
   compOpen: true,
   adding: false,
-  dirty: false,            // something changed → refresh the canvas on close
-  settings: loadSettings()
+  dirty: false, // something changed → refresh the canvas on close
+  settings: loadSettings(),
 };
 
 function loadSettings() {
   const def = { tiles: true, chips: false };
-  try { return Object.assign(def, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); }
-  catch (e) { return def; }
+  try {
+    return Object.assign(def, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
+  } catch {
+    return def;
+  }
 }
 function saveSettings() {
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(qn.settings)); } catch (e) { /* private mode */ }
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(qn.settings));
+  } catch {
+    /* private mode */
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -97,14 +104,14 @@ function normTask(t) {
     tags: Array.isArray(t.tags) ? t.tags.slice() : [],
     note: typeof t.note === 'string' ? t.note : '',
     noteStyle: t.noteStyle && typeof t.noteStyle === 'object' ? t.noteStyle : {},
-    createdAt: t.createdAt || null
+    createdAt: t.createdAt || null,
   };
 }
 
 async function load() {
   const r = await api.todos();
   qn.rootCanvasId = r.rootCanvasId;
-  if (savePending.size) return;   // a local edit is still in flight — keep ours
+  if (savePending.size) return; // a local edit is still in flight — keep ours
   qn.lists = (r.lists || []).map(l => ({
     id: l.id,
     canvasId: l.canvasId,
@@ -113,8 +120,8 @@ async function load() {
     color: l.color || null,
     tags: Array.isArray(l.tags) ? l.tags : [],
     tasks: (l.tasks || []).map(normTask),
-    baseTasks: l.tasks || [],       // as the server has it; sent with edits so they merge
-    createdAt: l.createdAt
+    baseTasks: l.tasks || [], // as the server has it; sent with edits so they merge
+    createdAt: l.createdAt,
   }));
   qn.loaded = true;
   updateBadge();
@@ -127,7 +134,10 @@ function save(list, body) {
   qn.dirty = true;
   clearTimeout(saveTimers.get(list.id));
   savePending.set(list.id, Object.assign(savePending.get(list.id) || {}, body));
-  saveTimers.set(list.id, setTimeout(() => flushSaves(list.id), 200));
+  saveTimers.set(
+    list.id,
+    setTimeout(() => flushSaves(list.id), 200)
+  );
 }
 
 // Writes are debounced while typing; anything still queued goes out as soon as
@@ -158,7 +168,9 @@ function adoptMerged(list, saved) {
   render();
 }
 // Queued edits go out before the tab closes or the phone backgrounds the app.
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSaves(null, true); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushSaves(null, true);
+});
 window.addEventListener('pagehide', () => flushSaves(null, true));
 const saveTasks = list => save(list, { tasks: list.tasks });
 const saveMeta = list => save(list, { title: list.title, tags: list.tags });
@@ -224,7 +236,7 @@ function dueInfo(iso) {
     label: near || short,
     full: near || 'Due ' + short,
     sub: relDays(n),
-    color: n <= 0 ? 'var(--qn-due)' : 'var(--qn-muted)'
+    color: n <= 0 ? 'var(--qn-due)' : 'var(--qn-muted)',
   };
 }
 function agoLabel(ms) {
@@ -241,7 +253,9 @@ function agoLabel(ms) {
 // ---------------------------------------------------------------------------
 // Navigation
 // ---------------------------------------------------------------------------
-export function isQuickNotesOpen() { return qn.open; }
+export function isQuickNotesOpen() {
+  return qn.open;
+}
 
 function placeDeskPanel() {
   const btn = el('phoneNotes');
@@ -252,7 +266,7 @@ function placeDeskPanel() {
   let left = r.left + r.width / 2 - w / 2;
   left = Math.max(12, Math.min(left, window.innerWidth - w - 12));
   panel.style.left = left + 'px';
-  panel.style.top = (r.bottom + 10) + 'px';
+  panel.style.top = r.bottom + 10 + 'px';
 }
 
 function syncPhoneBtn() {
@@ -270,7 +284,10 @@ function updateBadge() {
 }
 
 async function refreshBadge() {
-  if (qn.loaded) { updateBadge(); return; }
+  if (qn.loaded) {
+    updateBadge();
+    return;
+  }
   try {
     const r = await api.todos();
     const badge = el('phoneNotesBadge');
@@ -278,7 +295,9 @@ async function refreshBadge() {
     const n = (r.lists || []).length;
     badge.textContent = String(n);
     badge.hidden = n === 0;
-  } catch (e) { /* badge is decorative */ }
+  } catch {
+    /* badge is decorative */
+  }
 }
 
 export function openQuickNotes(opts) {
@@ -292,8 +311,10 @@ export function openQuickNotes(opts) {
   document.body.classList.toggle('qn-desk', qn.desk);
   if (qn.desk) placeDeskPanel();
   syncPhoneBtn();
-  render();                                        // paint the cached lists…
-  load().catch(() => { if (!qn.loaded) toast('Could not load your lists'); });   // …then refresh
+  render(); // paint the cached lists…
+  load().catch(() => {
+    if (!qn.loaded) toast('Could not load your lists');
+  }); // …then refresh
 }
 
 export function closeQuickNotes() {
@@ -324,7 +345,11 @@ export function togglePhoneNotes() {
   else openQuickNotes({ desk: true });
 }
 
-function goHome() { qn.screen = 'home'; qn.adding = false; render(); }
+function goHome() {
+  qn.screen = 'home';
+  qn.adding = false;
+  render();
+}
 function openList(id, opts) {
   qn.listId = id;
   qn.screen = 'list';
@@ -391,19 +416,23 @@ function renderHome() {
   chips.hidden = !qn.settings.chips;
   chips.innerHTML = '';
   if (qn.settings.chips) {
-    buildChips(chips, qn.homeTag, tag => { qn.homeTag = tag; renderHome(); refreshIcons(); });
+    buildChips(chips, qn.homeTag, tag => {
+      qn.homeTag = tag;
+      renderHome();
+      refreshIcons();
+    });
   }
 
   const rows = el('qnLists');
   rows.innerHTML = '';
   const shown = qn.lists.filter(l => !qn.homeTag || l.tags.includes(qn.homeTag));
   if (!shown.length) {
-    rows.appendChild(h('div', 'qn-empty', qn.lists.length
-      ? 'No lists carry that tag.'
-      : 'No todo lists yet. Tap + to make one.'));
+    rows.appendChild(
+      h('div', 'qn-empty', qn.lists.length ? 'No lists carry that tag.' : 'No todo lists yet. Tap + to make one.')
+    );
     return;
   }
-  shown.forEach((list) => {
+  shown.forEach(list => {
     const i = qn.lists.indexOf(list);
     const row = h('button', 'qn-row-btn');
     row.dataset.list = list.id;
@@ -462,7 +491,10 @@ function renderListScreen() {
     return;
   }
 
-  if (!list) { el('qnAddBar').hidden = true; return; }
+  if (!list) {
+    el('qnAddBar').hidden = true;
+    return;
+  }
 
   const all = tasksOf(list);
   const open = all.filter(t => !t.done);
@@ -477,7 +509,11 @@ function renderListScreen() {
     const head = h('button', 'qn-comphead' + (qn.compOpen ? '' : ' closed'));
     head.appendChild(h('span', null, 'Completed · ' + done.length));
     head.appendChild(lucideEl('chevron-down'));
-    head.onclick = () => { qn.compOpen = !qn.compOpen; renderListScreen(); refreshIcons(); };
+    head.onclick = () => {
+      qn.compOpen = !qn.compOpen;
+      renderListScreen();
+      refreshIcons();
+    };
     tasksEl.appendChild(head);
     if (qn.compOpen) for (const task of done) tasksEl.appendChild(taskRow(list, task));
   }
@@ -495,7 +531,12 @@ function taskRow(list, task, sub) {
   const box = h('button', 'qn-box' + (task.done ? ' on' : ''));
   box.setAttribute('aria-label', task.done ? 'Mark not done' : 'Mark done');
   box.appendChild(lucideEl('check'));
-  box.onclick = e => { e.stopPropagation(); task.done = !task.done; saveTasks(list); render(); };
+  box.onclick = e => {
+    e.stopPropagation();
+    task.done = !task.done;
+    saveTasks(list);
+    render();
+  };
 
   const mid = h('div', 'qn-task-mid');
   mid.appendChild(h('span', 'qn-task-text', task.text));
@@ -512,7 +553,12 @@ function taskRow(list, task, sub) {
   const star = h('button', 'qn-star' + (task.starred ? ' on' : ''));
   star.setAttribute('aria-label', task.starred ? 'Remove star' : 'Star task');
   star.appendChild(lucideEl('star'));
-  star.onclick = e => { e.stopPropagation(); task.starred = !task.starred; saveTasks(list); render(); };
+  star.onclick = e => {
+    e.stopPropagation();
+    task.starred = !task.starred;
+    saveTasks(list);
+    render();
+  };
 
   row.append(box, mid, star);
   row.onclick = () => openTask(list, task);
@@ -552,7 +598,11 @@ function renderTaskScreen() {
   picker.className = 'qn-dateinput';
   picker.value = task.due || '';
   picker.setAttribute('aria-label', 'Due date');
-  picker.onchange = () => { task.due = picker.value || null; saveTasks(list); render(); };
+  picker.onchange = () => {
+    task.due = picker.value || null;
+    saveTasks(list);
+    render();
+  };
   dueRow.appendChild(picker);
   if (due) {
     const clear = h('button', 'qn-x');
@@ -560,7 +610,10 @@ function renderTaskScreen() {
     clear.appendChild(lucideEl('x'));
     clear.onclick = e => {
       e.stopPropagation();
-      task.due = null; saveTasks(list); render(); toast('Due date removed');
+      task.due = null;
+      saveTasks(list);
+      render();
+      toast('Due date removed');
     };
     dueRow.appendChild(clear);
   }
@@ -595,9 +648,8 @@ function renderTaskScreen() {
   note.style.fontStyle = task.noteStyle.i ? 'italic' : 'normal';
   note.style.textDecoration = task.noteStyle.u ? 'underline' : 'none';
 
-  el('qnCreated').textContent = task.createdAt || list.createdAt
-    ? 'Created ' + agoLabel(task.createdAt || list.createdAt)
-    : '';
+  el('qnCreated').textContent =
+    task.createdAt || list.createdAt ? 'Created ' + agoLabel(task.createdAt || list.createdAt) : '';
 }
 
 // Bullets/numbers rewrite the note's lines; B/I/U style the whole note and are
@@ -617,13 +669,13 @@ function applyFormat(list, task, key) {
 
 function toggleListPrefix(note, kind) {
   const lines = (note || '').split('\n');
-  const isBul = l => /^• /.test(l);
+  const isBul = l => l.startsWith('• ');
   const isNum = l => /^\d+\. /.test(l);
   const strip = l => l.replace(/^• /, '').replace(/^\d+\. /, '');
   const marked = lines.every(l => !l.trim() || (kind === 'bullet' ? isBul(l) : isNum(l)));
   if (marked && lines.some(l => l.trim())) return lines.map(strip).join('\n');
   let n = 0;
-  return lines.map(l => !l.trim() ? l : (kind === 'bullet' ? '• ' + strip(l) : (++n) + '. ' + strip(l))).join('\n');
+  return lines.map(l => (!l.trim() ? l : kind === 'bullet' ? '• ' + strip(l) : ++n + '. ' + strip(l))).join('\n');
 }
 
 // ---- search ----------------------------------------------------------------
@@ -644,7 +696,11 @@ function searchResults() {
 function renderSearch() {
   const chips = el('qnSearchChips');
   chips.innerHTML = '';
-  buildChips(chips, qn.searchTag, tag => { qn.searchTag = tag; renderSearch(); refreshIcons(); });
+  buildChips(chips, qn.searchTag, tag => {
+    qn.searchTag = tag;
+    renderSearch();
+    refreshIcons();
+  });
 
   const results = el('qnResults');
   results.innerHTML = '';
@@ -669,7 +725,11 @@ function renderSearch() {
   results.appendChild(h('span', 'qn-count', found.length + (found.length === 1 ? ' result' : ' results')));
   for (const p of found) {
     const row = taskRow(p.list, p.task, p.list.title);
-    row.onclick = () => { closeSearch(); qn.listId = p.list.id; openTask(p.list, p.task); };
+    row.onclick = () => {
+      closeSearch();
+      qn.listId = p.list.id;
+      openTask(p.list, p.task);
+    };
     results.appendChild(row);
   }
 }
@@ -725,12 +785,20 @@ function sheetRow(parent, opt) {
 function showAddSheet() {
   showSheet(body => {
     sheetRow(body, {
-      icon: 'file-text', label: 'Note',
-      onClick: () => { hideSheet(); addNoteToBoard(); }
+      icon: 'file-text',
+      label: 'Note',
+      onClick: () => {
+        hideSheet();
+        addNoteToBoard();
+      },
     });
     sheetRow(body, {
-      icon: 'square-check-big', label: 'Todo list',
-      onClick: () => { hideSheet(); createList(); }
+      icon: 'square-check-big',
+      label: 'Todo list',
+      onClick: () => {
+        hideSheet();
+        createList();
+      },
     });
   });
 }
@@ -738,42 +806,69 @@ function showAddSheet() {
 function showSettingsSheet() {
   showSheet(body => {
     sheetRow(body, {
-      icon: 'layout-grid', label: 'Smart views', state: qn.settings.tiles ? 'On' : 'Off',
+      icon: 'layout-grid',
+      label: 'Smart views',
+      state: qn.settings.tiles ? 'On' : 'Off',
       cls: qn.settings.tiles ? 'on' : '',
-      onClick: () => { qn.settings.tiles = !qn.settings.tiles; saveSettings(); renderHome(); drawSheet(); refreshIcons(); }
+      onClick: () => {
+        qn.settings.tiles = !qn.settings.tiles;
+        saveSettings();
+        renderHome();
+        drawSheet();
+        refreshIcons();
+      },
     });
     sheetRow(body, {
-      icon: 'tag', label: 'Tag filters', state: qn.settings.chips ? 'On' : 'Off',
+      icon: 'tag',
+      label: 'Tag filters',
+      state: qn.settings.chips ? 'On' : 'Off',
       cls: qn.settings.chips ? 'on' : '',
       onClick: () => {
         qn.settings.chips = !qn.settings.chips;
         if (!qn.settings.chips) qn.homeTag = null;
-        saveSettings(); renderHome(); drawSheet(); refreshIcons();
-      }
+        saveSettings();
+        renderHome();
+        drawSheet();
+        refreshIcons();
+      },
     });
   });
 }
 
 function showListSheet() {
   const list = activeList();
-  if (!list) { showSettingsSheet(); return; }
+  if (!list) {
+    showSettingsSheet();
+    return;
+  }
   showSheet(body => {
     sheetRow(body, {
-      icon: 'pencil', label: 'Rename list',
+      icon: 'pencil',
+      label: 'Rename list',
       onClick: () => {
         hideSheet();
         const title = el('qnListTitle');
         title.focus();
         document.getSelection().selectAllChildren(title);
-      }
+      },
     });
     sheetRow(body, {
-      icon: 'layout-grid', label: 'Show on board',
-      onClick: () => { hideSheet(); closeQuickNotes(); openCanvas(list.canvasId); }
+      icon: 'layout-grid',
+      label: 'Show on board',
+      onClick: () => {
+        hideSheet();
+        closeQuickNotes();
+        openCanvas(list.canvasId);
+      },
     });
     sheetRow(body, {
-      icon: 'trash-2', label: 'Delete list', cls: 'danger',
-      onClick: () => { hideSheet(); deleteList(list); }
+      icon: 'trash-2',
+      label: 'Delete list',
+      cls: 'danger',
+      onClick: () => {
+        hideSheet();
+        deleteList(list);
+      },
     });
   });
 }
@@ -785,8 +880,13 @@ function showTagSheet(list, task) {
     for (const tag of known) {
       const on = task.tags.includes(tag);
       sheetRow(body, {
-        icon: on ? 'check' : 'tag', label: '#' + tag, cls: on ? 'on' : '',
-        onClick: () => { toggleTag(list, task, tag); drawSheet(); }
+        icon: on ? 'check' : 'tag',
+        label: '#' + tag,
+        cls: on ? 'on' : '',
+        onClick: () => {
+          toggleTag(list, task, tag);
+          drawSheet();
+        },
       });
     }
     const field = h('div', 'qn-sheet-field');
@@ -803,7 +903,9 @@ function showTagSheet(list, task) {
     };
     field.appendChild(input);
     body.appendChild(field);
-    setTimeout(() => { if (!known.length) input.focus(); }, 60);
+    setTimeout(() => {
+      if (!known.length) input.focus();
+    }, 60);
   });
 }
 function toggleTag(list, task, tag) {
@@ -827,7 +929,10 @@ function addNoteToBoard() {
 // already there so they don't land on top of an existing card.
 async function createList() {
   const rootId = qn.rootCanvasId || state.rootCanvasId;
-  if (!rootId) { toast('Could not reach your board'); return; }
+  if (!rootId) {
+    toast('Could not reach your board');
+    return;
+  }
   let y = 60;
   try {
     const root = await api.canvas(rootId);
@@ -835,17 +940,28 @@ async function createList() {
       if (it.parentItemId) continue;
       y = Math.max(y, (it.y || 0) + (it.h || 200) + 24);
     }
-  } catch (e) { /* fall back to the default slot */ }
+  } catch {
+    /* fall back to the default slot */
+  }
 
   const created = await api.create({
-    canvasId: rootId, type: 'todo', x: 60, y,
+    canvasId: rootId,
+    type: 'todo',
+    x: 60,
+    y,
     w: defaultsFor('todo').w,
-    data: { title: 'New list', tasks: [] }
+    data: { title: 'New list', tasks: [] },
   });
   qn.dirty = true;
   qn.lists.push({
-    id: created.id, canvasId: rootId, canvasTitle: '',
-    title: 'New list', color: created.color || null, tags: [], tasks: [], createdAt: created.createdAt
+    id: created.id,
+    canvasId: rootId,
+    canvasTitle: '',
+    title: 'New list',
+    color: created.color || null,
+    tags: [],
+    tasks: [],
+    createdAt: created.createdAt,
   });
   openList(created.id, { rename: true });
 }
@@ -855,8 +971,21 @@ async function deleteList(list) {
   qn.dirty = true;
   goHome();
   flushSaves(list.id);
-  try { await api.remove(list.id); } catch (e) { toast('Could not delete the list'); return; }
-  toast('List deleted', { label: 'Undo', fn: async () => { if (await api.restore(list.id)) { qn.dirty = true; await load(); } } });
+  try {
+    await api.remove(list.id);
+  } catch {
+    toast('Could not delete the list');
+    return;
+  }
+  toast('List deleted', {
+    label: 'Undo',
+    fn: async () => {
+      if (await api.restore(list.id)) {
+        qn.dirty = true;
+        await load();
+      }
+    },
+  });
 }
 
 function addTask(list, text) {
@@ -905,7 +1034,10 @@ export function initQuickNotes() {
     refreshIcons();
   });
   title.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); title.blur(); }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      title.blur();
+    }
   });
 
   el('qnAddTask').onclick = () => {
@@ -915,49 +1047,87 @@ export function initQuickNotes() {
     el('qnNewTask').value = '';
     el('qnNewTask').focus();
   };
-  el('qnAddCancel').onclick = () => { qn.adding = false; el('qnNewTask').value = ''; renderListScreen(); refreshIcons(); };
+  el('qnAddCancel').onclick = () => {
+    qn.adding = false;
+    el('qnNewTask').value = '';
+    renderListScreen();
+    refreshIcons();
+  };
   el('qnNewTask').addEventListener('keydown', e => {
     const input = el('qnNewTask');
-    if (e.key === 'Escape') { qn.adding = false; input.value = ''; renderListScreen(); refreshIcons(); return; }
+    if (e.key === 'Escape') {
+      qn.adding = false;
+      input.value = '';
+      renderListScreen();
+      refreshIcons();
+      return;
+    }
     if (e.key !== 'Enter') return;
     const list = activeList();
     const text = input.value.trim();
     if (!list || !text) return;
     addTask(list, text);
     input.value = '';
-    input.focus();                       // stays open for the next one
+    input.focus(); // stays open for the next one
   });
 
-  el('qnTaskBack').onclick = () => { qn.screen = 'list'; render(); };
+  el('qnTaskBack').onclick = () => {
+    qn.screen = 'list';
+    render();
+  };
   el('qnTaskBox').onclick = () => {
-    const f = findTask(qn.taskRef); if (!f) return;
-    f.task.done = !f.task.done; saveTasks(f.list); render();
+    const f = findTask(qn.taskRef);
+    if (!f) return;
+    f.task.done = !f.task.done;
+    saveTasks(f.list);
+    render();
   };
   el('qnTaskStar').onclick = () => {
-    const f = findTask(qn.taskRef); if (!f) return;
-    f.task.starred = !f.task.starred; saveTasks(f.list); render();
+    const f = findTask(qn.taskRef);
+    if (!f) return;
+    f.task.starred = !f.task.starred;
+    saveTasks(f.list);
+    render();
   };
   const taskTitle = el('qnTaskTitle');
   taskTitle.addEventListener('input', () => {
-    const f = findTask(qn.taskRef); if (!f) return;
+    const f = findTask(qn.taskRef);
+    if (!f) return;
     f.task.text = taskTitle.textContent.trim();
     saveTasks(f.list);
   });
-  taskTitle.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); taskTitle.blur(); } });
+  taskTitle.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      taskTitle.blur();
+    }
+  });
   el('qnNote').addEventListener('input', () => {
     autoGrow(el('qnNote'));
-    const f = findTask(qn.taskRef); if (!f) return;
+    const f = findTask(qn.taskRef);
+    if (!f) return;
     f.task.note = el('qnNote').value;
     saveTasks(f.list);
   });
   el('qnDelTask').onclick = () => {
-    const f = findTask(qn.taskRef); if (!f) return;
+    const f = findTask(qn.taskRef);
+    if (!f) return;
     deleteTask(f.list, f.task);
   };
 
   el('qnSearchCancel').onclick = closeSearch;
-  el('qnQueryClear').onclick = () => { qn.query = ''; el('qnQuery').value = ''; renderSearch(); refreshIcons(); el('qnQuery').focus(); };
-  el('qnQuery').addEventListener('input', () => { qn.query = el('qnQuery').value; renderSearch(); refreshIcons(); });
+  el('qnQueryClear').onclick = () => {
+    qn.query = '';
+    el('qnQuery').value = '';
+    renderSearch();
+    refreshIcons();
+    el('qnQuery').focus();
+  };
+  el('qnQuery').addEventListener('input', () => {
+    qn.query = el('qnQuery').value;
+    renderSearch();
+    refreshIcons();
+  });
 
   // Mobile fullscreen ↔ desktop popover: close when the chrome that opened it
   // disappears; re-anchor the popover while it stays open.
@@ -972,19 +1142,36 @@ export function initQuickNotes() {
   });
 
   // Desktop popover: click outside dismisses (mobile stays fullscreen until Escape / Your boards).
-  document.addEventListener('pointerdown', e => {
-    if (!qn.open || !qn.desk) return;
-    if (e.target.closest('#quicknotes') || e.target.closest('#phoneNotes')) return;
-    closeQuickNotes();
-  }, true);
+  document.addEventListener(
+    'pointerdown',
+    e => {
+      if (!qn.open || !qn.desk) return;
+      if (e.target.closest('#quicknotes') || e.target.closest('#phoneNotes')) return;
+      closeQuickNotes();
+    },
+    true
+  );
 
   // Escape backs out one layer at a time: sheet → search → task → list → board.
   document.addEventListener('keydown', e => {
     if (!qn.open || e.key !== 'Escape') return;
-    if (sheetBuilder) { hideSheet(); return; }
-    if (qn.searchOpen) { closeSearch(); return; }
-    if (qn.screen === 'task') { qn.screen = 'list'; render(); return; }
-    if (qn.screen === 'list') { goHome(); return; }
+    if (sheetBuilder) {
+      hideSheet();
+      return;
+    }
+    if (qn.searchOpen) {
+      closeSearch();
+      return;
+    }
+    if (qn.screen === 'task') {
+      qn.screen = 'list';
+      render();
+      return;
+    }
+    if (qn.screen === 'list') {
+      goHome();
+      return;
+    }
     closeQuickNotes();
   });
 }

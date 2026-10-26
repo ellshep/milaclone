@@ -27,7 +27,7 @@ function rid() {
 function gridPos(i) {
   return {
     x: ORIGIN_X + (i % COLS) * (CELL_W + GAP),
-    y: ORIGIN_Y + Math.floor(i / COLS) * (CELL_H + GAP)
+    y: ORIGIN_Y + Math.floor(i / COLS) * (CELL_H + GAP),
   };
 }
 
@@ -73,7 +73,7 @@ function flushTodo(blocks, title, tasks) {
   blocks.push({
     kind: 'todo',
     title: title || 'To-do',
-    tasks: tasks.map(t => ({ id: rid(), text: t.text, done: t.done }))
+    tasks: tasks.map(t => ({ id: rid(), text: t.text, done: t.done })),
   });
 }
 
@@ -175,8 +175,7 @@ function parseBlocks(lines) {
     if (mode === 'todo') {
       // prose mid-todo: fold into last task or skip
       if (todoTasks.length) {
-        todoTasks[todoTasks.length - 1].text =
-          (todoTasks[todoTasks.length - 1].text + ' ' + cleanLine(t)).trim();
+        todoTasks[todoTasks.length - 1].text = (todoTasks[todoTasks.length - 1].text + ' ' + cleanLine(t)).trim();
       }
       continue;
     }
@@ -228,7 +227,7 @@ function parseMd(text) {
   return {
     title,
     blocks: parseBlocks(rootLines),
-    boards: boards.map(b => ({ title: b.title, blocks: parseBlocks(b.lines) }))
+    boards: boards.map(b => ({ title: b.title, blocks: parseBlocks(b.lines) })),
   };
 }
 
@@ -251,13 +250,11 @@ async function tryUploadImage(base, url, alt) {
     const r = await fetch(url, { redirect: 'follow' });
     if (!r.ok) return null;
     const mime = (r.headers.get('content-type') || 'image/png').split(';')[0].trim();
-    if (!/^image\//.test(mime)) return null;
+    if (!mime.startsWith('image/')) return null;
     const buf = Buffer.from(await r.arrayBuffer());
     if (!buf.length) return null;
-    const ext = mime === 'image/jpeg' ? '.jpg'
-      : mime === 'image/webp' ? '.webp'
-      : mime === 'image/gif' ? '.gif'
-      : '.png';
+    const ext =
+      mime === 'image/jpeg' ? '.jpg' : mime === 'image/webp' ? '.webp' : mime === 'image/gif' ? '.gif' : '.png';
     const name = (alt || 'image').replace(/[^\w.-]+/g, '_').slice(0, 60) + ext;
     const fd = new FormData();
     fd.append('file', new Blob([buf], { type: mime }), name);
@@ -275,34 +272,51 @@ async function writeBlocks(base, canvasId, blocks, stats) {
     const pos = gridPos(n++);
     if (b.kind === 'note') {
       await apiJson(base, 'POST', '/api/item', {
-        canvasId, type: 'note', ...pos, w: 240,
-        data: { title: b.title || '', body: b.body || '' }
+        canvasId,
+        type: 'note',
+        ...pos,
+        w: 240,
+        data: { title: b.title || '', body: b.body || '' },
       });
       stats.notes++;
     } else if (b.kind === 'todo') {
       await apiJson(base, 'POST', '/api/item', {
-        canvasId, type: 'todo', ...pos, w: 240,
-        data: { title: b.title || 'To-do', tasks: b.tasks }
+        canvasId,
+        type: 'todo',
+        ...pos,
+        w: 240,
+        data: { title: b.title || 'To-do', tasks: b.tasks },
       });
       stats.todos++;
     } else if (b.kind === 'link') {
       await apiJson(base, 'POST', '/api/item', {
-        canvasId, type: 'link', ...pos, w: 240, color: 'blue',
-        data: { url: b.url, title: b.title || '' }
+        canvasId,
+        type: 'link',
+        ...pos,
+        w: 240,
+        color: 'blue',
+        data: { url: b.url, title: b.title || '' },
       });
       stats.links++;
     } else if (b.kind === 'image') {
       const uploaded = await tryUploadImage(base, b.url, b.alt);
       if (uploaded && uploaded.src) {
         await apiJson(base, 'POST', '/api/item', {
-          canvasId, type: 'image', ...pos, w: 280,
-          data: { src: uploaded.src, name: uploaded.name || b.alt || 'image' }
+          canvasId,
+          type: 'image',
+          ...pos,
+          w: 280,
+          data: { src: uploaded.src, name: uploaded.name || b.alt || 'image' },
         });
         stats.images++;
       } else {
         await apiJson(base, 'POST', '/api/item', {
-          canvasId, type: 'link', ...pos, w: 240, color: 'blue',
-          data: { url: b.url, title: b.alt || b.url }
+          canvasId,
+          type: 'link',
+          ...pos,
+          w: 240,
+          color: 'blue',
+          data: { url: b.url, title: b.alt || b.url },
         });
         stats.imageFallbacks++;
       }
@@ -319,7 +333,7 @@ async function importFile(base, parentCanvasId, filePath, stats) {
     type: 'board',
     ...gridPos(stats.boards),
     w: 152,
-    data: { title: doc.title }
+    data: { title: doc.title },
   });
   stats.boards++;
   const rootChild = top.data.childCanvasId;
@@ -334,7 +348,7 @@ async function importFile(base, parentCanvasId, filePath, stats) {
       type: 'board',
       ...gridPos(bi++),
       w: 152,
-      data: { title: nb.title }
+      data: { title: nb.title },
     });
     stats.boards++;
     const childId = card.data.childCanvasId;
@@ -375,7 +389,9 @@ otherwise a link card is created.`);
     if (!fs.existsSync(f)) throw new Error('file not found: ' + f);
   }
 
-  const health = await fetch(args.base + '/api/health').then(r => r.json()).catch(() => null);
+  const health = await fetch(args.base + '/api/health')
+    .then(r => r.json())
+    .catch(() => null);
   if (!health || !health.ok) throw new Error('server not reachable at ' + args.base);
 
   let parent = args.parent;
@@ -392,7 +408,7 @@ otherwise a link card is created.`);
   console.log('done:', stats);
 }
 
-module.exports = { parseMd, parseBlocks, gridPos, rid };
+module.exports = { parseMd, parseBlocks, gridPos, rid, parseArgs, importFile };
 
 if (require.main === module) {
   main().catch(err => {
