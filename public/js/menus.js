@@ -17,10 +17,14 @@ export function openPalette(it, anchor, mode = 'auto') {
   dom.palette.className = 'open' + (showIcon ? ' board-palette' : '') + (mode === 'icon' ? ' icon-only' : '');
 
   if (showColor) {
-    COLORS.forEach(c => {
+    // The 12 colours, then None (null clears the colour) — except on cards that
+    // fall back to a default colour, where None would look like a swatch.
+    const none = ['todo', 'board', 'column'].includes(it.type) ? [] : [null];
+    [...COLORS, ...none].forEach(c => {
       const sw = document.createElement('div');
-      sw.className = 'sw' + ((it.color || it._childColor) === c ? ' sel' : '');
-      sw.style.background = colorVar(c);
+      sw.className = 'sw' + (c ? '' : ' sw-none') + ((it.color || it._childColor || null) === c ? ' sel' : '');
+      if (c) sw.style.background = colorVar(c);
+      else sw.title = 'None';
       // Recolours the whole selection when this card is part of it.
       sw.onclick = () => {
         const targets = state.selection.has(it.id) && state.selection.size > 1 ? selectedItems() : [it];

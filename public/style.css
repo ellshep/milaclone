@@ -2615,7 +2615,8 @@ body.qn-open .toast {
 }
 
 /* ---- Trash sheet ------------------------------------------------------- */
-#trashDialog {
+#trashDialog,
+#shortcutsDialog {
   width: min(440px, calc(100vw - 32px));
   max-height: min(560px, calc(100vh - 64px));
   padding: 0;
@@ -2625,11 +2626,13 @@ body.qn-open .toast {
   color: var(--ink);
   font-family: var(--sans);
 }
-#trashDialog[open] {
+#trashDialog[open],
+#shortcutsDialog[open] {
   display: flex;
   flex-direction: column;
 }
-#trashDialog::backdrop {
+#trashDialog::backdrop,
+#shortcutsDialog::backdrop {
   background: rgba(28, 30, 38, 0.25);
 }
 .trash-head,
@@ -2741,4 +2744,40 @@ body.qn-open .toast {
 #stage.space-pan.panning,
 #stage.space-pan.panning .item {
   cursor: grabbing;
+}
+
+/* ---- Shortcuts sheet --------------------------------------------------- */
+.shortcuts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 4px 18px 18px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+.shortcuts dt {
+  font-family: ui-monospace, monospace;
+  color: var(--ink-soft);
+}
+.shortcuts dd {
+  margin: 0;
+}
+
+/* Palette "None" swatch: a struck-through blank. */
+#palette .sw-none {
+  background: linear-gradient(to top right, transparent 46%, #c4c6cc 46% 54%, transparent 54%), #fff;
+  border-color: var(--rail-border);
+}
+
+#crumbs .crumb-input {
+  font: inherit;
+  font-weight: 600;
+  padding: 3px 8px;
+  border: 1px solid var(--rail-border);
+  border-radius: 7px;
+  max-width: 240px;
+}
+#crumbs .crumb.current {
+  cursor: text;
 }

@@ -14,6 +14,8 @@ import {
   fileIcon,
   clipMarker,
   parseClipMarker,
+  snap,
+  zRange,
 } from '../../public/js/util.js';
 import { dom } from '../../public/js/state.js';
 
@@ -105,6 +107,20 @@ describe('util', () => {
     btn.click();
     expect(fn).toHaveBeenCalledOnce();
     expect(dom.toastEl.classList.contains('show')).toBe(false);
+  });
+});
+
+describe('canvas helpers', () => {
+  it('snap rounds to the 10 px grid unless free', () => {
+    expect(snap(14, false)).toBe(10);
+    expect(snap(15, false)).toBe(20);
+    expect(snap(-6, false)).toBe(-10);
+    expect(snap(14.3, true)).toBe(14.3);
+  });
+
+  it('zRange spans free cards and always includes 0', () => {
+    expect(zRange([])).toEqual([0, 0]);
+    expect(zRange([{ z: 3 }, { z: -2 }, { z: 9, parentItemId: 'c' }])).toEqual([-2, 3]);
   });
 });
 

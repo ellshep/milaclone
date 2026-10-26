@@ -2,8 +2,8 @@
 
 import { state, dom } from './state.js';
 import { api } from './api.js';
-import { refreshIcons, toast } from './util.js';
-import { loadCam, applyCam, initViewport } from './viewport.js';
+import { refreshIcons, toast, GRID } from './util.js';
+import { loadCam, applyCam, initViewport, zoomBy, zoomToFit, resetZoom } from './viewport.js';
 import { render, renderCrumbs } from './cards.js';
 import {
   deselect,
@@ -16,6 +16,7 @@ import {
 } from './editing.js';
 import { closePalette, closeCtx } from './menus.js';
 import { duplicateSelected } from './clipboard.js';
+import { nudgeSelection } from './drag.js';
 import { arm, disarm, initTools } from './tools.js';
 import { initMobile, updateMobileChrome } from './mobile.js';
 import { initBoardChrome, updateSelectionChrome } from './boardchrome.js';
@@ -30,8 +31,14 @@ import { initLightbox } from './lightbox.js';
 
 // Each board visit is a history entry, so browser Back/Forward walk between
 // boards. `replace` is for the initial load and fallbacks that shouldn't add one.
+// A later call wins: fast Back presses can overlap, and a stale fetch finishing
+// last must not push its board back over the newer one.
+let navSeq = 0;
 export async function openCanvas(id, { replace = false } = {}) {
-  state.view = await api.canvas(id);
+  const seq = ++navSeq;
+  const view = await api.canvas(id);
+  if (seq !== navSeq) return;
+  state.view = view;
   if (state.view.error) {
     if (id !== state.rootCanvasId) return openCanvas(state.rootCanvasId, { replace: true });
     toast('Board not found');
@@ -46,7 +53,8 @@ export async function openCanvas(id, { replace = false } = {}) {
   updateSelectionChrome();
   render();
   applyCam();
-  if (location.hash.slice(1) !== id) history[replace ? 'replaceState' : 'pushState'](null, '', '#' + id);
+  const i = (history.state?.i ?? 0) + (replace ? 0 : 1);
+  if (location.hash.slice(1) !== id) history[replace ? 'replaceState' : 'pushState']({ i }, '', '#' + id);
 }
 
 // Re-fetch the current board after a server-side change (paste, restore) without
@@ -70,6 +78,14 @@ document.addEventListener('keydown', e => {
     closePalette();
     closeCtx();
   }
+  const mod = e.metaKey || e.ctrlKey;
+  // Canvas zoom, even mid-typing, so the browser never zooms the page instead.
+  if (mod && ['=', '+', '-', '0'].includes(e.key)) {
+    e.preventDefault();
+    if (e.key === '0') resetZoom();
+    else zoomBy(e.key === '-' ? 1 / 1.2 : 1.2);
+    return;
+  }
   if (typing) return;
   // Space held = pan mode, unless a focused control should get the keypress.
   const control = ae && ae.closest('button, a, select, summary, [role="button"], [tabindex]:not([tabindex="-1"])');
@@ -81,7 +97,6 @@ document.addEventListener('keydown', e => {
     }
     return;
   }
-  const mod = e.metaKey || e.ctrlKey;
   // cmd+C / X / V arrive as copy/cut/paste events, handled in capture.js.
   if (mod && e.key.toLowerCase() === 'd') {
     e.preventDefault();
@@ -91,6 +106,36 @@ document.addEventListener('keydown', e => {
   if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
     e.preventDefault();
     undoDelete();
+    return;
+  }
+  // Back / forward through visited boards, and up to the parent board.
+  if (mod && (e.key === '[' || e.key === ']')) {
+    e.preventDefault();
+    // history.state.i counts this tab's board visits, so Back never leaves the app.
+    if (e.key === ']') history.forward();
+    else if (history.state?.i > 0) history.back();
+    return;
+  }
+  if (mod && e.key.toLowerCase() === 'u') {
+    e.preventDefault();
+    const bc = state.view.breadcrumb;
+    if (bc.length > 1) openCanvas(bc[bc.length - 2].id);
+    return;
+  }
+  const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+  if (arrow && state.selection.size && !mod && !control) {
+    e.preventDefault();
+    const step = GRID * (e.shiftKey ? 10 : 1);
+    nudgeSelection(arrow[0] * step, arrow[1] * step);
+    return;
+  }
+  if (e.key === '/' && !mod) {
+    e.preventDefault();
+    document.getElementById('shortcutsDialog').showModal();
+    return;
+  }
+  if (e.key.toLowerCase() === 'z' && !mod) {
+    zoomToFit();
     return;
   }
   if (e.key === 'Enter' && state.selectedId && !mod) {
