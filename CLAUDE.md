@@ -18,7 +18,7 @@ npm run lint                  # oxlint; warnings fail CI
 npm run format                # prettier --write (CI runs format:check)
 ```
 
-CI (`.github/workflows/tests.yml`) runs Lint, Format, Unit / API tests, UI unit tests, E2E tests and Docker smoke on every PR; all six are required checks on `main`, so job names must not change without updating branch protection. Coverage floors: `npm test` applies 80% to all backend files; Vitest applies 80% per file to the modules listed in `vitest.config.mjs` thresholds — add a module there when it gets unit tests. Modules that import `main.js` boot the whole app, so test them in Playwright instead.
+CI (`.github/workflows/tests.yml`) runs Lint, Format, Unit / API tests, UI unit tests, E2E tests and Docker smoke on every PR; all six are required checks on `main`, so job names must not change without updating branch protection. The E2E job runs in the `mcr.microsoft.com/playwright:v<version>-noble` image — bump that tag with `@playwright/test`. Coverage floors: `npm test` applies 80% to all backend files; Vitest applies 80% per file to the modules listed in `vitest.config.mjs` thresholds — add a module there when it gets unit tests. Modules that import `main.js` boot the whole app, so test them in Playwright instead.
 
 The backend and e2e suites are self-isolating: `test/api.test.js` points `DATA_DIR` at a fresh `mkdtemp` before requiring `db.js`; `playwright.config.js` starts its own server on port 4322 with `DATA_DIR=.e2e-data` (wiped each run). Neither touches real board data — but note that `db.js` opens the SQLite handle on `require`, so any code that requires it must set `DATA_DIR` first if isolation matters.
 
