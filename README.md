@@ -271,6 +271,24 @@ there, so the path isn't configurable).
 - **Frontend:** vanilla JavaScript, HTML, and CSS in `public/` — no bundler, no
   framework
 
+## Import from Milanote
+
+Milanote’s markdown export has no layout data, so this is a one-shot CLI that
+creates nested boards / notes / todos / links via the running app’s API (grid
+positions; rearrange in the UI after). Copy your `.md` files onto a machine
+that can reach the server, then:
+
+```bash
+node scripts/import-milanote-md.js \
+  --base http://127.0.0.1:8182 \
+  business-ideas.md creative-projects.md therapy.md writing.md
+```
+
+Use your Tailscale URL for `--base` if you’re not on the host. Optional
+`--parent <canvasId>` targets a board other than Home. Images are uploaded when
+the Milanote CDN allows the fetch; otherwise a link card is kept. Running twice
+duplicates — there is no idempotency.
+
 ## Development
 
 ```bash
