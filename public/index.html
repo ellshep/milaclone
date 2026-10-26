@@ -32,6 +32,9 @@
           <i data-lucide="smartphone"></i>
           <span class="top-phone-badge" id="phoneNotesBadge" hidden>0</span>
         </button>
+        <button type="button" class="top-phone" id="trashBtn" aria-label="Trash" title="Trash" aria-haspopup="dialog">
+          <i data-lucide="trash-2"></i>
+        </button>
         <span class="ghost" id="exportBtn">Export</span>
         <div class="zoomwrap">
           <button id="zoomOut" title="Zoom out">−</button>
@@ -294,7 +297,20 @@
       <button data-act="zoomout">Zoom out</button>
       <button data-act="reset">Reset view</button>
       <button data-act="export">Export</button>
+      <button data-act="trash">Trash</button>
     </div>
+
+    <dialog id="trashDialog" aria-labelledby="trashTitle">
+      <header class="trash-head">
+        <h2 id="trashTitle">Trash</h2>
+        <button type="button" class="top-phone" id="trashClose" aria-label="Close"><i data-lucide="x"></i></button>
+      </header>
+      <ul id="trashList"></ul>
+      <p id="trashEmptyNote" hidden>The trash is empty.</p>
+      <footer class="trash-foot">
+        <button type="button" class="trash-empty" id="trashEmpty">Empty trash</button>
+      </footer>
+    </dialog>
 
     <div id="mBoardSheet" hidden>
       <button data-act="delete" class="danger">Move to Trash</button>

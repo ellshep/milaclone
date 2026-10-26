@@ -15,6 +15,7 @@ const {
   itemsForCanvas,
   trashItemDeep,
   restoreItem,
+  emptyTrash,
   copyItemDeep,
   moveItemDeep,
 } = require('./db');
@@ -53,6 +54,8 @@ const randomBoardIcon = () => BOARD_ICONS[Math.floor(Math.random() * BOARD_ICONS
 const ALLOWED_UPLOAD = mime =>
   mime.startsWith('image/') ||
   mime.startsWith('text/') ||
+  mime.startsWith('audio/') ||
+  mime.startsWith('video/') ||
   mime === 'application/pdf' ||
   mime === 'application/msword' ||
   mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
@@ -134,8 +137,19 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => cb(null, ALLOWED_UPLOAD(file.mimetype)),
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_UPLOAD(file.mimetype)) return cb(null, true);
+    req.rejectedType = file.mimetype || 'unknown';
+    cb(null, false);
+  },
 });
+
+// A card may only sit inside a live column on its own canvas.
+function badParent(parentItemId, canvasId, selfId) {
+  if (parentItemId == null) return false;
+  const p = stmt.getItem.get(parentItemId);
+  return !p || p.type !== 'column' || p.canvasId !== canvasId || p.id === selfId;
+}
 
 // ---- Canvas ----------------------------------------------------------------
 router.get('/api/root', (req, res) => res.json({ rootCanvasId: rootCanvasId() }));
@@ -232,6 +246,9 @@ router.patch('/api/item/:id', (req, res) => {
   if (b.color !== undefined) it.color = b.color;
   if (b.parentItemId !== undefined) it.parentItemId = b.parentItemId;
   if (b.canvasId && stmt.getCanvas.get(b.canvasId)) it.canvasId = b.canvasId;
+  if (b.parentItemId !== undefined && badParent(it.parentItemId, it.canvasId, it.id)) {
+    return res.status(400).json({ error: 'bad parentItemId' });
+  }
   if (b.data && typeof b.data === 'object') {
     const stored = it.data.tasks;
     it.data = Object.assign({}, it.data, b.data);
@@ -281,6 +298,12 @@ router.patch('/api/item/:id', (req, res) => {
 // Bulk position update (used after multi-select drags / reflows)
 router.patch('/api/items', (req, res) => {
   const updates = (req.body && req.body.updates) || [];
+  for (const u of updates) {
+    const row = u.parentItemId !== undefined && stmt.getItem.get(u.id);
+    if (row && badParent(u.parentItemId, row.canvasId, row.id)) {
+      return res.status(400).json({ error: 'bad parentItemId', id: u.id });
+    }
+  }
   db.transaction(() => {
     for (const u of updates) {
       const row = stmt.getItem.get(u.id);
@@ -313,6 +336,10 @@ router.delete('/api/item/:id', (req, res) => {
 });
 
 router.post('/api/item/:id/restore', (req, res) => {
+  const row = stmt.anyItem.get(req.params.id);
+  if (row && row.trashedBy === row.id && !stmt.getCanvas.get(row.canvasId)) {
+    return res.status(409).json({ error: 'its board is in the trash — restore that first' });
+  }
   const restored = db.transaction(() => restoreItem(req.params.id))();
   if (!restored) return res.status(404).json({ error: 'not in trash' });
   res.json(rowToItem(stmt.getItem.get(req.params.id)));
@@ -372,8 +399,63 @@ router.get('/api/todos', (req, res) => {
   res.json({ rootCanvasId: rootCanvasId(), lists });
 });
 
+// ---- Trash -----------------------------------------------------------------
+// One entry per delete (the item the user deleted, not everything inside it).
+const trashTitle = (row, data) => {
+  if (row.type === 'board') {
+    const c = data.childCanvasId && stmt.anyCanvas.get(data.childCanvasId);
+    return (c && c.title) || 'Board';
+  }
+  const t = data.title || data.name || data.body || data.text || data.url || '';
+  return String(t).split('\n')[0].trim().slice(0, 80);
+};
+
+router.get('/api/trash', (req, res) => {
+  const items = stmt.trashRoots.all().map(row => {
+    const data = row.data ? JSON.parse(row.data) : {};
+    const canvas = stmt.anyCanvas.get(row.canvasId);
+    return {
+      id: row.id,
+      type: row.type,
+      title: trashTitle(row, data),
+      canvasId: row.canvasId,
+      canvasTitle: canvas ? canvas.title : '',
+      restorable: !!canvas && canvas.trashedBy == null,
+      trashedAt: row.trashedAt,
+    };
+  });
+  res.json({ items });
+});
+
+router.delete('/api/trash', (req, res) => {
+  const { items, orphanSrcs } = db.transaction(emptyTrash)();
+  let files = 0;
+  for (const src of orphanSrcs) {
+    if (!String(src).startsWith('/uploads/')) continue;
+    try {
+      fs.unlinkSync(path.join(UPLOAD_DIR, path.basename(src)));
+      files++;
+    } catch {
+      /* already gone */
+    }
+  }
+  res.json({ items, files });
+});
+
 // ---- Upload ----------------------------------------------------------------
-router.post('/api/upload', upload.single('file'), (req, res) => {
+// Rejections carry a reason the client can show: 415 for a disallowed type,
+// 413 over the size cap.
+const uploadOne = (req, res, next) =>
+  upload.single('file')(req, res, err => {
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File is larger than 25 MB' });
+    res.status(400).json({ error: err.message });
+  });
+
+router.post('/api/upload', uploadOne, (req, res) => {
+  if (req.rejectedType) {
+    return res.status(415).json({ error: `${req.rejectedType} files can't be uploaded` });
+  }
   if (!req.file) return res.status(400).json({ error: 'no file' });
   res.json({
     src: '/uploads/' + req.file.filename,

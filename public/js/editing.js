@@ -111,8 +111,7 @@ async function flushSave(id, keepalive = false) {
 }
 
 export function flushAllSaves() {
-  // oxlint-disable-next-line unicorn/no-useless-spread -- snapshot: flushSave deletes from pending
-  for (const id of [...pending.keys()]) flushSave(id, true);
+  return Promise.all([...pending.keys()].map(id => flushSave(id, true)));
 }
 // Send queued edits before the tab is closed, reloaded or backgrounded.
 document.addEventListener('visibilitychange', () => {
@@ -133,6 +132,12 @@ export async function deleteItem(id) {
   render();
   updateSelectionChrome();
   toast('Moved to trash', { label: 'Undo', fn: () => undoDelete(id) });
+}
+
+// The Trash sheet restored or purged it: cmd+Z must not try again. No id = all.
+export function forgetUndo(id) {
+  if (id === undefined) trashed.length = 0;
+  else if (trashed.includes(id)) trashed.splice(trashed.indexOf(id), 1);
 }
 
 export async function undoDelete(id = trashed[trashed.length - 1]) {

@@ -46,22 +46,22 @@ Set up in the `chore/quality-gates` PR, at the user's request, so auto-merged ph
 
 ## P1 · Robustness tail
 
-- [ ] **F1.1 Trash view with restore** (S).
+- [x] **F1.1 Trash view with restore** (S).
   - `GET /api/trash` lists the top-level trashed items, newest first. A sheet lets you restore them.
   - Acceptance: trash an item, then GET it from `/api/trash`, restore it, and its whole subtree is live again.
-- [ ] **F1.2 Empty trash** (S).
+- [x] **F1.2 Empty trash** (S).
   - Hard-deletes the trashed rows and unlinks their upload files, after a confirm step.
   - Acceptance: once it's emptied, the rows and the upload files are gone, and files referenced by live items survive.
-- [ ] **F1.3 Reparent guard** (S).
+- [x] **F1.3 Reparent guard** (S).
   - A PATCH with `parentItemId` must point at a live column on the same canvas.
   - Acceptance: a PATCH to a missing column, a trashed column, a column on another canvas, or a non-column item returns 400.
-- [ ] **F1.4 Reload when the tab regains focus** (S).
+- [x] **F1.4 Reload when the tab regains focus** (S).
   - On `visibilitychange`→visible, flush pending saves, then refetch the canvas and Quick notes.
   - Acceptance (e2e): change an item through the API, refocus the page, and the change shows.
-- [ ] **F1.5 Audio/video uploads and rejection reasons** (S).
+- [x] **F1.5 Audio/video uploads and rejection reasons** (S).
   - Allow `audio/*` and `video/*`. A rejected file gets a 415 with the reason, and the toast shows it.
   - Acceptance: an mp3 or mp4 upload returns 200, and a disallowed type returns 415 with the reason in the body.
-- [ ] **F1.6 Fix the flaky double-tap test** (S).
+- [x] **F1.6 Fix the flaky double-tap test** (S).
   - Remove the 120 ms gap in `e2e/mobile-board.spec.js`.
   - Acceptance: the spec passes 20 times in a row with `--repeat-each=20`.
 

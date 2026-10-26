@@ -6,6 +6,7 @@ import { applyCam, zoomBy } from './viewport.js';
 import { arm, disarm } from './tools.js';
 import { openCanvas } from './main.js';
 import { openQuickNotes } from './quicknotes.js';
+import { openTrash } from './trash.js';
 
 // Mobile chrome: the header (back / title / share) and footer (tabs, more
 // menu, and the swap-in tool tray). The elements exist on every viewport but
@@ -89,6 +90,7 @@ export function initMobile() {
       applyCam();
     }
     if (act.dataset.act === 'export') toast('Tip: your boards auto-save to the server');
+    if (act.dataset.act === 'trash') openTrash();
     sheet.hidden = true;
   });
   document.addEventListener(

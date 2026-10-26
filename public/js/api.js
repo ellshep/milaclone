@@ -70,6 +70,12 @@ export const api = {
   move(id, to) {
     return write('/api/item/' + id + '/move', json('POST', to));
   },
+  async trash() {
+    return (await fetch('/api/trash')).json();
+  },
+  emptyTrash() {
+    return write('/api/trash', { method: 'DELETE' });
+  },
   async upload(file) {
     const fd = new FormData();
     fd.append('file', file);

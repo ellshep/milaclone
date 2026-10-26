@@ -74,6 +74,18 @@ const stmt = {
   trashItem: db.prepare(`UPDATE items SET trashedBy = ?, trashedAt = ? WHERE id = ?`),
   restoreItems: db.prepare(`UPDATE items SET trashedBy = NULL, trashedAt = NULL WHERE trashedBy = ?`),
   restoreCanvases: db.prepare(`UPDATE canvases SET trashedBy = NULL, trashedAt = NULL WHERE trashedBy = ?`),
+  // Trash: rows a delete started from (trashedBy = own id), newest first.
+  trashRoots: db.prepare(`SELECT * FROM items WHERE trashedBy = id ORDER BY trashedAt DESC, id`),
+  anyItem: db.prepare(`SELECT * FROM items WHERE id = ?`),
+  anyCanvas: db.prepare(`SELECT * FROM canvases WHERE id = ?`),
+  setItemParent: db.prepare(`UPDATE items SET parentItemId = ? WHERE id = ?`),
+  trashedSrcs: db.prepare(
+    `SELECT DISTINCT json_extract(data, '$.src') AS src FROM items WHERE trashedBy IS NOT NULL
+       AND json_extract(data, '$.src') IS NOT NULL`
+  ),
+  srcInUse: db.prepare(`SELECT 1 FROM items WHERE json_extract(data, '$.src') = ? LIMIT 1`),
+  purgeItems: db.prepare(`DELETE FROM items WHERE trashedBy IS NOT NULL`),
+  purgeCanvases: db.prepare(`DELETE FROM canvases WHERE trashedBy IS NOT NULL`),
 };
 
 // Seed a root 'Home' canvas on first run.
@@ -165,10 +177,23 @@ function trashItemDeep(itemId) {
   for (const r of items) stmt.trashItem.run(itemId, now, r.id);
   for (const c of canvases) stmt.trashCanvas.run(itemId, now, c.id);
 }
-// ponytail: trash is never purged; add a "empty trash" sweep if the db grows.
 
+// Brings back exactly the rows one delete trashed. A card whose column was
+// deleted separately comes back loose on the canvas instead of inside a ghost.
 function restoreItem(itemId) {
-  return stmt.restoreItems.run(itemId).changes + stmt.restoreCanvases.run(itemId).changes;
+  const n = stmt.restoreItems.run(itemId).changes + stmt.restoreCanvases.run(itemId).changes;
+  const row = stmt.getItem.get(itemId);
+  if (row && row.parentItemId && !stmt.getItem.get(row.parentItemId)) stmt.setItemParent.run(null, itemId);
+  return n;
+}
+
+// Hard-delete everything in the trash. Returns the upload srcs no surviving item
+// references, for the caller to unlink. Run inside a transaction.
+function emptyTrash() {
+  const srcs = stmt.trashedSrcs.all().map(r => r.src);
+  const items = stmt.purgeItems.run().changes;
+  stmt.purgeCanvases.run();
+  return { items, orphanSrcs: srcs.filter(src => !stmt.srcInUse.get(src)) };
 }
 
 // Deep-copy an item (and its subtree) onto `canvasId` at (x, y). Returns the new
@@ -235,6 +260,7 @@ module.exports = {
   itemsForCanvas,
   trashItemDeep,
   restoreItem,
+  emptyTrash,
   copyItemDeep,
   moveItemDeep,
 };
