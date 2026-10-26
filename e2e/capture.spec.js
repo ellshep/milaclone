@@ -157,7 +157,8 @@ test('F2.4 double-clicking an image opens the lightbox; arrows step, Escape clos
   });
   await page.reload();
 
-  await page.locator(`.item[data-id="${first.id}"] img`).dblclick({ force: true });
+  // the card, not the <img>: an image that hasn't loaded yet has no height
+  await page.locator(`.item[data-id="${first.id}"]`).dblclick();
   const lb = page.locator('#lightbox');
   await expect(lb).toHaveAttribute('open', '');
   await expect(lb.locator('.lb-caption')).toHaveText('First');
@@ -223,6 +224,7 @@ test('a cut marker moves the card once; pasting it again does nothing', async ({
     data: { name: 'cut.pdf' },
   });
   await page.reload();
+  await expect(page.locator('#crumbs')).toContainText('fixture'); // board loaded: paste is handled
   const marker = `milaclone:item:${card.id}:cut`;
   await paste(page, { text: marker });
   await expect(page.locator(`.item[data-id="${card.id}"]`)).toBeVisible();
