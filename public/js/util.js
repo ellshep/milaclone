@@ -72,6 +72,10 @@ export function zRange(items) {
   return [Math.min(0, ...zs), Math.max(0, ...zs)];
 }
 
+// Cards snap to a 10 px grid while dragged; `free` (shift held) turns it off.
+export const GRID = 10;
+export const snap = (v, free) => (free ? v : Math.round(v / GRID) * GRID);
+
 export const isUrl = s => /^https?:\/\/\S+$/i.test(String(s || '').trim());
 
 // YouTube, Vimeo and Spotify links play inline as an iframe; null for anything

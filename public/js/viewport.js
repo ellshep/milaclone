@@ -1,6 +1,6 @@
 'use strict';
 
-import { state, dom } from './state.js';
+import { state, dom, elMap } from './state.js';
 import { toast } from './util.js';
 
 // Camera / pan / zoom for the infinite canvas, plus screen<->world mapping.
@@ -40,6 +40,31 @@ export function zoomBy(factor) {
   state.cam.scale = Math.max(0.2, Math.min(2.5, state.cam.scale * factor));
   state.cam.x = px - wx * state.cam.scale;
   state.cam.y = py - wy * state.cam.scale;
+  applyCam();
+}
+
+export function resetZoom() {
+  state.cam = { x: 80, y: 60, scale: 1 };
+  applyCam();
+}
+
+// Frames every free card on the board (never magnifying past 100%).
+export function zoomToFit() {
+  const boxes = state.view.items
+    .filter(i => !i.parentItemId && elMap.get(i.id))
+    .map(i => {
+      const el = elMap.get(i.id);
+      return [i.x, i.y, i.x + el.offsetWidth, i.y + el.offsetHeight];
+    });
+  if (!boxes.length) return resetZoom();
+  const l = Math.min(...boxes.map(b => b[0])),
+    t = Math.min(...boxes.map(b => b[1])),
+    w = Math.max(...boxes.map(b => b[2])) - l,
+    h = Math.max(...boxes.map(b => b[3])) - t;
+  const r = dom.stage.getBoundingClientRect();
+  const pad = 60;
+  const scale = Math.max(0.2, Math.min(1, (r.width - 2 * pad) / w, (r.height - 2 * pad) / h));
+  state.cam = { scale, x: (r.width - w * scale) / 2 - l * scale, y: (r.height - h * scale) / 2 - t * scale };
   applyCam();
 }
 
@@ -93,10 +118,7 @@ function initPinch() {
 export function initViewport() {
   document.getElementById('zoomIn').onclick = () => zoomBy(1.2);
   document.getElementById('zoomOut').onclick = () => zoomBy(1 / 1.2);
-  document.getElementById('zoomReset').onclick = () => {
-    state.cam = { x: 80, y: 60, scale: 1 };
-    applyCam();
-  };
+  document.getElementById('zoomReset').onclick = resetZoom;
   document.getElementById('exportBtn').onclick = () => toast('Tip: your boards auto-save to the server');
 
   dom.stage.addEventListener(

@@ -2,7 +2,7 @@
 
 import { state, dom, elMap } from './state.js';
 import { api } from './api.js';
-import { isLocked, zRange } from './util.js';
+import { isLocked, zRange, snap } from './util.js';
 import { screenToWorld } from './viewport.js';
 import { select, enterEdit, toggleSelect, selectedItems } from './editing.js';
 import { render } from './cards.js';
@@ -65,13 +65,14 @@ export function onItemPointerDown(e, it, el) {
         el.style.width = (it.w || 240) + 'px';
       }
     }
-    const wx = startWorld.x + dx / state.cam.scale;
-    const wy = startWorld.y + dy / state.cam.scale;
+    // The dragged card lands on the grid; the rest of the group keeps its offsets.
+    const wx = snap(startWorld.x + dx / state.cam.scale, ev.shiftKey);
+    const wy = snap(startWorld.y + dy / state.cam.scale, ev.shiftKey);
     el.style.left = wx + 'px';
     el.style.top = wy + 'px';
     for (const o of others) {
-      o.el.style.left = o.x + dx / state.cam.scale + 'px';
-      o.el.style.top = o.y + dy / state.cam.scale + 'px';
+      o.el.style.left = o.x + wx - startWorld.x + 'px';
+      o.el.style.top = o.y + wy - startWorld.y + 'px';
     }
     if (!others.length) highlightColumn(ev, it);
   };
@@ -168,6 +169,29 @@ function insertOrder(colId, clientY, selfId) {
     if (clientY < r.top + r.height / 2) return i;
   }
   return rows.length;
+}
+
+// Arrow keys: move the free, unlocked selected cards by (dx, dy), onto the grid.
+// Key-repeat fires fast, so moves are saved in one bulk PATCH once the keys rest
+// (parallel requests could land out of order and keep an older position).
+const nudged = new Map();
+let nudgeTimer = 0;
+export function nudgeSelection(dx, dy) {
+  const items = selectedItems().filter(i => !i.parentItemId && !isLocked(i));
+  for (const it of items) {
+    it.x = snap(it.x + dx);
+    it.y = snap(it.y + dy);
+    const el = elMap.get(it.id);
+    el.style.left = it.x + 'px';
+    el.style.top = it.y + 'px';
+    nudged.set(it.id, it);
+  }
+  clearTimeout(nudgeTimer);
+  nudgeTimer = setTimeout(() => {
+    const updates = [...nudged.values()].map(i => ({ id: i.id, x: i.x, y: i.y }));
+    nudged.clear();
+    if (updates.length) api.patchMany(updates);
+  }, 300);
 }
 
 export function startResize(e, it, el) {

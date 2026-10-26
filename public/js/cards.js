@@ -7,7 +7,9 @@ import { openPalette, openCtx } from './menus.js';
 import { updateSelectionChrome } from './boardchrome.js';
 import { onItemPointerDown, startResize } from './drag.js';
 import { openCanvas } from './main.js';
+import { api } from './api.js';
 import { openLightbox } from './lightbox.js';
+import { updateMobileChrome } from './mobile.js';
 
 // Rendering of the canvas and every card type. This module owns the DOM for
 // items; other modules ask it to (re)render when data changes.
@@ -50,8 +52,40 @@ export function renderCrumbs() {
     t.textContent = c.title;
     b.appendChild(t);
     if (i !== state.view.breadcrumb.length - 1) b.onclick = () => openCanvas(c.id);
+    else b.onclick = () => renameBoard(b);
     dom.crumbs.appendChild(b);
   });
+}
+
+// Clicking the current board's name in the header edits it in place: Enter or
+// blur saves, Escape cancels. Only this crumb is swapped (not the whole bar), so
+// a click on another crumb that blurs the field still lands; if we navigated
+// away meanwhile, the input is already detached and the swap is a no-op.
+function renameBoard(b) {
+  const canvas = state.view.canvas;
+  const crumb = state.view.breadcrumb.at(-1);
+  const input = document.createElement('input');
+  input.className = 'crumb-input';
+  input.value = canvas.title || '';
+  input.setAttribute('aria-label', 'Board name');
+  b.replaceWith(input);
+  input.focus();
+  input.select();
+  let cancel = false;
+  input.onkeydown = e => {
+    if (e.key === 'Escape') cancel = true;
+    if (e.key === 'Enter' || e.key === 'Escape') input.blur();
+  };
+  input.onblur = async () => {
+    const title = input.value.trim();
+    if (!cancel && title && title !== canvas.title) {
+      const old = canvas.title;
+      canvas.title = crumb.title = b.lastChild.textContent = title;
+      if (!(await api.patchCanvas(canvas.id, { title }))) canvas.title = crumb.title = b.lastChild.textContent = old;
+      if (state.view.canvas === canvas) updateMobileChrome();
+    }
+    input.replaceWith(b);
+  };
 }
 
 export function makeField(tag, cls, value, placeholder) {

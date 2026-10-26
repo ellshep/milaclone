@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import { applyCam, screenToWorld, saveCam, loadCam, zoomBy, initViewport } from '../../public/js/viewport.js';
-import { state, dom } from '../../public/js/state.js';
+import {
+  applyCam,
+  screenToWorld,
+  saveCam,
+  loadCam,
+  zoomBy,
+  zoomToFit,
+  initViewport,
+} from '../../public/js/viewport.js';
+import { state, dom, elMap } from '../../public/js/state.js';
 
 // jsdom has no layout: give the stage a fixed 800×600 box at (10, 20).
 dom.stage.getBoundingClientRect = () => ({ left: 10, top: 20, width: 800, height: 600 });
@@ -58,6 +66,28 @@ describe('viewport', () => {
     expect(state.cam.scale).toBeCloseTo(1);
     document.getElementById('zoomReset').click();
     expect(state.cam).toEqual({ x: 80, y: 60, scale: 1 });
+  });
+
+  it('zoomToFit frames the free cards, never past 100%, and resets on an empty board', () => {
+    const box = (w, h) =>
+      Object.defineProperties(document.createElement('div'), { offsetWidth: { value: w }, offsetHeight: { value: h } });
+    state.view.items = [
+      { id: 'a', x: 0, y: 0 },
+      { id: 'b', x: 1500, y: 900 },
+      { id: 'in', x: 9999, y: 9999, parentItemId: 'col' }, // column cards don't count
+    ];
+    elMap.set('a', box(100, 100)).set('b', box(100, 100)).set('in', box(100, 100));
+    zoomToFit(); // 1600×1000 into 680×480 → width-bound at 0.425, centred vertically
+    expect(state.cam.scale).toBeCloseTo(0.425);
+    expect(state.cam.x).toBeCloseTo(60);
+    expect(state.cam.y).toBeCloseTo(87.5);
+    state.view.items = [{ id: 'a', x: 100, y: 100 }];
+    zoomToFit(); // a lone card is centred at 100%
+    expect(state.cam).toEqual({ scale: 1, x: 250, y: 150 });
+    state.view.items = [];
+    zoomToFit();
+    expect(state.cam).toEqual({ x: 80, y: 60, scale: 1 });
+    elMap.clear();
   });
 
   it('wheel pans; ctrl+wheel zooms around the pointer', () => {

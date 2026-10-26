@@ -33,14 +33,8 @@ export const api = {
   async todos() {
     return (await fetch('/api/todos')).json();
   },
-  async patchCanvas(id, body) {
-    return (
-      await fetch('/api/canvas/' + id, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-    ).json();
+  patchCanvas(id, body) {
+    return write('/api/canvas/' + id, json('PATCH', body));
   },
   async create(body) {
     return (

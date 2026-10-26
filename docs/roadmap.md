@@ -99,19 +99,19 @@ Set up in the `chore/quality-gates` PR, at the user's request, so auto-merged ph
 - [x] **F3.4 Stacking order** (S).
   - Each card gets a `z` value. Dragging a card raises it, and the menu has bring-to-front and send-to-back.
   - Acceptance: the order persists after a reload.
-- [ ] **F3.5 Grid snap and arrow-key nudge** (S).
+- [x] **F3.5 Grid snap and arrow-key nudge** (S).
   - Cards snap to a 10 px grid, and shift turns snapping off. Arrow keys nudge by 1 grid step, shift+arrow by 10.
   - Acceptance (e2e): a dropped card lands on multiples of 10.
-- [ ] **F3.7 Zoom keys** (S).
+- [x] **F3.7 Zoom keys** (S).
   - z zooms to fit. cmd+= / − / 0 zoom the canvas, and `preventDefault` stops the browser zooming the page.
   - Acceptance (e2e): the canvas scale changes and the page zoom doesn't.
-- [ ] **F3.8 Shortcuts sheet** (S).
+- [x] **F3.8 Shortcuts sheet** (S).
   - `/` opens the list of keyboard shortcuts.
   - Acceptance (e2e): it opens and closes.
-- [ ] **F3.10 Palette: add "None"** (S, D6).
+- [x] **F3.10 Palette: add "None"** (S, D6).
   - Keep the 12 colours and add a "None" option that clears the colour.
   - Acceptance: choosing None removes `color` from the item.
-- [ ] **F3.11 Navigation keys and header rename** (S).
+- [x] **F3.11 Navigation keys and header rename** (S).
   - cmd+[ goes back, cmd+] goes forward and cmd+U goes up a board. Clicking the board title in the header renames the board.
   - Acceptance (e2e): each key navigates, and the renamed title persists.
 
