@@ -61,7 +61,8 @@ test('util.isLocked reflects the data.locked flag', async ({ page }) => {
 test('util.rid produces distinct short ids', async ({ page }) => {
   const out = await page.evaluate(async () => {
     const { rid } = await import('/js/util.js');
-    const a = rid(), b = rid();
+    const a = rid(),
+      b = rid();
     return { a, b, len: a.length };
   });
   expect(out.len).toBeGreaterThan(0);

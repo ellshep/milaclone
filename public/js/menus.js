@@ -18,18 +18,28 @@ export function openPalette(it, anchor, mode = 'auto') {
 
   if (showColor) {
     COLORS.forEach(c => {
-      const sw = document.createElement('div'); sw.className = 'sw' + ((it.color || it._childColor) === c ? ' sel' : '');
+      const sw = document.createElement('div');
+      sw.className = 'sw' + ((it.color || it._childColor) === c ? ' sel' : '');
       sw.style.background = colorVar(c);
-      sw.onclick = () => { it.color = c; if (it.type === 'board') it._childColor = c; api.patch(it.id, { color: c }); refreshItem(it); closePalette(); };
+      sw.onclick = () => {
+        it.color = c;
+        if (it.type === 'board') it._childColor = c;
+        api.patch(it.id, { color: c });
+        refreshItem(it);
+        closePalette();
+      };
       dom.palette.appendChild(sw);
     });
   }
 
   if (showIcon) {
     if (showColor) {
-      const sep = document.createElement('div'); sep.className = 'pal-sep'; dom.palette.appendChild(sep);
+      const sep = document.createElement('div');
+      sep.className = 'pal-sep';
+      dom.palette.appendChild(sep);
     }
-    const grid = document.createElement('div'); grid.className = 'icon-grid';
+    const grid = document.createElement('div');
+    grid.className = 'icon-grid';
     const current = it._childIcon || 'layout-grid';
     BOARD_ICONS.forEach(name => {
       const btn = document.createElement('button');
@@ -79,27 +89,43 @@ export function openCtx(e, it) {
     { label: 'Rename', hint: 'Return', fn: () => renameSelected() },
     { label: locked ? 'Unlock Position' : 'Lock Position', fn: () => toggleLock() },
     { sep: true },
-    { label: 'Move to Trash', hint: 'Delete', danger: true, fn: () => deleteItem(it.id) }
+    { label: 'Move to Trash', hint: 'Delete', danger: true, fn: () => deleteItem(it.id) },
   ];
   dom.ctxmenu.innerHTML = '';
   rows.forEach(r => {
-    if (r.sep) { const s = document.createElement('div'); s.className = 'ctx-sep'; dom.ctxmenu.appendChild(s); return; }
+    if (r.sep) {
+      const s = document.createElement('div');
+      s.className = 'ctx-sep';
+      dom.ctxmenu.appendChild(s);
+      return;
+    }
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'ctx-item' + (r.danger ? ' danger' : '');
     if (r.disabled) b.disabled = true;
-    const lab = document.createElement('span'); lab.textContent = r.label; b.appendChild(lab);
-    if (r.hint) { const k = document.createElement('kbd'); k.textContent = r.hint; b.appendChild(k); }
+    const lab = document.createElement('span');
+    lab.textContent = r.label;
+    b.appendChild(lab);
+    if (r.hint) {
+      const k = document.createElement('kbd');
+      k.textContent = r.hint;
+      b.appendChild(k);
+    }
     b.onclick = () => r.fn();
     dom.ctxmenu.appendChild(b);
   });
   dom.ctxmenu.classList.add('open');
-  const mw = 220, mh = dom.ctxmenu.offsetHeight || 280;
-  let left = e.clientX, top = e.clientY;
+  const mw = 220,
+    mh = dom.ctxmenu.offsetHeight || 280;
+  let left = e.clientX,
+    top = e.clientY;
   if (left + mw > window.innerWidth) left = window.innerWidth - mw - 8;
   if (top + mh > window.innerHeight) top = window.innerHeight - mh - 8;
   dom.ctxmenu.style.left = left + 'px';
   dom.ctxmenu.style.top = top + 'px';
 }
 
-export function closeCtx() { dom.ctxmenu.classList.remove('open'); dom.ctxmenu.innerHTML = ''; }
+export function closeCtx() {
+  dom.ctxmenu.classList.remove('open');
+  dom.ctxmenu.innerHTML = '';
+}

@@ -8,19 +8,25 @@ const { test, expect } = require('@playwright/test');
 test.use({ viewport: { width: 390, height: 844 } });
 
 let seq = 0;
-const uniq = (p) => `${p}-${Date.now()}-${seq++}`;
+const uniq = p => `${p}-${Date.now()}-${seq++}`;
 
 // Seed a todo card straight through the API, then open Quick notes on it.
 async function seedList(page, title, tasks) {
   await page.goto('/');
-  const id = await page.evaluate(async ([title, tasks]) => {
-    const root = (await (await fetch('/api/root')).json()).rootCanvasId;
-    const it = await (await fetch('/api/item', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ canvasId: root, type: 'todo', data: { title, tasks } })
-    })).json();
-    return it.id;
-  }, [title, tasks || []]);
+  const id = await page.evaluate(
+    async ([title, tasks]) => {
+      const root = (await (await fetch('/api/root')).json()).rootCanvasId;
+      const it = await (
+        await fetch('/api/item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ canvasId: root, type: 'todo', data: { title, tasks } }),
+        })
+      ).json();
+      return it.id;
+    },
+    [title, tasks || []]
+  );
   return id;
 }
 
@@ -37,12 +43,12 @@ test('the Quick notes tab opens the overview with every todo list', async ({ pag
   const title = uniq('Nightly');
   await seedList(page, title, [
     { id: 'a', text: 'Floss', done: false },
-    { id: 'b', text: 'Shower', done: true }
+    { id: 'b', text: 'Shower', done: true },
   ]);
   await openQuickNotes(page);
 
   await expect(listRow(page, title)).toBeVisible();
-  await expect(listRow(page, title).locator('.qn-row-count')).toHaveText('1');   // open tasks only
+  await expect(listRow(page, title).locator('.qn-row-count')).toHaveText('1'); // open tasks only
   await expect(page.locator('.qn-tile')).toHaveCount(4);
 });
 
@@ -50,7 +56,7 @@ test('drilling into a list shows open tasks and a collapsible completed group', 
   const title = uniq('Routine');
   await seedList(page, title, [
     { id: 'a', text: 'Wash face', done: false },
-    { id: 'b', text: 'Shower', done: true }
+    { id: 'b', text: 'Shower', done: true },
   ]);
   await openQuickNotes(page);
   await listRow(page, title).click();
@@ -76,7 +82,7 @@ test('checking a task persists and moves it into Completed', async ({ page }) =>
   await expect(page.locator('.qn-comphead')).toContainText('Completed · 1');
 
   // the write lands on the same todo card the canvas renders
-  const tasks = await page.evaluate(async (id) => {
+  const tasks = await page.evaluate(async id => {
     const r = await (await fetch('/api/todos')).json();
     return r.lists.find(l => l.id === id).tasks;
   }, id);
@@ -143,7 +149,7 @@ test('task detail edits the note, due date and tags', async ({ page }) => {
   await flushed;
   await expect(page.locator('.qn-taglist .qn-tag')).toHaveText('#faith');
 
-  const saved = await page.evaluate(async (id) => {
+  const saved = await page.evaluate(async id => {
     const r = await (await fetch('/api/todos')).json();
     return r.lists.find(l => l.id === id).tasks[0];
   }, id);
@@ -183,7 +189,7 @@ test('search matches task text and opens the task', async ({ page }) => {
 
   await page.locator('#qnResults .qn-task').click();
   await expect(page.locator('#qnTaskTitle')).toHaveText(needle);
-  await expect(page.locator('#qnTaskBackLabel')).toHaveText(title);   // back goes to its own list
+  await expect(page.locator('#qnTaskBackLabel')).toHaveText(title); // back goes to its own list
 });
 
 test('search reports when nothing matches', async ({ page }) => {

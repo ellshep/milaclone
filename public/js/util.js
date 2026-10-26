@@ -18,10 +18,20 @@ export function refreshIcons(root) {
   }
 }
 
-export function autoGrow(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
-export function isLocked(it) { return !!(it.data && it.data.locked); }
-export function rid() { return Math.random().toString(36).slice(2, 10); }
-export function normalizeUrl(u) { if (!u) return '#'; return /^https?:\/\//.test(u) ? u : 'https://' + u; }
+export function autoGrow(t) {
+  t.style.height = 'auto';
+  t.style.height = t.scrollHeight + 'px';
+}
+export function isLocked(it) {
+  return !!(it.data && it.data.locked);
+}
+export function rid() {
+  return Math.random().toString(36).slice(2, 10);
+}
+export function normalizeUrl(u) {
+  if (!u) return '#';
+  return /^https?:\/\//.test(u) ? u : 'https://' + u;
+}
 
 export function imageSize(src) {
   return new Promise(r => {
@@ -40,8 +50,13 @@ export function toast(msg, action) {
   t.classList.toggle('has-action', !!action);
   if (action) {
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'toast-action'; b.textContent = action.label;
-    b.onclick = () => { t.classList.remove('show'); action.fn(); };
+    b.type = 'button';
+    b.className = 'toast-action';
+    b.textContent = action.label;
+    b.onclick = () => {
+      t.classList.remove('show');
+      action.fn();
+    };
     t.appendChild(b);
   }
   t.classList.add('show');

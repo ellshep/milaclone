@@ -21,19 +21,32 @@ export function select(id) {
   updateSelectionChrome();
 }
 
-export function deselect() { select(null); if (state.editingId) exitEdit(); }
+export function deselect() {
+  select(null);
+  if (state.editingId) exitEdit();
+}
 
 export function enterEdit(el) {
   if (state.editingId && state.editingId !== el.dataset.id) exitEdit();
   state.editingId = el.dataset.id;
   el.classList.add('editing');
-  el.querySelectorAll('[data-edit]').forEach(f => { f.readOnly = false; f.tabIndex = 0; });
+  el.querySelectorAll('[data-edit]').forEach(f => {
+    f.readOnly = false;
+    f.tabIndex = 0;
+  });
 }
 
 export function exitEdit() {
   if (!state.editingId) return;
   const el = elMap.get(state.editingId);
-  if (el) { el.classList.remove('editing'); el.querySelectorAll('[data-edit]').forEach(f => { f.readOnly = true; f.tabIndex = -1; f.blur(); }); }
+  if (el) {
+    el.classList.remove('editing');
+    el.querySelectorAll('[data-edit]').forEach(f => {
+      f.readOnly = true;
+      f.tabIndex = -1;
+      f.blur();
+    });
+  }
   state.editingId = null;
 }
 
@@ -45,13 +58,16 @@ export function renameSelected() {
   // focus synchronously so keystrokes right after the rename shortcut land in
   // the field instead of falling through to the document
   const f = el.querySelector('[data-edit]');
-  if (f) { f.focus(); if (f.select) f.select(); }
+  if (f) {
+    f.focus();
+    if (f.select) f.select();
+  }
 }
 
 // Edits are debounced per item. Every field changed during the debounce window
 // is accumulated, so typing a title and then a body sends both, not just the last.
 const saveTimers = new Map();
-const pending = new Map();   // item id -> { it, patch }
+const pending = new Map(); // item id -> { it, patch }
 const clone = v => JSON.parse(JSON.stringify(v));
 
 export function saveData(it, patch) {
@@ -62,7 +78,10 @@ export function saveData(it, patch) {
   Object.assign(p.patch, patch);
   pending.set(it.id, p);
   clearTimeout(saveTimers.get(it.id));
-  saveTimers.set(it.id, setTimeout(() => flushSave(it.id), 400));
+  saveTimers.set(
+    it.id,
+    setTimeout(() => flushSave(it.id), 400)
+  );
 }
 
 // Remember the task list as the server last confirmed it; edits are sent along
@@ -96,14 +115,16 @@ export function flushAllSaves() {
   for (const id of [...pending.keys()]) flushSave(id, true);
 }
 // Send queued edits before the tab is closed, reloaded or backgrounded.
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushAllSaves(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushAllSaves();
+});
 window.addEventListener('pagehide', flushAllSaves);
 
 // Deleting moves the item to the server-side trash; Undo (toast or cmd+Z)
 // restores it with everything that was inside it.
 const trashed = [];
 export async function deleteItem(id) {
-  await flushSave(id);   // keep last-second edits so Undo brings them back too
+  await flushSave(id); // keep last-second edits so Undo brings them back too
   await api.remove(id);
   trashed.push(id);
   state.view.items = state.view.items.filter(x => x.parentItemId !== id && x.id !== id);
@@ -117,5 +138,8 @@ export async function deleteItem(id) {
 export async function undoDelete(id = trashed[trashed.length - 1]) {
   if (!id) return;
   trashed.splice(trashed.indexOf(id), 1);
-  if (await api.restore(id)) { await reloadView(); toast('Restored'); }
+  if (await api.restore(id)) {
+    await reloadView();
+    toast('Restored');
+  }
 }

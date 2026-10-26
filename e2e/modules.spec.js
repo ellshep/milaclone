@@ -57,7 +57,7 @@ test('color palette recolors a note and the color survives reload', async ({ pag
   await note.locator('.card-tools .swatch').click();
   await expect(page.locator('#palette.open')).toBeVisible();
   const saved = page.waitForResponse(PATCH);
-  await page.locator('#palette .sw').nth(7).click();   // 8th swatch (red)
+  await page.locator('#palette .sw').nth(7).click(); // 8th swatch (red)
   await saved;
 
   await page.goto('/#' + id);
@@ -120,9 +120,9 @@ test('Enter renames the selected board and the name persists', async ({ page }) 
   const id = await freshCanvas(page);
   await place(page, 'board');
   await page.keyboard.press('Escape');
-  await page.locator('.item.type-board .tile').click();   // select without editing
+  await page.locator('.item.type-board .tile').click(); // select without editing
 
-  await page.keyboard.press('Enter');                     // renameSelected -> edit title
+  await page.keyboard.press('Enter'); // renameSelected -> edit title
   // focus lands on the title input a frame later (rAF); wait for it before
   // typing so keystrokes aren't dropped on the way in.
   await expect(page.locator('.item.type-board .btitle')).toBeFocused();

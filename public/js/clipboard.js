@@ -23,7 +23,7 @@ export function copySelected(cut) {
 async function placeCopy(id, cut, x, y) {
   const to = { canvasId: state.view.canvas.id, x: Math.round(x), y: Math.round(y) };
   const it = cut ? await api.move(id, to) : await api.copy(id, to);
-  if (!it) return;                    // api already reported the failure
+  if (!it) return; // api already reported the failure
   await reloadView();
   select(it.id);
   closeCtx();
@@ -37,7 +37,7 @@ export async function pasteClipboard(wx, wy) {
   const y = wy != null ? wy : ((sel && sel.y) || 80) + 24;
   const { id, cut } = state.clipboard;
   if (await placeCopy(id, cut, x, y)) {
-    if (cut) state.clipboard = null;   // a cut item moves once
+    if (cut) state.clipboard = null; // a cut item moves once
     toast('Pasted');
   }
 }

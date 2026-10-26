@@ -66,34 +66,41 @@ export function updateSelectionChrome() {
 
 export function initBoardChrome() {
   el('railBoardBack').onclick = () => deselect();
-  el('railBoardColor').onclick = (e) => {
-    const it = selectedBoard(); if (!it) return;
+  el('railBoardColor').onclick = e => {
+    const it = selectedBoard();
+    if (!it) return;
     openPalette(it, e.currentTarget, 'color');
   };
-  el('railBoardIcon').onclick = (e) => {
-    const it = selectedBoard(); if (!it) return;
+  el('railBoardIcon').onclick = e => {
+    const it = selectedBoard();
+    if (!it) return;
     openPalette(it, e.currentTarget, 'icon');
   };
   el('railBoardRename').onclick = () => renameSelected();
   el('railBoardDelete').onclick = () => {
-    const it = selectedBoard(); if (!it) return;
+    const it = selectedBoard();
+    if (!it) return;
     deleteItem(it.id);
   };
 
-  el('mfBoardColor').onclick = (e) => {
-    const it = selectedBoard(); if (!it) return;
+  el('mfBoardColor').onclick = e => {
+    const it = selectedBoard();
+    if (!it) return;
     openPalette(it, e.currentTarget, 'color');
   };
-  el('mfBoardIcon').onclick = (e) => {
-    const it = selectedBoard(); if (!it) return;
+  el('mfBoardIcon').onclick = e => {
+    const it = selectedBoard();
+    if (!it) return;
     openPalette(it, e.currentTarget, 'icon');
   };
   el('mfBoardRename').onclick = () => renameSelected();
   el('mfBoardDone').onclick = () => deselect();
 
   const sheet = el('mBoardSheet');
-  el('mfBoardMore').onclick = () => { sheet.hidden = !sheet.hidden; };
-  sheet.addEventListener('click', (e) => {
+  el('mfBoardMore').onclick = () => {
+    sheet.hidden = !sheet.hidden;
+  };
+  sheet.addEventListener('click', e => {
     const act = e.target.closest('[data-act]');
     if (!act) return;
     if (act.dataset.act === 'delete') {
@@ -102,11 +109,15 @@ export function initBoardChrome() {
     }
     sheet.hidden = true;
   });
-  document.addEventListener('pointerdown', (e) => {
-    if (!sheet.hidden && !e.target.closest('#mBoardSheet') && !e.target.closest('#mfBoardMore')) {
-      sheet.hidden = true;
-    }
-  }, true);
+  document.addEventListener(
+    'pointerdown',
+    e => {
+      if (!sheet.hidden && !e.target.closest('#mBoardSheet') && !e.target.closest('#mfBoardMore')) {
+        sheet.hidden = true;
+      }
+    },
+    true
+  );
 
   updateSelectionChrome();
 }

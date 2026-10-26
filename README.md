@@ -71,11 +71,11 @@ to Home Screen gives it an app icon that opens fullscreen.
 
 Data lives in three named volumes, so `docker compose down` keeps it:
 
-| Volume                | Mounted at              | Holds                     |
-|-----------------------|-------------------------|---------------------------|
-| `milaclone_data`      | `/data`                 | `board.db` (SQLite)       |
-| `milaclone_uploads`   | `/app/public/uploads`   | uploaded images/files     |
-| `milaclone_ts_state`  | `/var/lib/tailscale`    | the sidecar's node identity |
+| Volume               | Mounted at            | Holds                       |
+| -------------------- | --------------------- | --------------------------- |
+| `milaclone_data`     | `/data`               | `board.db` (SQLite)         |
+| `milaclone_uploads`  | `/app/public/uploads` | uploaded images/files       |
+| `milaclone_ts_state` | `/var/lib/tailscale`  | the sidecar's node identity |
 
 Back up the board with:
 
@@ -104,12 +104,12 @@ which break under a path-prefixed proxy.
 
 How the pieces fit:
 
-| Piece                    | Where                              | Does what                                        |
-|--------------------------|------------------------------------|--------------------------------------------------|
-| `TS_AUTHKEY`             | `.env` (gitignored)                | Authenticates the node on first start            |
-| `TS_HOSTNAME=mila`       | `docker-compose.yml`               | Names the node → `mila.your-tailnet.ts.net`      |
-| `tailscale/serve.json`   | mounted at `/config/serve.json`    | Terminates HTTPS, proxies `/` → `app:4321`       |
-| `milaclone_ts_state`     | volume at `/var/lib/tailscale`     | Remembers the node so restarts don't re-auth     |
+| Piece                  | Where                           | Does what                                    |
+| ---------------------- | ------------------------------- | -------------------------------------------- |
+| `TS_AUTHKEY`           | `.env` (gitignored)             | Authenticates the node on first start        |
+| `TS_HOSTNAME=mila`     | `docker-compose.yml`            | Names the node → `mila.your-tailnet.ts.net`  |
+| `tailscale/serve.json` | mounted at `/config/serve.json` | Terminates HTTPS, proxies `/` → `app:4321`   |
+| `milaclone_ts_state`   | volume at `/var/lib/tailscale`  | Remembers the node so restarts don't re-auth |
 
 The Serve config uses `${TS_CERT_DOMAIN}`, which the container substitutes at
 startup, so it works on any tailnet without editing. Tailscale provisions the
@@ -254,11 +254,11 @@ start).
 
 All optional, via environment variables:
 
-| Variable     | Default              | Purpose                          |
-|--------------|----------------------|----------------------------------|
-| `PORT`       | `4321`               | Port to listen on                |
-| `HOST`       | `0.0.0.0`            | Bind address                     |
-| `DATA_DIR`   | `./data`             | Where the SQLite DB is written   |
+| Variable   | Default   | Purpose                        |
+| ---------- | --------- | ------------------------------ |
+| `PORT`     | `4321`    | Port to listen on              |
+| `HOST`     | `0.0.0.0` | Bind address                   |
+| `DATA_DIR` | `./data`  | Where the SQLite DB is written |
 
 Uploads always go to `public/uploads/` (they're served as static files from
 there, so the path isn't configurable).

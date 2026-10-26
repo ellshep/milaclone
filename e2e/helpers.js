@@ -8,10 +8,13 @@ async function freshCanvas(page) {
   await page.goto('/');
   const childId = await page.evaluate(async () => {
     const root = (await (await fetch('/api/root')).json()).rootCanvasId;
-    const it = await (await fetch('/api/item', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ canvasId: root, type: 'board', data: { title: 'fixture' } }),
-    })).json();
+    const it = await (
+      await fetch('/api/item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canvasId: root, type: 'board', data: { title: 'fixture' } }),
+      })
+    ).json();
     return it.data.childCanvasId;
   });
   await page.goto('/#' + childId);

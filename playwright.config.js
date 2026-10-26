@@ -17,7 +17,11 @@ module.exports = defineConfig({
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: '**/mobile-board.spec.js' },
     // Mobile Safari path: touch double-tap must open boards without dblclick.
-    { name: 'mobile-webkit', use: { ...devices['iPhone 13'], browserName: 'webkit' }, testMatch: '**/mobile-board.spec.js' },
+    {
+      name: 'mobile-webkit',
+      use: { ...devices['iPhone 13'], browserName: 'webkit' },
+      testMatch: '**/mobile-board.spec.js',
+    },
   ],
   webServer: {
     command: `rm -rf .e2e-data && DATA_DIR=.e2e-data PORT=${PORT} node server.js`,

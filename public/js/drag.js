@@ -12,7 +12,10 @@ import { render } from './cards.js';
 export function onItemPointerDown(e, it, el) {
   if (e.button !== 0) return;
   if (state.armed) return;
-  if (e.target.closest('[data-nodrag]')) { e.stopPropagation(); return; }
+  if (e.target.closest('[data-nodrag]')) {
+    e.stopPropagation();
+    return;
+  }
   if (el.classList.contains('editing') && e.target.closest('[data-edit]')) return;
   e.stopPropagation();
   select(it.id);
@@ -26,11 +29,13 @@ export function onItemPointerDown(e, it, el) {
   state.drag = { it, el, start, startWorld, fromColumn, moved: false, dropCol: null };
   el.setPointerCapture(e.pointerId);
 
-  const move = (ev) => {
-    const dx = ev.clientX - start.sx, dy = ev.clientY - start.sy;
+  const move = ev => {
+    const dx = ev.clientX - start.sx,
+      dy = ev.clientY - start.sy;
     if (!moved && Math.hypot(dx, dy) < 4) return;
     if (!moved) {
-      moved = true; state.drag.moved = true;
+      moved = true;
+      state.drag.moved = true;
       el.classList.add('dragging');
       if (fromColumn) {
         dom.world.appendChild(el);
@@ -41,18 +46,20 @@ export function onItemPointerDown(e, it, el) {
     }
     const wx = startWorld.x + dx / state.cam.scale;
     const wy = startWorld.y + dy / state.cam.scale;
-    el.style.left = wx + 'px'; el.style.top = wy + 'px';
+    el.style.left = wx + 'px';
+    el.style.top = wy + 'px';
     highlightColumn(ev, it);
   };
 
-  const up = (ev) => {
+  const up = ev => {
     el.releasePointerCapture(e.pointerId);
     document.removeEventListener('pointermove', move);
     document.removeEventListener('pointerup', up);
     el.classList.remove('dragging');
     if (!moved) {
       if (it.type !== 'board') maybeEdit(el, ev);
-      state.drag = null; return;
+      state.drag = null;
+      return;
     }
     finishDrag(ev);
   };
@@ -81,7 +88,10 @@ function columnBodyUnder(clientX, clientY, excludeId) {
 
 function highlightColumn(ev, it) {
   dom.world.querySelectorAll('.column.drop-target').forEach(c => c.classList.remove('drop-target'));
-  if (it.type === 'column') { state.drag.dropCol = null; return; }
+  if (it.type === 'column') {
+    state.drag.dropCol = null;
+    return;
+  }
   const body = columnBodyUnder(ev.clientX, ev.clientY, it.id);
   state.drag.dropCol = body ? body.dataset.colbody : null;
   if (body) body.closest('.column').classList.add('drop-target');
@@ -95,7 +105,7 @@ async function finishDrag(ev) {
     it.parentItemId = state.drag.dropCol;
     it.y = order;
     const sibs = state.view.items.filter(k => k.parentItemId === state.drag.dropCol).sort((a, b) => a.y - b.y);
-    sibs.forEach((s, i) => s.y = i);
+    sibs.forEach((s, i) => (s.y = i));
     await api.patch(it.id, { parentItemId: it.parentItemId, canvasId: state.view.canvas.id });
     await api.patchMany(sibs.map(s => ({ id: s.id, y: s.y })));
     render();
@@ -103,7 +113,9 @@ async function finishDrag(ev) {
     const wx = Math.round(parseFloat(el.style.left));
     const wy = Math.round(parseFloat(el.style.top));
     const wasChild = state.drag.fromColumn;
-    it.x = wx; it.y = wy; it.parentItemId = null;
+    it.x = wx;
+    it.y = wy;
+    it.parentItemId = null;
     await api.patch(it.id, { x: wx, y: wy, parentItemId: null });
     if (wasChild) render();
   }
@@ -111,7 +123,9 @@ async function finishDrag(ev) {
 }
 
 function insertOrder(colId, clientY, selfId) {
-  const rows = [...dom.world.querySelectorAll(`[data-colbody="${colId}"] > .item`)].filter(r => r.dataset.id !== selfId);
+  const rows = [...dom.world.querySelectorAll(`[data-colbody="${colId}"] > .item`)].filter(
+    r => r.dataset.id !== selfId
+  );
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i].getBoundingClientRect();
     if (clientY < r.top + r.height / 2) return i;
@@ -120,13 +134,16 @@ function insertOrder(colId, clientY, selfId) {
 }
 
 export function startResize(e, it, el) {
-  e.preventDefault(); e.stopPropagation();
-  const startX = e.clientX, startW = it.w || el.offsetWidth;
+  e.preventDefault();
+  e.stopPropagation();
+  const startX = e.clientX,
+    startW = it.w || el.offsetWidth;
   el.setPointerCapture(e.pointerId);
-  const move = (ev) => {
+  const move = ev => {
     let w = startW + (ev.clientX - startX) / state.cam.scale;
     w = Math.max(120, Math.min(900, w));
-    el.style.width = w + 'px'; it.w = Math.round(w);
+    el.style.width = w + 'px';
+    it.w = Math.round(w);
   };
   const up = () => {
     el.releasePointerCapture(e.pointerId);

@@ -34,7 +34,11 @@ db.exec(`
 
 // Additive columns for existing DBs. `trashedBy` holds the id of the item whose
 // deletion trashed the row, so restoring that item brings back exactly its subtree.
-const colsOf = t => db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
+const colsOf = t =>
+  db
+    .prepare(`PRAGMA table_info(${t})`)
+    .all()
+    .map(c => c.name);
 if (!colsOf('canvases').includes('icon')) db.exec('ALTER TABLE canvases ADD COLUMN icon TEXT');
 for (const t of ['canvases', 'items']) {
   if (!colsOf(t).includes('trashedBy')) db.exec(`ALTER TABLE ${t} ADD COLUMN trashedBy TEXT`);
@@ -55,7 +59,9 @@ const stmt = {
   setCanvasParent: db.prepare(`UPDATE canvases SET parentCanvasId = ? WHERE id = ?`),
   trashCanvas: db.prepare(`UPDATE canvases SET trashedBy = ?, trashedAt = ? WHERE id = ?`),
   getItem: db.prepare(`SELECT * FROM items WHERE id = ? AND ${LIVE}`),
-  itemsForCanvas: db.prepare(`SELECT * FROM items WHERE canvasId = ? AND ${LIVE} ORDER BY COALESCE(z, 0), createdAt, id`),
+  itemsForCanvas: db.prepare(
+    `SELECT * FROM items WHERE canvasId = ? AND ${LIVE} ORDER BY COALESCE(z, 0), createdAt, id`
+  ),
   itemsByParent: db.prepare(`SELECT * FROM items WHERE parentItemId = ? AND ${LIVE}`),
   todoItems: db.prepare(`SELECT * FROM items WHERE type = 'todo' AND ${LIVE} ORDER BY createdAt, id`),
   itemsByCanvas: db.prepare(`SELECT * FROM items WHERE canvasId = ? AND ${LIVE}`),
@@ -67,14 +73,21 @@ const stmt = {
                           z=@z, color=@color, data=@data WHERE id=@id`),
   trashItem: db.prepare(`UPDATE items SET trashedBy = ?, trashedAt = ? WHERE id = ?`),
   restoreItems: db.prepare(`UPDATE items SET trashedBy = NULL, trashedAt = NULL WHERE trashedBy = ?`),
-  restoreCanvases: db.prepare(`UPDATE canvases SET trashedBy = NULL, trashedAt = NULL WHERE trashedBy = ?`)
+  restoreCanvases: db.prepare(`UPDATE canvases SET trashedBy = NULL, trashedAt = NULL WHERE trashedBy = ?`),
 };
 
 // Seed a root 'Home' canvas on first run.
 if (!stmt.getMeta.get('rootCanvasId')) {
   const rootId = id('c_');
   db.transaction(() => {
-    stmt.insertCanvas.run({ id: rootId, title: 'Home', parentCanvasId: null, color: 'slate', icon: null, createdAt: Date.now() });
+    stmt.insertCanvas.run({
+      id: rootId,
+      title: 'Home',
+      parentCanvasId: null,
+      color: 'slate',
+      icon: null,
+      createdAt: Date.now(),
+    });
     stmt.setMeta.run('rootCanvasId', rootId);
   })();
 }
@@ -82,8 +95,14 @@ function rootCanvasId() {
   return stmt.getMeta.get('rootCanvasId')?.value;
 }
 
-process.on('SIGINT', () => { db.close(); process.exit(0); });
-process.on('SIGTERM', () => { db.close(); process.exit(0); });
+process.on('SIGINT', () => {
+  db.close();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  db.close();
+  process.exit(0);
+});
 
 // ---------------------------------------------------------------------------
 // Mapping helpers: rows <-> API objects. `data` is stored as a JSON string but
@@ -116,18 +135,22 @@ function itemsForCanvas(canvasId) {
 // written here, so callers can copy a board into its own subtree without the copy
 // feeding back into the walk.
 function collectSubtree(itemId) {
-  const items = [], canvases = [], seen = new Set();
-  const addItem = (row) => {
+  const items = [],
+    canvases = [],
+    seen = new Set();
+  const addItem = row => {
     if (!row || seen.has(row.id)) return;
-    seen.add(row.id); items.push(row);
+    seen.add(row.id);
+    items.push(row);
     for (const k of stmt.itemsByParent.all(row.id)) addItem(k);
     const data = row.data ? JSON.parse(row.data) : {};
     if (row.type === 'board' && data.childCanvasId) addCanvas(data.childCanvasId);
   };
-  const addCanvas = (cid) => {
+  const addCanvas = cid => {
     const c = stmt.getCanvas.get(cid);
     if (!c || seen.has(cid)) return;
-    seen.add(cid); canvases.push(c);
+    seen.add(cid);
+    canvases.push(c);
     for (const r of stmt.itemsByCanvas.all(cid)) if (!r.parentItemId) addItem(r);
   };
   addItem(stmt.getItem.get(itemId));
@@ -157,7 +180,12 @@ function copyItemDeep(itemId, canvasId, x, y) {
   for (const c of canvases) map.set(c.id, id('c_'));
   const now = Date.now();
   for (const c of canvases) {
-    stmt.insertCanvas.run({ ...c, id: map.get(c.id), parentCanvasId: map.get(c.parentCanvasId) || canvasId, createdAt: now });
+    stmt.insertCanvas.run({
+      ...c,
+      id: map.get(c.id),
+      parentCanvasId: map.get(c.parentCanvasId) || canvasId,
+      createdAt: now,
+    });
   }
   let z = Math.max(0, stmt.maxZ.get().m || 0);
   items.forEach((r, i) => {
@@ -168,11 +196,12 @@ function copyItemDeep(itemId, canvasId, x, y) {
       ...r,
       id: map.get(r.id),
       canvasId: map.get(r.canvasId) || canvasId,
-      parentItemId: isRoot ? null : (map.get(r.parentItemId) || null),
-      x: isRoot ? x : r.x, y: isRoot ? y : r.y,
+      parentItemId: isRoot ? null : map.get(r.parentItemId) || null,
+      x: isRoot ? x : r.x,
+      y: isRoot ? y : r.y,
       z: isRoot ? ++z : r.z,
       data: JSON.stringify(data),
-      createdAt: now
+      createdAt: now,
     });
   });
   return map.get(itemId);
@@ -185,7 +214,7 @@ function moveItemDeep(itemId, canvasId, x, y) {
   if (canvases.some(c => c.id === canvasId)) return false;
   const nested = new Set(canvases.map(c => c.id));
   for (const r of items) {
-    if (nested.has(r.canvasId)) continue;            // lives on a nested canvas: unchanged
+    if (nested.has(r.canvasId)) continue; // lives on a nested canvas: unchanged
     const it = rowToItem(r);
     if (r.id === itemId) Object.assign(it, { x, y, parentItemId: null, z: Math.max(0, stmt.maxZ.get().m || 0) + 1 });
     it.canvasId = canvasId;
@@ -196,6 +225,16 @@ function moveItemDeep(itemId, canvasId, x, y) {
 }
 
 module.exports = {
-  DB_FILE, db, stmt, id, rootCanvasId,
-  rowToItem, breadcrumb, itemsForCanvas, trashItemDeep, restoreItem, copyItemDeep, moveItemDeep
+  DB_FILE,
+  db,
+  stmt,
+  id,
+  rootCanvasId,
+  rowToItem,
+  breadcrumb,
+  itemsForCanvas,
+  trashItemDeep,
+  restoreItem,
+  copyItemDeep,
+  moveItemDeep,
 };

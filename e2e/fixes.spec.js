@@ -8,12 +8,20 @@ const { freshCanvas, place } = require('./helpers');
 
 // Create a board holding one note, straight through the API.
 async function boardWithNote(page, canvasId, body) {
-  return page.evaluate(async ({ canvasId, body }) => {
-    const post = (b) => fetch('/api/item', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json());
-    const board = await post({ canvasId, type: 'board', x: 200, y: 200, data: { title: 'Packed' } });
-    await post({ canvasId: board.data.childCanvasId, type: 'note', data: { body } });
-    return board;
-  }, { canvasId, body });
+  return page.evaluate(
+    async ({ canvasId, body }) => {
+      const post = b =>
+        fetch('/api/item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(b),
+        }).then(r => r.json());
+      const board = await post({ canvasId, type: 'board', x: 200, y: 200, data: { title: 'Packed' } });
+      await post({ canvasId: board.data.childCanvasId, type: 'note', data: { body } });
+      return board;
+    },
+    { canvasId, body }
+  );
 }
 
 test('deleting a note can be undone from the toast, and the undo sticks', async ({ page }) => {
@@ -59,10 +67,12 @@ test('editing title then body quickly saves both', async ({ page }) => {
   await place(page, 'note');
   await page.locator('.item.type-note textarea.ntitle').fill('Title');
   await page.locator('.item.type-note textarea.nbody').fill('Body');
-  await expect.poll(async () => {
-    const d = (await (await page.request.get('/api/canvas/' + canvasId)).json()).items[0]?.data;
-    return d && d.title + '|' + d.body;
-  }).toBe('Title|Body');
+  await expect
+    .poll(async () => {
+      const d = (await (await page.request.get('/api/canvas/' + canvasId)).json()).items[0]?.data;
+      return d && d.title + '|' + d.body;
+    })
+    .toBe('Title|Body');
   await page.reload();
   await expect(page.locator('.item.type-note textarea.ntitle')).toHaveValue('Title');
   await expect(page.locator('.item.type-note textarea.nbody')).toHaveValue('Body');
@@ -72,11 +82,13 @@ test('an edit still in the debounce window is saved when the page is left', asyn
   const canvasId = await freshCanvas(page);
   await place(page, 'note');
   await page.locator('.item.type-note textarea.nbody').fill('last words');
-  await page.goto('about:blank');                     // leave before the 400 ms debounce fires
-  await expect.poll(async () => {
-    const r = await page.request.get('/api/canvas/' + canvasId);
-    return (await r.json()).items[0]?.data.body;
-  }).toBe('last words');
+  await page.goto('about:blank'); // leave before the 400 ms debounce fires
+  await expect
+    .poll(async () => {
+      const r = await page.request.get('/api/canvas/' + canvasId);
+      return (await r.json()).items[0]?.data.body;
+    })
+    .toBe('last words');
 });
 
 test('browser Back returns from a nested board to its parent', async ({ page }) => {

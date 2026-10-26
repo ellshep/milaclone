@@ -17,18 +17,18 @@ Work through it top to bottom. Tick a box only when its acceptance check passes 
 
 ## Decisions
 
-| ID | Decision | Choice |
-|---|---|---|
-| D1 | Rich-text editor | TipTap, bundled by esbuild via `buildSync` in `server.js` at boot into a gitignored `public/vendor/editor.js`. `esbuild` goes in `dependencies` (Docker runs `npm ci --omit=dev`). Loaded lazily with `import()`. No framework. |
-| D2 | Left-drag on empty canvas | Draws a selection box. Pan with wheel/trackpad, space-drag or middle-drag. |
-| D3 | Cross-board to-do list | Keep Quick notes as it is (feature-map roadmap #11 dropped). |
-| D4 | Link previews | Video/music embeds only. The server never fetches URLs. |
-| D5 | Undo scope | Every operation, per tab. **Deferred along with F3.3**; cmd+Z keeps undoing deletes until then. |
-| D6 | Colour palette | Keep milaclone's 12 colours and add "None". No migration. |
-| D7 | Lines, first version | Straight lines only, with arrowheads, dashed style, colour and a label. |
-| D8 | Dark mode | Follow `prefers-color-scheme`. No in-app switch. |
-| D9 | Shipping | One PR per phase, merged by the agent when CI is green, before the next phase starts. |
-| D10 | Phase order | As planned: P1 → P7, after P0. |
+| ID  | Decision                  | Choice                                                                                                                                                                                                                          |
+| --- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Rich-text editor          | TipTap, bundled by esbuild via `buildSync` in `server.js` at boot into a gitignored `public/vendor/editor.js`. `esbuild` goes in `dependencies` (Docker runs `npm ci --omit=dev`). Loaded lazily with `import()`. No framework. |
+| D2  | Left-drag on empty canvas | Draws a selection box. Pan with wheel/trackpad, space-drag or middle-drag.                                                                                                                                                      |
+| D3  | Cross-board to-do list    | Keep Quick notes as it is (feature-map roadmap #11 dropped).                                                                                                                                                                    |
+| D4  | Link previews             | Video/music embeds only. The server never fetches URLs.                                                                                                                                                                         |
+| D5  | Undo scope                | Every operation, per tab. **Deferred along with F3.3**; cmd+Z keeps undoing deletes until then.                                                                                                                                 |
+| D6  | Colour palette            | Keep milaclone's 12 colours and add "None". No migration.                                                                                                                                                                       |
+| D7  | Lines, first version      | Straight lines only, with arrowheads, dashed style, colour and a label.                                                                                                                                                         |
+| D8  | Dark mode                 | Follow `prefers-color-scheme`. No in-app switch.                                                                                                                                                                                |
+| D9  | Shipping                  | One PR per phase, merged by the agent when CI is green, before the next phase starts.                                                                                                                                           |
+| D10 | Phase order               | As planned: P1 → P7, after P0.                                                                                                                                                                                                  |
 
 ## P0 · Quality gates
 

@@ -1,262 +1,316 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Canvas Board</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Figtree:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css">
-</head>
-<body>
-
-<div id="topbar">
-  <div class="dots"><i class="r"></i><i class="y"></i><i class="g"></i></div>
-  <nav id="crumbs"></nav>
-  <div class="top-right">
-    <button type="button" class="top-phone" id="phoneNotes" aria-label="From your phone" aria-expanded="false" aria-haspopup="dialog" title="From your phone">
-      <i data-lucide="smartphone"></i>
-      <span class="top-phone-badge" id="phoneNotesBadge" hidden>0</span>
-    </button>
-    <span class="ghost" id="exportBtn">Export</span>
-    <div class="zoomwrap">
-      <button id="zoomOut" title="Zoom out">−</button>
-      <span class="lvl" id="zoomLvl">100%</span>
-      <button id="zoomIn" title="Zoom in">+</button>
-      <button id="zoomReset" title="Reset view">⤢</button>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Canvas Board</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Figtree:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div id="topbar">
+      <div class="dots"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+      <nav id="crumbs"></nav>
+      <div class="top-right">
+        <button
+          type="button"
+          class="top-phone"
+          id="phoneNotes"
+          aria-label="From your phone"
+          aria-expanded="false"
+          aria-haspopup="dialog"
+          title="From your phone"
+        >
+          <i data-lucide="smartphone"></i>
+          <span class="top-phone-badge" id="phoneNotesBadge" hidden>0</span>
+        </button>
+        <span class="ghost" id="exportBtn">Export</span>
+        <div class="zoomwrap">
+          <button id="zoomOut" title="Zoom out">−</button>
+          <span class="lvl" id="zoomLvl">100%</span>
+          <button id="zoomIn" title="Zoom in">+</button>
+          <button id="zoomReset" title="Reset view">⤢</button>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
 
-<aside id="rail">
-  <div id="railCreate">
-  <button class="tool" data-tool="note" title="Note (N)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5h14M5 10h14M5 15h9" stroke-linecap="round"/></svg>
-    Note
-  </button>
-  <button class="tool" data-tool="link" title="Link (L)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9.5 14.5l5-5M8 13l-2 2a3 3 0 104.2 4.2l2-2M16 11l2-2a3 3 0 10-4.2-4.2l-2 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    Link
-  </button>
-  <button class="tool" data-tool="todo" title="To-do (T)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6.5l1.6 1.6L8.5 5M4 13l1.6 1.6L8.5 11M4 19.5l1.6 1.6L8.5 18M12 6.5h8M12 13h8M12 19.5h8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    To-do
-  </button>
-  <button class="tool" data-tool="board" title="Board (B)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/></svg>
-    Board
-  </button>
-  <button class="tool" data-tool="column" title="Column (C)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="4" width="14" height="5" rx="1.5"/><rect x="5" y="11" width="14" height="5" rx="1.5"/><rect x="5" y="18" width="14" height="2.5" rx="1.2"/></svg>
-    Column
-  </button>
-  <button class="tool" data-tool="comment" title="Comment (M)">
-    <i data-lucide="message-circle"></i>
-    Comment
-  </button>
-  <div class="rail-sep"></div>
-  <button class="tool" data-tool="image" title="Image">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M5 17l4.5-4.5L13 16l3-3 3 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    Image
-  </button>
-  <button class="tool" data-tool="upload" title="Upload">
-    <i data-lucide="upload"></i>
-    Upload
-  </button>
-  </div>
-  <div id="railBoard" hidden>
-    <button type="button" class="tool" id="railBoardBack" title="Done">
-      <i data-lucide="chevron-left"></i>
-    </button>
-    <div class="rail-sep"></div>
-    <button type="button" class="tool" id="railBoardColor" title="Color">
-      <span class="rail-swatch" id="railBoardSwatch"></span>
-      Color
-    </button>
-    <button type="button" class="tool" id="railBoardIcon" title="Icon">
-      <span class="rail-icon" id="railBoardIconGlyph"></span>
-      Icon
-    </button>
-    <button type="button" class="tool" id="railBoardRename" title="Rename">
-      <i data-lucide="type"></i>
-      Rename
-    </button>
-    <button type="button" class="tool" id="railBoardDelete" title="Delete">
-      <i data-lucide="trash-2"></i>
-      Delete
-    </button>
-  </div>
-</aside>
+    <aside id="rail">
+      <div id="railCreate">
+        <button class="tool" data-tool="note" title="Note (N)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M5 5h14M5 10h14M5 15h9" stroke-linecap="round" />
+          </svg>
+          Note
+        </button>
+        <button class="tool" data-tool="link" title="Link (L)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path
+              d="M9.5 14.5l5-5M8 13l-2 2a3 3 0 104.2 4.2l2-2M16 11l2-2a3 3 0 10-4.2-4.2l-2 2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          Link
+        </button>
+        <button class="tool" data-tool="todo" title="To-do (T)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path
+              d="M4 6.5l1.6 1.6L8.5 5M4 13l1.6 1.6L8.5 11M4 19.5l1.6 1.6L8.5 18M12 6.5h8M12 13h8M12 19.5h8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          To-do
+        </button>
+        <button class="tool" data-tool="board" title="Board (B)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="4" y="4" width="7" height="7" rx="1.6" />
+            <rect x="13" y="4" width="7" height="7" rx="1.6" />
+            <rect x="4" y="13" width="7" height="7" rx="1.6" />
+            <rect x="13" y="13" width="7" height="7" rx="1.6" />
+          </svg>
+          Board
+        </button>
+        <button class="tool" data-tool="column" title="Column (C)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="5" y="4" width="14" height="5" rx="1.5" />
+            <rect x="5" y="11" width="14" height="5" rx="1.5" />
+            <rect x="5" y="18" width="14" height="2.5" rx="1.2" />
+          </svg>
+          Column
+        </button>
+        <button class="tool" data-tool="comment" title="Comment (M)">
+          <i data-lucide="message-circle"></i>
+          Comment
+        </button>
+        <div class="rail-sep"></div>
+        <button class="tool" data-tool="image" title="Image">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="4" y="5" width="16" height="14" rx="2" />
+            <circle cx="9" cy="10" r="1.6" />
+            <path d="M5 17l4.5-4.5L13 16l3-3 3 3" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          Image
+        </button>
+        <button class="tool" data-tool="upload" title="Upload">
+          <i data-lucide="upload"></i>
+          Upload
+        </button>
+      </div>
+      <div id="railBoard" hidden>
+        <button type="button" class="tool" id="railBoardBack" title="Done">
+          <i data-lucide="chevron-left"></i>
+        </button>
+        <div class="rail-sep"></div>
+        <button type="button" class="tool" id="railBoardColor" title="Color">
+          <span class="rail-swatch" id="railBoardSwatch"></span>
+          Color
+        </button>
+        <button type="button" class="tool" id="railBoardIcon" title="Icon">
+          <span class="rail-icon" id="railBoardIconGlyph"></span>
+          Icon
+        </button>
+        <button type="button" class="tool" id="railBoardRename" title="Rename">
+          <i data-lucide="type"></i>
+          Rename
+        </button>
+        <button type="button" class="tool" id="railBoardDelete" title="Delete">
+          <i data-lucide="trash-2"></i>
+          Delete
+        </button>
+      </div>
+    </aside>
 
-<div id="stage">
-  <div id="world"></div>
-</div>
-
-<div id="hint">
-  <h2>This board is empty</h2>
-  <p class="hint-desktop">Pick a tool on the left, then click the canvas to add it.</p>
-  <p class="hint-mobile">Tap +, pick a tool, then tap the canvas to add it.</p>
-</div>
-
-<header id="mheader" hidden>
-  <button class="mh-btn" id="mBack" aria-label="Back"><i data-lucide="chevron-left"></i></button>
-  <h1 id="mTitle"></h1>
-  <button class="mh-btn mh-round" id="mShare" aria-label="Copy board link"><i data-lucide="user-plus"></i></button>
-</header>
-
-<nav id="mfooter">
-  <div class="mf-row" id="mfNav">
-    <button class="mf-icon" id="mMore" aria-label="More options"><i data-lucide="ellipsis"></i></button>
-    <div class="mf-tabs">
-      <button class="mf-tab active" id="mBoards">Your boards</button>
-      <button class="mf-tab" id="mNotes">Quick notes</button>
+    <div id="stage">
+      <div id="world"></div>
     </div>
-    <button class="mf-icon" id="mAdd" aria-label="Add a card"><i data-lucide="plus"></i></button>
-  </div>
-  <div class="mf-row mf-tray" id="mfTray" hidden>
-    <button class="mf-icon mf-close" id="mTrayClose" aria-label="Close tool tray"><i data-lucide="x"></i></button>
-    <div class="mf-tools" id="mfTools"></div>
-  </div>
-  <div class="mf-row" id="mfBoard" hidden>
-    <div class="mf-board-actions">
-      <button type="button" class="mf-bact" id="mfBoardColor">
-        <span class="mf-bact-swatch" id="mfBoardSwatch"></span>
-        <span>Color</span>
-      </button>
-      <button type="button" class="mf-bact" id="mfBoardIcon">
-        <span class="mf-bact-icon" id="mfBoardIconGlyph"></span>
-        <span>Icon</span>
-      </button>
-      <button type="button" class="mf-bact" id="mfBoardRename">
-        <span class="mf-bact-glyph"><i data-lucide="type"></i></span>
-        <span>Rename</span>
-      </button>
-      <button type="button" class="mf-bact" id="mfBoardMore">
-        <span class="mf-bact-glyph"><i data-lucide="ellipsis"></i></span>
-        <span>More</span>
-      </button>
-    </div>
-    <button type="button" class="mf-done" id="mfBoardDone">Done</button>
-  </div>
-</nav>
 
-<!-- Quick notes: task workspace (mobile fullscreen / desktop phone popover).
+    <div id="hint">
+      <h2>This board is empty</h2>
+      <p class="hint-desktop">Pick a tool on the left, then click the canvas to add it.</p>
+      <p class="hint-mobile">Tap +, pick a tool, then tap the canvas to add it.</p>
+    </div>
+
+    <header id="mheader" hidden>
+      <button class="mh-btn" id="mBack" aria-label="Back"><i data-lucide="chevron-left"></i></button>
+      <h1 id="mTitle"></h1>
+      <button class="mh-btn mh-round" id="mShare" aria-label="Copy board link"><i data-lucide="user-plus"></i></button>
+    </header>
+
+    <nav id="mfooter">
+      <div class="mf-row" id="mfNav">
+        <button class="mf-icon" id="mMore" aria-label="More options"><i data-lucide="ellipsis"></i></button>
+        <div class="mf-tabs">
+          <button class="mf-tab active" id="mBoards">Your boards</button>
+          <button class="mf-tab" id="mNotes">Quick notes</button>
+        </div>
+        <button class="mf-icon" id="mAdd" aria-label="Add a card"><i data-lucide="plus"></i></button>
+      </div>
+      <div class="mf-row mf-tray" id="mfTray" hidden>
+        <button class="mf-icon mf-close" id="mTrayClose" aria-label="Close tool tray"><i data-lucide="x"></i></button>
+        <div class="mf-tools" id="mfTools"></div>
+      </div>
+      <div class="mf-row" id="mfBoard" hidden>
+        <div class="mf-board-actions">
+          <button type="button" class="mf-bact" id="mfBoardColor">
+            <span class="mf-bact-swatch" id="mfBoardSwatch"></span>
+            <span>Color</span>
+          </button>
+          <button type="button" class="mf-bact" id="mfBoardIcon">
+            <span class="mf-bact-icon" id="mfBoardIconGlyph"></span>
+            <span>Icon</span>
+          </button>
+          <button type="button" class="mf-bact" id="mfBoardRename">
+            <span class="mf-bact-glyph"><i data-lucide="type"></i></span>
+            <span>Rename</span>
+          </button>
+          <button type="button" class="mf-bact" id="mfBoardMore">
+            <span class="mf-bact-glyph"><i data-lucide="ellipsis"></i></span>
+            <span>More</span>
+          </button>
+        </div>
+        <button type="button" class="mf-done" id="mfBoardDone">Done</button>
+      </div>
+    </nav>
+
+    <!-- Quick notes: task workspace (mobile fullscreen / desktop phone popover).
      Three-level stack (overview → list → task) plus a modal search layer.
      Static chrome lives here; quicknotes.js fills every [id] region. -->
-<div id="quicknotes" hidden>
-  <div class="qn-deskhead" id="qnDeskHead" hidden>From your phone</div>
+    <div id="quicknotes" hidden>
+      <div class="qn-deskhead" id="qnDeskHead" hidden>From your phone</div>
 
-  <section class="qn-screen" id="qnHome">
-    <div class="qn-scroll qn-home-scroll">
-      <div class="qn-titlerow">
-        <h1 class="qn-title">Quick notes</h1>
-        <button class="qn-round" id="qnSearchBtn" aria-label="Search tasks"><i data-lucide="search"></i></button>
-        <button class="qn-round" id="qnHomeMenu" aria-label="Quick notes options"><i data-lucide="ellipsis"></i></button>
-      </div>
-      <div class="qn-tiles" id="qnTiles"></div>
-      <div class="qn-chips" id="qnHomeChips"></div>
-      <div class="qn-section">
-        <h2 class="qn-h2">Lists</h2>
-        <div class="qn-card qn-rows" id="qnLists"></div>
-      </div>
-    </div>
-    <div class="qn-bar">
-      <button class="qn-bar-icon" id="qnBarMenu" aria-label="Quick notes options"><i data-lucide="ellipsis"></i></button>
-      <div class="qn-bar-tabs">
-        <button class="qn-bar-tab" id="qnBoards">Your boards</button>
-        <span class="qn-bar-tab active">Quick notes</span>
-      </div>
-      <button class="qn-bar-icon" id="qnAdd" aria-label="Add"><i data-lucide="plus"></i></button>
-    </div>
-  </section>
-
-  <section class="qn-screen" id="qnList">
-    <div class="qn-navrow">
-      <button class="qn-back" id="qnListBack"><i data-lucide="chevron-left"></i><span>Quick notes</span></button>
-      <button class="qn-dots" id="qnListMenu" aria-label="List options"><i data-lucide="ellipsis"></i></button>
-    </div>
-    <div class="qn-scroll qn-list-scroll">
-      <div class="qn-listhead">
-        <div class="qn-listtitle" id="qnListTitle"></div>
-        <div class="qn-listmeta" id="qnListMeta"></div>
-      </div>
-      <div class="qn-tasks" id="qnTasks"></div>
-    </div>
-    <div class="qn-addbar" id="qnAddBar" hidden>
-      <button class="qn-addbtn" id="qnAddTask"><i data-lucide="plus"></i><span>Add a task</span></button>
-      <div class="qn-addfield" id="qnAddField" hidden>
-        <span class="qn-box"></span>
-        <input id="qnNewTask" placeholder="New task — press Enter" aria-label="New task">
-        <button class="qn-x" id="qnAddCancel" aria-label="Cancel"><i data-lucide="x"></i></button>
-      </div>
-    </div>
-  </section>
-
-  <section class="qn-screen" id="qnTask">
-    <div class="qn-navrow">
-      <button class="qn-back" id="qnTaskBack"><i data-lucide="chevron-left"></i><span id="qnTaskBackLabel"></span></button>
-    </div>
-    <div class="qn-scroll qn-task-scroll">
-      <div class="qn-taskhead">
-        <button class="qn-box qn-box-lg" id="qnTaskBox" aria-label="Toggle done"><i data-lucide="check"></i></button>
-        <h2 class="qn-tasktitle" id="qnTaskTitle" contenteditable="true" role="textbox" aria-label="Task"></h2>
-        <button class="qn-star qn-star-lg" id="qnTaskStar" aria-label="Star task"><i data-lucide="star"></i></button>
-      </div>
-      <div class="qn-card qn-details" id="qnDetails"></div>
-      <div class="qn-card qn-notecard">
-        <div class="qn-noterow">
-          <span class="qn-notelabel">NOTE</span>
-          <div class="qn-fmt" id="qnFmt"></div>
+      <section class="qn-screen" id="qnHome">
+        <div class="qn-scroll qn-home-scroll">
+          <div class="qn-titlerow">
+            <h1 class="qn-title">Quick notes</h1>
+            <button class="qn-round" id="qnSearchBtn" aria-label="Search tasks"><i data-lucide="search"></i></button>
+            <button class="qn-round" id="qnHomeMenu" aria-label="Quick notes options">
+              <i data-lucide="ellipsis"></i>
+            </button>
+          </div>
+          <div class="qn-tiles" id="qnTiles"></div>
+          <div class="qn-chips" id="qnHomeChips"></div>
+          <div class="qn-section">
+            <h2 class="qn-h2">Lists</h2>
+            <div class="qn-card qn-rows" id="qnLists"></div>
+          </div>
         </div>
-        <textarea id="qnNote" rows="4" placeholder="Add note" aria-label="Note"></textarea>
+        <div class="qn-bar">
+          <button class="qn-bar-icon" id="qnBarMenu" aria-label="Quick notes options">
+            <i data-lucide="ellipsis"></i>
+          </button>
+          <div class="qn-bar-tabs">
+            <button class="qn-bar-tab" id="qnBoards">Your boards</button>
+            <span class="qn-bar-tab active">Quick notes</span>
+          </div>
+          <button class="qn-bar-icon" id="qnAdd" aria-label="Add"><i data-lucide="plus"></i></button>
+        </div>
+      </section>
+
+      <section class="qn-screen" id="qnList">
+        <div class="qn-navrow">
+          <button class="qn-back" id="qnListBack"><i data-lucide="chevron-left"></i><span>Quick notes</span></button>
+          <button class="qn-dots" id="qnListMenu" aria-label="List options"><i data-lucide="ellipsis"></i></button>
+        </div>
+        <div class="qn-scroll qn-list-scroll">
+          <div class="qn-listhead">
+            <div class="qn-listtitle" id="qnListTitle"></div>
+            <div class="qn-listmeta" id="qnListMeta"></div>
+          </div>
+          <div class="qn-tasks" id="qnTasks"></div>
+        </div>
+        <div class="qn-addbar" id="qnAddBar" hidden>
+          <button class="qn-addbtn" id="qnAddTask"><i data-lucide="plus"></i><span>Add a task</span></button>
+          <div class="qn-addfield" id="qnAddField" hidden>
+            <span class="qn-box"></span>
+            <input id="qnNewTask" placeholder="New task — press Enter" aria-label="New task" />
+            <button class="qn-x" id="qnAddCancel" aria-label="Cancel"><i data-lucide="x"></i></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="qn-screen" id="qnTask">
+        <div class="qn-navrow">
+          <button class="qn-back" id="qnTaskBack">
+            <i data-lucide="chevron-left"></i><span id="qnTaskBackLabel"></span>
+          </button>
+        </div>
+        <div class="qn-scroll qn-task-scroll">
+          <div class="qn-taskhead">
+            <button class="qn-box qn-box-lg" id="qnTaskBox" aria-label="Toggle done">
+              <i data-lucide="check"></i>
+            </button>
+            <h2 class="qn-tasktitle" id="qnTaskTitle" contenteditable="true" role="textbox" aria-label="Task"></h2>
+            <button class="qn-star qn-star-lg" id="qnTaskStar" aria-label="Star task">
+              <i data-lucide="star"></i>
+            </button>
+          </div>
+          <div class="qn-card qn-details" id="qnDetails"></div>
+          <div class="qn-card qn-notecard">
+            <div class="qn-noterow">
+              <span class="qn-notelabel">NOTE</span>
+              <div class="qn-fmt" id="qnFmt"></div>
+            </div>
+            <textarea id="qnNote" rows="4" placeholder="Add note" aria-label="Note"></textarea>
+          </div>
+        </div>
+        <div class="qn-taskfoot">
+          <span class="qn-foot-pad"></span>
+          <span class="qn-created" id="qnCreated"></span>
+          <button class="qn-trash" id="qnDelTask" aria-label="Delete task"><i data-lucide="trash-2"></i></button>
+        </div>
+      </section>
+
+      <section class="qn-screen qn-searchscreen" id="qnSearch">
+        <div class="qn-searchbar">
+          <div class="qn-searchfield">
+            <i data-lucide="search"></i>
+            <input id="qnQuery" placeholder="Search tasks, notes, tags" aria-label="Search tasks" />
+            <button class="qn-x" id="qnQueryClear" aria-label="Clear search" hidden><i data-lucide="x"></i></button>
+          </div>
+          <button class="qn-cancel" id="qnSearchCancel">Cancel</button>
+        </div>
+        <div class="qn-chips qn-chips-scroll" id="qnSearchChips"></div>
+        <div class="qn-scroll qn-results" id="qnResults"></div>
+      </section>
+
+      <div class="qn-dim" id="qnDim"></div>
+      <div class="qn-sheet" id="qnSheet">
+        <div class="qn-grabber"></div>
+        <div id="qnSheetBody"></div>
       </div>
     </div>
-    <div class="qn-taskfoot">
-      <span class="qn-foot-pad"></span>
-      <span class="qn-created" id="qnCreated"></span>
-      <button class="qn-trash" id="qnDelTask" aria-label="Delete task"><i data-lucide="trash-2"></i></button>
+
+    <div id="msheet" hidden>
+      <button data-act="zoomin">Zoom in</button>
+      <button data-act="zoomout">Zoom out</button>
+      <button data-act="reset">Reset view</button>
+      <button data-act="export">Export</button>
     </div>
-  </section>
 
-  <section class="qn-screen qn-searchscreen" id="qnSearch">
-    <div class="qn-searchbar">
-      <div class="qn-searchfield">
-        <i data-lucide="search"></i>
-        <input id="qnQuery" placeholder="Search tasks, notes, tags" aria-label="Search tasks">
-        <button class="qn-x" id="qnQueryClear" aria-label="Clear search" hidden><i data-lucide="x"></i></button>
-      </div>
-      <button class="qn-cancel" id="qnSearchCancel">Cancel</button>
+    <div id="mBoardSheet" hidden>
+      <button data-act="delete" class="danger">Move to Trash</button>
     </div>
-    <div class="qn-chips qn-chips-scroll" id="qnSearchChips"></div>
-    <div class="qn-scroll qn-results" id="qnResults"></div>
-  </section>
 
-  <div class="qn-dim" id="qnDim"></div>
-  <div class="qn-sheet" id="qnSheet">
-    <div class="qn-grabber"></div>
-    <div id="qnSheetBody"></div>
-  </div>
-</div>
+    <div id="palette"></div>
+    <div id="ctxmenu" role="menu"></div>
+    <input type="file" id="fileInput" accept="image/*" />
+    <input
+      type="file"
+      id="uploadInput"
+      accept=".pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.json,text/*,application/pdf"
+    />
+    <div class="toast" id="toast"></div>
 
-<div id="msheet" hidden>
-  <button data-act="zoomin">Zoom in</button>
-  <button data-act="zoomout">Zoom out</button>
-  <button data-act="reset">Reset view</button>
-  <button data-act="export">Export</button>
-</div>
-
-<div id="mBoardSheet" hidden>
-  <button data-act="delete" class="danger">Move to Trash</button>
-</div>
-
-<div id="palette"></div>
-<div id="ctxmenu" role="menu"></div>
-<input type="file" id="fileInput" accept="image/*">
-<input type="file" id="uploadInput" accept=".pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.json,text/*,application/pdf">
-<div class="toast" id="toast"></div>
-
-<script src="https://unpkg.com/lucide@0.469.0"></script>
-<script type="module" src="/js/main.js"></script>
-</body>
+    <script src="https://unpkg.com/lucide@0.469.0"></script>
+    <script type="module" src="/js/main.js"></script>
+  </body>
 </html>
