@@ -92,6 +92,7 @@ async function flushSave(id, keepalive = false) {
 }
 
 export function flushAllSaves() {
+  // oxlint-disable-next-line unicorn/no-useless-spread -- snapshot: flushSave deletes from pending
   for (const id of [...pending.keys()]) flushSave(id, true);
 }
 // Send queued edits before the tab is closed, reloaded or backgrounded.

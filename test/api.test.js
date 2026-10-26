@@ -32,6 +32,7 @@ test.after(() => { server.close(); fs.rmSync(TMP, { recursive: true, force: true
 // tiny fetch helpers
 const get = (p) => fetch(base + p).then(async r => ({ status: r.status, body: await r.json() }));
 const send = (m, p, b) => fetch(base + p, {
+  // oxlint-disable-next-line unicorn/no-invalid-fetch-options -- m is never GET
   method: m, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b)
 }).then(async r => ({ status: r.status, body: await r.json() }));
 

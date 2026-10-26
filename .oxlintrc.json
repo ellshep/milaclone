@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": { "node": true, "es2024": true },
+  "ignorePatterns": [".lavish/**", ".claude/**", ".impeccable/**", "public/vendor/**", "coverage/**", "playwright-report/**"],
+  "rules": {
+    "no-undef": "error"
+  },
+  "overrides": [
+    {
+      "files": ["public/js/**"],
+      "env": { "browser": true, "node": false },
+      "globals": { "lucide": "readonly" }
+    },
+    {
+      "files": ["e2e/**", "test/**"],
+      "env": { "browser": true }
+    }
+  ]
+}

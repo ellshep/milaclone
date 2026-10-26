@@ -1,0 +1,11 @@
+.lavish/
+.claude/
+.impeccable/
+data/
+.e2e-data/
+coverage/
+playwright-report/
+test-results/
+public/uploads/
+public/vendor/
+package-lock.json

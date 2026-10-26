@@ -54,7 +54,6 @@ const stmt = {
   updateCanvas: db.prepare(`UPDATE canvases SET title = @title, color = @color, icon = @icon WHERE id = @id`),
   setCanvasParent: db.prepare(`UPDATE canvases SET parentCanvasId = ? WHERE id = ?`),
   trashCanvas: db.prepare(`UPDATE canvases SET trashedBy = ?, trashedAt = ? WHERE id = ?`),
-  boardItemsOnCanvas: db.prepare(`SELECT * FROM items WHERE canvasId = ? AND type = 'board' AND ${LIVE}`),
   getItem: db.prepare(`SELECT * FROM items WHERE id = ? AND ${LIVE}`),
   itemsForCanvas: db.prepare(`SELECT * FROM items WHERE canvasId = ? AND ${LIVE} ORDER BY COALESCE(z, 0), createdAt, id`),
   itemsByParent: db.prepare(`SELECT * FROM items WHERE parentItemId = ? AND ${LIVE}`),
@@ -110,18 +109,6 @@ function breadcrumb(canvasId) {
 
 function itemsForCanvas(canvasId) {
   return stmt.itemsForCanvas.all(canvasId).map(rowToItem);
-}
-
-// Recursively collect a canvas and all canvases nested beneath it.
-function collectDescendantCanvases(canvasId, acc) {
-  acc.add(canvasId);
-  for (const row of stmt.boardItemsOnCanvas.all(canvasId)) {
-    const data = row.data ? JSON.parse(row.data) : {};
-    if (data.childCanvasId && !acc.has(data.childCanvasId)) {
-      collectDescendantCanvases(data.childCanvasId, acc);
-    }
-  }
-  return acc;
 }
 
 // Collect an item's whole live subtree: the item, cards parented to it (column

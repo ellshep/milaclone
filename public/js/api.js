@@ -10,7 +10,7 @@ async function write(url, init) {
   try {
     const r = await fetch(url, init);
     if (r.ok) return await r.json();
-  } catch (e) { /* offline or aborted: reported below */ }
+  } catch { /* offline or aborted: reported below */ }
   toast('Could not save — check your connection');
   return null;
 }

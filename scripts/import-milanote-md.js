@@ -251,7 +251,7 @@ async function tryUploadImage(base, url, alt) {
     const r = await fetch(url, { redirect: 'follow' });
     if (!r.ok) return null;
     const mime = (r.headers.get('content-type') || 'image/png').split(';')[0].trim();
-    if (!/^image\//.test(mime)) return null;
+    if (!mime.startsWith('image/')) return null;
     const buf = Buffer.from(await r.arrayBuffer());
     if (!buf.length) return null;
     const ext = mime === 'image/jpeg' ? '.jpg'

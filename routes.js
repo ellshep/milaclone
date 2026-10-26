@@ -21,8 +21,8 @@ const BOARD_ICONS = [
 const randomBoardIcon = () => BOARD_ICONS[Math.floor(Math.random() * BOARD_ICONS.length)];
 
 const ALLOWED_UPLOAD = (mime) =>
-  /^image\//.test(mime) ||
-  /^text\//.test(mime) ||
+  mime.startsWith('image/') ||
+  mime.startsWith('text/') ||
   mime === 'application/pdf' ||
   mime === 'application/msword' ||
   mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
@@ -54,7 +54,7 @@ function isUpload(filePath) {
       if (s.ino === up.ino && s.dev === up.dev) return true;
     }
     return false;
-  } catch (e) { return true; }   // can't tell: treat as untrusted
+  } catch { return true; }   // can't tell: treat as untrusted
 }
 function setUploadHeaders(res, filePath) {
   if (!isUpload(filePath)) return;

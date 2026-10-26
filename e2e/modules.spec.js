@@ -9,7 +9,6 @@ const { test, expect } = require('@playwright/test');
 const { freshCanvas, place, leaveEdit } = require('./helpers');
 
 const PATCH = r => r.url().includes('/api/item/') && r.request().method() === 'PATCH';
-const CREATE = r => r.url().endsWith('/api/item') && r.request().method() === 'POST';
 const PASTED = r => /\/api\/item\/[^/]+\/(copy|move)$/.test(r.url());
 
 test('context menu: copy then paste yields a second note', async ({ page }) => {

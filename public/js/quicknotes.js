@@ -75,10 +75,10 @@ const qn = {
 function loadSettings() {
   const def = { tiles: true, chips: false };
   try { return Object.assign(def, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); }
-  catch (e) { return def; }
+  catch { return def; }
 }
 function saveSettings() {
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(qn.settings)); } catch (e) { /* private mode */ }
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(qn.settings)); } catch { /* private mode */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +278,7 @@ async function refreshBadge() {
     const n = (r.lists || []).length;
     badge.textContent = String(n);
     badge.hidden = n === 0;
-  } catch (e) { /* badge is decorative */ }
+  } catch { /* badge is decorative */ }
 }
 
 export function openQuickNotes(opts) {
@@ -617,7 +617,7 @@ function applyFormat(list, task, key) {
 
 function toggleListPrefix(note, kind) {
   const lines = (note || '').split('\n');
-  const isBul = l => /^• /.test(l);
+  const isBul = l => l.startsWith('• ');
   const isNum = l => /^\d+\. /.test(l);
   const strip = l => l.replace(/^• /, '').replace(/^\d+\. /, '');
   const marked = lines.every(l => !l.trim() || (kind === 'bullet' ? isBul(l) : isNum(l)));
@@ -835,7 +835,7 @@ async function createList() {
       if (it.parentItemId) continue;
       y = Math.max(y, (it.y || 0) + (it.h || 200) + 24);
     }
-  } catch (e) { /* fall back to the default slot */ }
+  } catch { /* fall back to the default slot */ }
 
   const created = await api.create({
     canvasId: rootId, type: 'todo', x: 60, y,
@@ -855,7 +855,7 @@ async function deleteList(list) {
   qn.dirty = true;
   goHome();
   flushSaves(list.id);
-  try { await api.remove(list.id); } catch (e) { toast('Could not delete the list'); return; }
+  try { await api.remove(list.id); } catch { toast('Could not delete the list'); return; }
   toast('List deleted', { label: 'Undo', fn: async () => { if (await api.restore(list.id)) { qn.dirty = true; await load(); } } });
 }
 

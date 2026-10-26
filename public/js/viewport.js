@@ -21,7 +21,7 @@ export function saveCam() {
 }
 
 export function loadCam(id) {
-  try { const c = JSON.parse(localStorage.getItem('cam:' + id)); if (c && c.scale) return c; } catch (e) {}
+  try { const c = JSON.parse(localStorage.getItem('cam:' + id)); if (c && c.scale) return c; } catch {}
   return { x: 80, y: 60, scale: 1 };
 }
 

@@ -58,7 +58,7 @@ export function initMobile() {
   };
   el('mShare').onclick = async () => {
     try { await navigator.clipboard.writeText(location.href); toast('Board link copied'); }
-    catch (e) { toast('Copy this page URL to share'); }
+    catch { toast('Copy this page URL to share'); }
   };
 
   el('mMore').onclick = () => { sheet.hidden = !sheet.hidden; };
