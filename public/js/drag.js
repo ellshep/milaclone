@@ -69,6 +69,9 @@ export function onItemPointerDown(e, it, el) {
 
 function maybeEdit(el, ev) {
   if (!el.querySelector('[data-edit]')) return;
+  // An image's only field is its caption: clicking the picture just selects it
+  // (so Delete / copy still act on the card); Enter or a click on the caption edits.
+  if (el.classList.contains('image') && !ev.target.closest('[data-edit]')) return;
   if (!el.classList.contains('editing')) {
     enterEdit(el);
     const f = ev.target.closest('[data-edit]') || el.querySelector('[data-edit]');

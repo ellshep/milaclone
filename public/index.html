@@ -300,6 +300,16 @@
       <button data-act="trash">Trash</button>
     </div>
 
+    <dialog id="lightbox" aria-label="Image viewer">
+      <img alt="" />
+      <div class="lb-caption"></div>
+      <button type="button" class="lb-btn lb-prev" aria-label="Previous image">
+        <i data-lucide="chevron-left"></i>
+      </button>
+      <button type="button" class="lb-btn lb-next" aria-label="Next image"><i data-lucide="chevron-right"></i></button>
+      <button type="button" class="lb-btn lb-close" aria-label="Close"><i data-lucide="x"></i></button>
+    </dialog>
+
     <dialog id="trashDialog" aria-labelledby="trashTitle">
       <header class="trash-head">
         <h2 id="trashTitle">Trash</h2>
@@ -318,11 +328,12 @@
 
     <div id="palette"></div>
     <div id="ctxmenu" role="menu"></div>
-    <input type="file" id="fileInput" accept="image/*" />
+    <input type="file" id="fileInput" accept="image/*" multiple />
     <input
       type="file"
       id="uploadInput"
-      accept=".pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.json,text/*,application/pdf"
+      accept=".pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.json,text/*,application/pdf,audio/*,video/*"
+      multiple
     />
     <div class="toast" id="toast"></div>
 

@@ -67,21 +67,21 @@ Set up in the `chore/quality-gates` PR, at the user's request, so auto-merged ph
 
 ## P2 · Capture
 
-- [ ] **F2.1 Paste from the system clipboard** (M).
+- [x] **F2.1 Paste from the system clipboard** (M).
   - Pasted images, URLs and text become cards. Copying a card writes a marker, so cmd+V still deep-copies it through `/copy`.
   - Acceptance (e2e): pasting an image, a URL and plain text creates an image card, a link card and a note. Copying a card and pasting it creates a deep copy.
-- [ ] **F2.2 Drag and drop from the computer** (M).
+- [x] **F2.2 Drag and drop from the computer** (M).
   - Dropped files upload and are laid out in a grid at the drop point. Dropped links become link cards.
   - Acceptance (e2e): dropping two files makes two cards at the drop point.
-- [ ] **F2.3 Video/music embeds** (S).
+- [x] **F2.3 Video/music embeds** (S).
   - YouTube, Vimeo and Spotify URLs become iframe embeds. The server fetches nothing.
   - Acceptance: each provider's URL maps to the right embed `src`, and other URLs stay plain link cards.
-- [ ] **F2.4 Image lightbox** (S).
+- [x] **F2.4 Image lightbox** (S).
   - Double-clicking an image opens it full size in a `<dialog>`. ←/→ step through the board's images, and Esc closes it.
   - Acceptance (e2e): it opens, steps to the next image and closes.
-- [ ] **F2.5 Image caption and transparent background** (S).
+- [x] **F2.5 Image caption and transparent background** (S).
   - Acceptance: both fields survive a reload.
-- [ ] **F2.6 File icons and media players** (S).
+- [x] **F2.6 File icons and media players** (S).
   - Each file extension gets a lucide icon. Audio and video files get native `<audio>` and `<video>` players.
   - Acceptance (e2e): an uploaded mp3 renders an `<audio>` element.
 

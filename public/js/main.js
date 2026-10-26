@@ -7,12 +7,14 @@ import { loadCam, applyCam, initViewport } from './viewport.js';
 import { render, renderCrumbs } from './cards.js';
 import { deselect, renameSelected, deleteItem, exitEdit, undoDelete, flushAllSaves } from './editing.js';
 import { closePalette, closeCtx } from './menus.js';
-import { copySelected, pasteClipboard, duplicateSelected } from './clipboard.js';
+import { duplicateSelected } from './clipboard.js';
 import { arm, disarm, initTools } from './tools.js';
 import { initMobile, updateMobileChrome } from './mobile.js';
 import { initBoardChrome, updateSelectionChrome } from './boardchrome.js';
 import { initQuickNotes, isQuickNotesOpen } from './quicknotes.js';
 import { initTrash } from './trash.js';
+import { initCapture } from './capture.js';
+import { initLightbox } from './lightbox.js';
 
 // Entry point: canvas loading/navigation, global keyboard + pointer handling,
 // and boot. Wiring for the viewport and toolbar lives in their own modules and
@@ -62,21 +64,7 @@ document.addEventListener('keydown', e => {
   }
   if (typing) return;
   const mod = e.metaKey || e.ctrlKey;
-  if (mod && e.key.toLowerCase() === 'c') {
-    e.preventDefault();
-    copySelected(false);
-    return;
-  }
-  if (mod && e.key.toLowerCase() === 'x') {
-    e.preventDefault();
-    copySelected(true);
-    return;
-  }
-  if (mod && e.key.toLowerCase() === 'v') {
-    e.preventDefault();
-    pasteClipboard();
-    return;
-  }
+  // cmd+C / X / V arrive as copy/cut/paste events, handled in capture.js.
   if (mod && e.key.toLowerCase() === 'd') {
     e.preventDefault();
     duplicateSelected();
@@ -138,6 +126,8 @@ initBoardChrome();
 initQuickNotes();
 initTools();
 initTrash();
+initCapture();
+initLightbox();
 
 (async function boot() {
   refreshIcons();

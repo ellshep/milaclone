@@ -1,12 +1,13 @@
 'use strict';
 
 import { state, dom, elMap } from './state.js';
-import { colorVar, lucideEl, refreshIcons, autoGrow, isLocked, rid, normalizeUrl } from './util.js';
+import { colorVar, lucideEl, refreshIcons, autoGrow, isLocked, rid, normalizeUrl, embedUrl, fileIcon } from './util.js';
 import { select, enterEdit, exitEdit, saveData, deleteItem, trackTasks } from './editing.js';
 import { openPalette, openCtx } from './menus.js';
 import { updateSelectionChrome } from './boardchrome.js';
 import { onItemPointerDown, startResize } from './drag.js';
 import { openCanvas } from './main.js';
+import { openLightbox } from './lightbox.js';
 
 // Rendering of the canvas and every card type. This module owns the DOM for
 // items; other modules ask it to (re)render when data changes.
@@ -260,6 +261,20 @@ function buildTodo(el, it) {
 
 function buildLink(el, it) {
   el.classList.add('link');
+  const embed = embedUrl(it.data.url);
+  // ponytail: render() rebuilds every card, so a playing embed restarts when the
+  // board re-renders; keyed rendering (reuse unchanged card elements) would fix it.
+  if (embed) {
+    el.classList.add('embed');
+    const frame = document.createElement('iframe');
+    frame.className = 'embed-frame' + (embed.includes('spotify') ? ' audio' : '');
+    frame.src = embed;
+    frame.title = it.data.title || 'Embedded player';
+    frame.loading = 'lazy';
+    frame.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture';
+    frame.referrerPolicy = 'strict-origin-when-cross-origin';
+    el.appendChild(frame);
+  }
   const bar = document.createElement('div');
   bar.className = 'lbar';
   bar.style.background = colorVar(it.color || 'blue');
@@ -288,18 +303,27 @@ function buildLink(el, it) {
 
 function buildImage(el, it) {
   el.classList.add('image');
+  if (it.data.transparent) el.classList.add('transparent');
   const img = document.createElement('img');
   img.src = it.data.src;
-  img.alt = it.data.name || '';
-  if (it.data.naturalW && it.data.naturalH) el.style.aspectRatio = it.data.naturalW + ' / ' + it.data.naturalH;
+  img.alt = it.data.caption || it.data.name || '';
+  if (it.data.naturalW && it.data.naturalH) img.style.aspectRatio = it.data.naturalW + ' / ' + it.data.naturalH;
   el.appendChild(img);
+  const caption = makeField('input', 'icaption', it.data.caption, 'Add a caption');
+  caption.setAttribute('aria-label', 'Caption');
+  caption.addEventListener('input', () => saveData(it, { caption: caption.value }));
+  el.appendChild(caption);
+  el.addEventListener('dblclick', e => {
+    if (el.classList.contains('editing') && e.target.closest('[data-edit]')) return;
+    openLightbox(it.id);
+  });
 }
 
 function buildFile(el, it) {
   el.classList.add('file');
   const icon = document.createElement('div');
   icon.className = 'ficon';
-  icon.appendChild(lucideEl('file-text'));
+  icon.appendChild(lucideEl(fileIcon(it.data.name, it.data.mime)));
   const name = document.createElement('div');
   name.className = 'fname';
   name.textContent = it.data.name || 'File';
@@ -315,6 +339,17 @@ function buildFile(el, it) {
   el.appendChild(icon);
   el.appendChild(name);
   el.appendChild(open);
+  const kind = String(it.data.mime || '').split('/')[0];
+  if (it.data.src && (kind === 'audio' || kind === 'video')) {
+    const media = document.createElement(kind);
+    media.className = 'fmedia';
+    media.controls = true;
+    media.preload = 'metadata';
+    media.src = it.data.src;
+    media.setAttribute('data-nodrag', '');
+    el.classList.add('has-media');
+    el.appendChild(media);
+  }
 }
 
 function buildBoard(el, it) {
