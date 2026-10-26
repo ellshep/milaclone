@@ -85,7 +85,7 @@ test('create.defaultsFor returns the right shape per card type', async ({ page }
       unknown: d('mystery'),
     };
   });
-  expect(out.note).toEqual({ w: 240, data: { title: '', body: '' } });
+  expect(out.note).toEqual({ w: 240, data: {} }); // the server fills in doc + text
   expect(out.todo.w).toBe(240);
   expect(out.todo.data.tasks).toHaveLength(1);
   expect(out.todo.data.tasks[0]).toMatchObject({ text: '', done: false });

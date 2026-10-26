@@ -21,13 +21,14 @@ test('create a note via the toolbar and it persists across reload', async ({ pag
   const note = page.locator('.item.type-note');
   await expect(note).toHaveCount(1);
 
-  // createAt() drops the card into edit mode with the title focused
+  // createAt() drops the card into edit mode; the editor focuses once loaded
+  await expect(note.locator('.ProseMirror')).toBeFocused();
   const saved = page.waitForResponse(r => r.url().includes('/api/item/') && r.request().method() === 'PATCH');
   await page.keyboard.type('Groceries');
   await saved;
 
   await page.goto('/#' + id);
-  await expect(page.locator('.item.type-note .ntitle')).toHaveValue('Groceries');
+  await expect(page.locator('.item.type-note .nbody')).toHaveText('Groceries');
 });
 
 test('keyboard shortcut arms the note tool', async ({ page }) => {

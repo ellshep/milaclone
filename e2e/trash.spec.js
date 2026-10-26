@@ -63,17 +63,18 @@ test('F1.2 empty trash asks first, then reports what it deleted', async ({ page 
 
 test('F1.4 returning to the tab shows changes made elsewhere', async ({ page }) => {
   const canvasId = await freshCanvas(page);
-  const note = await api(page, 'POST', '/api/item', { canvasId, type: 'note', data: { title: 'Before' } });
+  const note = await api(page, 'POST', '/api/item', { canvasId, type: 'note', data: { body: 'Before' } });
   await page.reload();
-  const title = page.locator(`.item[data-id="${note.id}"]`).getByRole('textbox', { name: 'Title' });
-  await expect(title).toHaveValue('Before');
+  const body = page.locator(`.item[data-id="${note.id}"] .nbody`);
+  await expect(body).toHaveText('Before');
 
-  await api(page, 'PATCH', '/api/item/' + note.id, { data: { title: 'After' } }); // "another device"
+  const doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'After' }] }] };
+  await api(page, 'PATCH', '/api/item/' + note.id, { data: { doc, text: 'After' } }); // "another device"
   await page.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await expect(title).toHaveValue('After');
+  await expect(body).toHaveText('After');
 });
 
 test('F1.5 a rejected upload says why', async ({ page }) => {

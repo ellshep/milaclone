@@ -77,7 +77,7 @@ Intro paragraph.
   assert.ok(board, 'top-level board created');
 
   const top = await get('/api/canvas/' + board.data.childCanvasId);
-  assert.ok(top.items.some(i => i.type === 'note' && /Intro paragraph/.test(i.data.body)));
+  assert.ok(top.items.some(i => i.type === 'note' && /Intro paragraph/.test(i.data.text)));
   const nestedCard = top.items.find(i => i.type === 'board');
   const nested = await get('/api/canvas/' + nestedCard.data.childCanvasId);
 

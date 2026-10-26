@@ -456,18 +456,6 @@ textarea {
 .note {
   padding: 14px 16px;
 }
-.note .ntitle {
-  font-family: var(--serif);
-  font-weight: 600;
-  font-size: 16px;
-  border: none;
-  outline: none;
-  width: 100%;
-  background: none;
-  color: var(--ink);
-  resize: none;
-  margin-bottom: 4px;
-}
 .note .nbody {
   font-size: 13.5px;
   line-height: 1.5;
@@ -478,10 +466,6 @@ textarea {
   color: #3c3f45;
   resize: none;
   min-height: 20px;
-}
-.note .ntitle::placeholder,
-.note .nbody::placeholder {
-  color: var(--ink-faint);
 }
 .note .accent {
   position: absolute;
@@ -841,9 +825,6 @@ textarea {
   color: #3c3f45;
   resize: none;
   min-height: 20px;
-}
-.comment .cbody::placeholder {
-  color: var(--ink-faint);
 }
 
 /* ---------- file ---------- */
@@ -2780,4 +2761,113 @@ body.qn-open .toast {
 }
 #crumbs .crumb.current {
   cursor: text;
+}
+
+/* ---- Rich text (note / comment bodies) --------------------------------- */
+.rich {
+  min-height: 1.5em;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+.item:not(.editing) .rich {
+  cursor: inherit;
+}
+.rich .ProseMirror {
+  outline: none;
+}
+.rich :is(p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre) {
+  margin: 0 0 6px;
+}
+.rich > :last-child,
+.rich .ProseMirror > :last-child {
+  margin-bottom: 0;
+}
+.rich :is(h1, h2, h3) {
+  font-family: var(--serif);
+  color: var(--ink);
+  line-height: 1.25;
+}
+.rich h1 {
+  font-size: 20px;
+}
+.rich h2 {
+  font-size: 16px;
+}
+.rich h3 {
+  font-size: 14.5px;
+}
+.rich :is(ul, ol) {
+  padding-left: 20px;
+}
+.rich ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 2px;
+}
+.rich ul[data-type='taskList'] li {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.rich ul[data-type='taskList'] li > label,
+.rich ul[data-type='taskList'] li > input {
+  margin-top: 3px;
+}
+.rich ul[data-type='taskList'] li > div {
+  flex: 1;
+  min-width: 0;
+}
+.rich li[data-checked='true'] > div {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+.rich blockquote {
+  background: #f6f6f8;
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+.rich code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+  background: #f1f1f3;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.rich pre {
+  background: #f1f1f3;
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+}
+.rich pre code {
+  background: none;
+  padding: 0;
+}
+.rich mark {
+  background: #fde68a;
+  border-radius: 2px;
+}
+.rich a {
+  color: var(--c-blue);
+  text-decoration: underline;
+}
+.rich hr {
+  border: none;
+  border-top: 1px solid var(--rail-border);
+  margin: 8px 0;
+}
+/* Placeholder: TipTap's on the editor, ours on an empty static body. */
+.rich[data-empty]::before,
+.rich .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+.rich .ProseMirror p.is-editor-empty:first-child::before {
+  float: left;
+  height: 0;
+}
+.rich[data-empty] > p:only-child {
+  display: none;
 }

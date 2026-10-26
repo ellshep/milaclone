@@ -124,8 +124,10 @@ jobs:
           root=$(curl -fs http://127.0.0.1:4321/api/root | node -pe 'JSON.parse(require("fs").readFileSync(0)).rootCanvasId')
           curl -fs -X POST -H 'Content-Type: application/json' \
             -d "{\"canvasId\":\"$root\",\"type\":\"note\",\"data\":{\"title\":\"smoke\"}}" \
-            http://127.0.0.1:4321/api/item | grep -q '"title":"smoke"'
+            http://127.0.0.1:4321/api/item | grep -q '"text":"smoke"'
           curl -fs http://127.0.0.1:4321/ | grep -q '<div id="world"'
+          # the TipTap bundle esbuild writes at boot (F4.1)
+          curl -fs http://127.0.0.1:4321/vendor/editor.js | grep -q mountEditor
       - name: Container logs
         if: ${{ failure() }}
         run: docker logs app

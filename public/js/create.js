@@ -11,7 +11,7 @@ import { select, enterEdit } from './editing.js';
 export function defaultsFor(type) {
   switch (type) {
     case 'note':
-      return { w: 240, data: { title: '', body: '' } };
+      return { w: 240, data: {} };
     case 'todo':
       return { w: 240, data: { title: 'To-do', tasks: [{ id: rid(), text: '', done: false }] } };
     case 'link':
@@ -21,7 +21,7 @@ export function defaultsFor(type) {
     case 'board':
       return { w: 152, data: { title: 'Untitled board' } };
     case 'comment':
-      return { w: 220, data: { body: '' } };
+      return { w: 220, data: {} };
     case 'file':
       return { w: 220, data: {} };
     default:

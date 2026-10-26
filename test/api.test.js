@@ -48,6 +48,28 @@ async function root() {
   return (await get('/api/root')).body.rootCanvasId;
 }
 
+test('POST converts a plain-text note or comment to doc + text', async () => {
+  const canvasId = await root();
+  const note = (await send('POST', '/api/item', { canvasId, type: 'note', data: { title: 'T', body: 'b' } })).body;
+  assert.equal(note.data.text, 'T\nb');
+  assert.equal(note.data.doc.content[0].type, 'heading');
+  assert.equal(note.data.title, undefined);
+  const comment = (await send('POST', '/api/item', { canvasId, type: 'comment' })).body;
+  assert.deepEqual(comment.data, { doc: { type: 'doc', content: [{ type: 'paragraph' }] }, text: '' });
+  await send('DELETE', '/api/item/' + note.id);
+  await send('DELETE', '/api/item/' + comment.id);
+});
+
+test("PATCH rebuilds a note body from a stale client's title/body", async () => {
+  const canvasId = await root();
+  const note = (await send('POST', '/api/item', { canvasId, type: 'note', data: { body: 'old' } })).body;
+  const r = (await send('PATCH', '/api/item/' + note.id, { data: { body: 'from an old tab' } })).body;
+  assert.equal(r.data.text, 'from an old tab');
+  assert.equal(r.data.body, undefined);
+  assert.equal(r.data.doc.content[0].content[0].text, 'from an old tab');
+  await send('DELETE', '/api/item/' + note.id);
+});
+
 test('health + root seeded', async () => {
   assert.deepEqual((await get('/api/health')).body, { ok: true });
   const id = await root();
@@ -118,7 +140,7 @@ test('create comment and file items', async () => {
   const canvasId = await root();
   const comment = (await send('POST', '/api/item', { canvasId, type: 'comment', data: { body: 'hi' } })).body;
   assert.equal(comment.type, 'comment');
-  assert.equal(comment.data.body, 'hi');
+  assert.equal(comment.data.text, 'hi');
   const file = (
     await send('POST', '/api/item', {
       canvasId,
@@ -303,7 +325,7 @@ test('copy: a board is deep-copied, including into its own subtree', async () =>
   const copied = (await get('/api/canvas/' + copy.data.childCanvasId)).body;
   assert.equal(copied.canvas.title, 'Src');
   assert.deepEqual(
-    copied.items.map(i => i.data.body),
+    copied.items.map(i => i.data.text),
     ['deep']
   );
   assert.deepEqual(
@@ -315,7 +337,7 @@ test('copy: a board is deep-copied, including into its own subtree', async () =>
   const nested = (await send('POST', '/api/item/' + board.id + '/copy', { canvasId: inside, x: 0, y: 0 })).body;
   const nestedView = (await get('/api/canvas/' + nested.data.childCanvasId)).body;
   assert.deepEqual(
-    nestedView.items.map(i => i.data.body),
+    nestedView.items.map(i => i.data.text),
     ['deep']
   );
 });
@@ -327,7 +349,7 @@ test('copy: a column comes with its cards', async () => {
   const copy = (await send('POST', '/api/item/' + col.id + '/copy', { canvasId, x: 0, y: 0 })).body;
   const kids = (await get('/api/canvas/' + canvasId)).body.items.filter(i => i.parentItemId === copy.id);
   assert.deepEqual(
-    kids.map(k => k.data.body),
+    kids.map(k => k.data.text),
     ['a']
   );
 });

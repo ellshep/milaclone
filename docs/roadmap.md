@@ -117,18 +117,18 @@ Set up in the `chore/quality-gates` PR, at the user's request, so auto-merged ph
 
 ## P4 · Rich text
 
-- [ ] **F4.1 Build step** (S).
+- [x] **F4.1 Build step** (S).
   - `server.js` runs esbuild `buildSync` on `public/js/editor.js`, writing `public/vendor/editor.js` (gitignored) at boot.
   - Acceptance: G4's Docker smoke fetches the bundle, and the Playwright webServer boots with the bundle present.
-- [ ] **F4.2 TipTap note editor** (M).
+- [x] **F4.2 TipTap note editor** (M).
   - Supports bold, italic, headings, lists, checklists, quotes, code, highlight, links and markdown shortcuts.
   - The editor is loaded with `import()` the first time a note is edited.
   - Acceptance (e2e): typing `**x**` renders bold, and the bundle isn't requested until a note is edited.
-- [ ] **F4.3 One body per note** (M).
+- [x] **F4.3 One body per note** (M).
   - Notes store `data.doc` (TipTap JSON) and `data.text` (plain text).
   - A one-time migration converts old title + body notes, after a `db.backup()`.
   - Acceptance: a migrated note keeps its title and body text. Quick notes, the importer and search all read `data.text`.
-- [ ] **F4.4 Rich text in comment cards** (S).
+- [x] **F4.4 Rich text in comment cards** (S).
   - Acceptance (e2e): a comment card supports bold.
 
 ## P5 · Find & keep

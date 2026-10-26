@@ -47,7 +47,7 @@ test('cmd+Z brings back a deleted board with everything inside it', async ({ pag
   await page.keyboard.press('ControlOrMeta+z');
   await expect(page.locator('.item.type-board')).toHaveCount(1);
   await page.locator('.item.type-board').dblclick();
-  await expect(page.locator('.item.type-note textarea.nbody')).toHaveValue('precious');
+  await expect(page.locator('.item.type-note .nbody')).toHaveText('precious');
 });
 
 test('duplicating a board copies its contents', async ({ page }) => {
@@ -59,34 +59,34 @@ test('duplicating a board copies its contents', async ({ page }) => {
   await expect(page.locator('.item.type-board')).toHaveCount(2);
 
   await page.locator('.item.type-board').nth(1).dblclick();
-  await expect(page.locator('.item.type-note textarea.nbody')).toHaveValue('inside');
+  await expect(page.locator('.item.type-note .nbody')).toHaveText('inside');
 });
 
-test('editing title then body quickly saves both', async ({ page }) => {
+test('typing a heading then body quickly saves both', async ({ page }) => {
   const canvasId = await freshCanvas(page);
   await place(page, 'note');
-  await page.locator('.item.type-note textarea.ntitle').fill('Title');
-  await page.locator('.item.type-note textarea.nbody').fill('Body');
+  await expect(page.locator('.item.type-note .ProseMirror')).toBeFocused();
+  await page.keyboard.type('## Title');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Body');
   await expect
-    .poll(async () => {
-      const d = (await (await page.request.get('/api/canvas/' + canvasId)).json()).items[0]?.data;
-      return d && d.title + '|' + d.body;
-    })
-    .toBe('Title|Body');
+    .poll(async () => (await (await page.request.get('/api/canvas/' + canvasId)).json()).items[0]?.data.text)
+    .toBe('Title\nBody');
   await page.reload();
-  await expect(page.locator('.item.type-note textarea.ntitle')).toHaveValue('Title');
-  await expect(page.locator('.item.type-note textarea.nbody')).toHaveValue('Body');
+  await expect(page.locator('.item.type-note .nbody h2')).toHaveText('Title');
+  await expect(page.locator('.item.type-note .nbody p').first()).toHaveText('Body');
 });
 
 test('an edit still in the debounce window is saved when the page is left', async ({ page }) => {
   const canvasId = await freshCanvas(page);
   await place(page, 'note');
-  await page.locator('.item.type-note textarea.nbody').fill('last words');
+  await expect(page.locator('.item.type-note .ProseMirror')).toBeFocused();
+  await page.keyboard.type('last words');
   await page.goto('about:blank'); // leave before the 400 ms debounce fires
   await expect
     .poll(async () => {
       const r = await page.request.get('/api/canvas/' + canvasId);
-      return (await r.json()).items[0]?.data.body;
+      return (await r.json()).items[0]?.data.text;
     })
     .toBe('last words');
 });

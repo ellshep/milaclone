@@ -14,3 +14,6 @@ playwright-report/
 
 # test coverage output
 coverage/
+
+# esbuild output (server.js builds it at boot)
+public/vendor/
