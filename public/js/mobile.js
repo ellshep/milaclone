@@ -7,6 +7,8 @@ import { arm, disarm } from './tools.js';
 import { openCanvas } from './main.js';
 import { openQuickNotes } from './quicknotes.js';
 import { openTrash } from './trash.js';
+import { openSearch } from './search.js';
+import { boardMarkdownUrl, download } from './export.js';
 
 // Mobile chrome: the header (back / title / share) and footer (tabs, more
 // menu, and the swap-in tool tray). The elements exist on every viewport but
@@ -89,7 +91,9 @@ export function initMobile() {
       state.cam = { x: 80, y: 60, scale: 1 };
       applyCam();
     }
-    if (act.dataset.act === 'export') toast('Tip: your boards auto-save to the server');
+    if (act.dataset.act === 'export') download(boardMarkdownUrl());
+    if (act.dataset.act === 'backup') download('/api/backup');
+    if (act.dataset.act === 'search') openSearch();
     if (act.dataset.act === 'trash') openTrash();
     sheet.hidden = true;
   });

@@ -24,6 +24,8 @@ import { initQuickNotes, isQuickNotesOpen } from './quicknotes.js';
 import { initTrash } from './trash.js';
 import { initCapture } from './capture.js';
 import { initLightbox } from './lightbox.js';
+import { initSearch, openSearch } from './search.js';
+import { initExport } from './export.js';
 
 // Entry point: canvas loading/navigation, global keyboard + pointer handling,
 // and boot. Wiring for the viewport and toolbar lives in their own modules and
@@ -84,6 +86,11 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     if (e.key === '0') resetZoom();
     else zoomBy(e.key === '-' ? 1 / 1.2 : 1.2);
+    return;
+  }
+  if (mod && e.key.toLowerCase() === 'k') {
+    e.preventDefault(); // also from inside a text field
+    openSearch();
     return;
   }
   if (typing) return;
@@ -203,6 +210,8 @@ initTools();
 initTrash();
 initCapture();
 initLightbox();
+initSearch();
+initExport();
 
 (async function boot() {
   refreshIcons();

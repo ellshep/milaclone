@@ -30,6 +30,14 @@ export const api = {
   async canvas(id) {
     return (await fetch('/api/canvas/' + id)).json();
   },
+  // Never throws: a failed search just shows no results.
+  async search(q) {
+    try {
+      return (await (await fetch('/api/search?q=' + encodeURIComponent(q))).json()).results || [];
+    } catch {
+      return [];
+    }
+  },
   async todos() {
     return (await fetch('/api/todos')).json();
   },

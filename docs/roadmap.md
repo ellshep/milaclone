@@ -133,13 +133,13 @@ Set up in the `chore/quality-gates` PR, at the user's request, so auto-merged ph
 
 ## P5 · Find & keep
 
-- [ ] **F5.1 Global search** (M).
+- [x] **F5.1 Global search** (M).
   - `GET /api/search` searches board titles and card `data.text`, skipping trashed rows. cmd+K opens the results with breadcrumbs.
   - Acceptance: search finds text on a nested board and not in trashed items. In the e2e test, clicking a result opens that board.
-- [ ] **F5.2 Markdown export** (M).
+- [x] **F5.2 Markdown export** (M).
   - Exports a board in the format the importer in `scripts/import-milanote-md.js` reads.
   - Acceptance: export, then import, gives back the same titles, text and tasks.
-- [ ] **F5.3 Backup download** (S).
+- [x] **F5.3 Backup download** (S).
   - Downloads a `db.backup()` snapshot from the Export menu. This replaces the current toast stub at `viewport.js:78`.
   - Acceptance: the response is a valid SQLite file that opens and contains the items.
 - [ ] **F5.4 Dark mode** (M, D8).
