@@ -78,7 +78,8 @@ const router = express.Router();
 // public/ handler, so server.js passes this same function to that handler too.
 // Whether a file is an upload is decided by directory identity (device + inode),
 // not by comparing path strings, so case folding, Unicode or symlinks can't dodge it.
-const INLINE_UPLOAD = /\.(png|jpe?g|gif|webp|avif|bmp|pdf|txt|csv|json)$/i;
+const INLINE_UPLOAD =
+  /\.(png|jpe?g|gif|webp|avif|bmp|pdf|txt|csv|json|mp3|m4a|wav|ogg|oga|opus|flac|mp4|m4v|webm|mov)$/i;
 function isUpload(filePath) {
   try {
     const up = fs.statSync(UPLOAD_DIR);
@@ -144,9 +145,11 @@ const upload = multer({
   },
 });
 
-// A card may only sit inside a live column on its own canvas.
-function badParent(parentItemId, canvasId, selfId) {
+// A card may only sit inside a live column on its own canvas, and columns
+// never nest (two columns parenting each other would both vanish).
+function badParent(parentItemId, canvasId, selfId, selfType) {
   if (parentItemId == null) return false;
+  if (selfType === 'column') return true;
   const p = stmt.getItem.get(parentItemId);
   return !p || p.type !== 'column' || p.canvasId !== canvasId || p.id === selfId;
 }
@@ -188,6 +191,9 @@ router.patch('/api/canvas/:id', (req, res) => {
 router.post('/api/item', (req, res) => {
   const b = req.body || {};
   if (!stmt.getCanvas.get(b.canvasId)) return res.status(400).json({ error: 'bad canvasId' });
+  if (badParent(b.parentItemId, b.canvasId, null, b.type || 'note')) {
+    return res.status(400).json({ error: 'bad parentItemId' });
+  }
 
   const item = {
     id: id('i_'),
@@ -246,7 +252,10 @@ router.patch('/api/item/:id', (req, res) => {
   if (b.color !== undefined) it.color = b.color;
   if (b.parentItemId !== undefined) it.parentItemId = b.parentItemId;
   if (b.canvasId && stmt.getCanvas.get(b.canvasId)) it.canvasId = b.canvasId;
-  if (b.parentItemId !== undefined && badParent(it.parentItemId, it.canvasId, it.id)) {
+  // Checked only when the parent or canvas changes, so an old row with an odd
+  // parent can still be edited.
+  const moved = b.parentItemId !== undefined || it.canvasId !== row.canvasId;
+  if (moved && badParent(it.parentItemId, it.canvasId, it.id, it.type)) {
     return res.status(400).json({ error: 'bad parentItemId' });
   }
   if (b.data && typeof b.data === 'object') {
@@ -300,7 +309,7 @@ router.patch('/api/items', (req, res) => {
   const updates = (req.body && req.body.updates) || [];
   for (const u of updates) {
     const row = u.parentItemId !== undefined && stmt.getItem.get(u.id);
-    if (row && badParent(u.parentItemId, row.canvasId, row.id)) {
+    if (row && badParent(u.parentItemId, row.canvasId, row.id, row.type)) {
       return res.status(400).json({ error: 'bad parentItemId', id: u.id });
     }
   }

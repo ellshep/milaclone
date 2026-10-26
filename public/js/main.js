@@ -119,8 +119,12 @@ document.addEventListener(
 // Skipped mid-edit so a caret or half-typed field isn't replaced.
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible' || !state.view.canvas) return;
-  await flushAllSaves();
-  if (!state.editingId && !isQuickNotesOpen()) reloadView();
+  try {
+    await flushAllSaves(false);
+    if (!state.editingId && !state.drag && !isQuickNotesOpen()) await reloadView();
+  } catch {
+    /* offline: the next focus or navigation tries again */
+  }
 });
 
 window.addEventListener('hashchange', () => {

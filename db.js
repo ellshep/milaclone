@@ -78,7 +78,7 @@ const stmt = {
   trashRoots: db.prepare(`SELECT * FROM items WHERE trashedBy = id ORDER BY trashedAt DESC, id`),
   anyItem: db.prepare(`SELECT * FROM items WHERE id = ?`),
   anyCanvas: db.prepare(`SELECT * FROM canvases WHERE id = ?`),
-  setItemParent: db.prepare(`UPDATE items SET parentItemId = ? WHERE id = ?`),
+  freeFromColumn: db.prepare(`UPDATE items SET parentItemId = NULL, x = ?, y = ? WHERE id = ?`),
   trashedSrcs: db.prepare(
     `SELECT DISTINCT json_extract(data, '$.src') AS src FROM items WHERE trashedBy IS NOT NULL
        AND json_extract(data, '$.src') IS NOT NULL`
@@ -179,11 +179,15 @@ function trashItemDeep(itemId) {
 }
 
 // Brings back exactly the rows one delete trashed. A card whose column was
-// deleted separately comes back loose on the canvas instead of inside a ghost.
+// deleted separately comes back loose where that column stood (its own x/y
+// only ordered it inside the column).
 function restoreItem(itemId) {
   const n = stmt.restoreItems.run(itemId).changes + stmt.restoreCanvases.run(itemId).changes;
   const row = stmt.getItem.get(itemId);
-  if (row && row.parentItemId && !stmt.getItem.get(row.parentItemId)) stmt.setItemParent.run(null, itemId);
+  if (row && row.parentItemId && !stmt.getItem.get(row.parentItemId)) {
+    const col = stmt.anyItem.get(row.parentItemId);
+    stmt.freeFromColumn.run(col ? col.x : row.x, col ? col.y : row.y, itemId);
+  }
   return n;
 }
 

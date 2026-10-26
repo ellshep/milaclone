@@ -70,8 +70,14 @@ export const api = {
   move(id, to) {
     return write('/api/item/' + id + '/move', json('POST', to));
   },
+  // null when the server can't be reached or errors.
   async trash() {
-    return (await fetch('/api/trash')).json();
+    try {
+      const r = await fetch('/api/trash');
+      return r.ok ? await r.json() : null;
+    } catch {
+      return null;
+    }
   },
   emptyTrash() {
     return write('/api/trash', { method: 'DELETE' });

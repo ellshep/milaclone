@@ -593,3 +593,46 @@ test('F1.3 a card can only be parented to a live column on its own canvas', asyn
   assert.equal(bulk.status, 400);
   assert.equal((await send('PATCH', '/api/items', { updates: [{ id: note.id, parentItemId: col.id }] })).status, 200);
 });
+
+test('F1.3 the parent rule also holds on create, on a canvas move, and for columns', async () => {
+  const canvasId = await root();
+  const other = (await send('POST', '/api/item', { canvasId, type: 'board' })).body.data.childCanvasId;
+  const col = (await send('POST', '/api/item', { canvasId, type: 'column' })).body;
+  const col2 = (await send('POST', '/api/item', { canvasId, type: 'column' })).body;
+
+  assert.equal((await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: 'i_missing' })).status, 400);
+  assert.equal((await send('POST', '/api/item', { canvasId, type: 'column', parentItemId: col.id })).status, 400);
+  const inCol = (await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: col.id })).body;
+  assert.equal(inCol.parentItemId, col.id);
+
+  // moving canvases without clearing the parent would strand the card
+  assert.equal((await send('PATCH', '/api/item/' + inCol.id, { canvasId: other })).status, 400);
+  const moved = await send('PATCH', '/api/item/' + inCol.id, { canvasId: other, parentItemId: null });
+  assert.equal(moved.body.canvasId, other);
+
+  const cycle = await send('PATCH', '/api/items', {
+    updates: [
+      { id: col.id, parentItemId: col2.id },
+      { id: col2.id, parentItemId: col.id },
+    ],
+  });
+  assert.equal(cycle.status, 400);
+});
+
+test('F1.1 a card freed from a deleted column comes back where the column stood', async () => {
+  const canvasId = await root();
+  const col = (await send('POST', '/api/item', { canvasId, type: 'column', x: 900, y: 700 })).body;
+  const card = (await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: col.id, x: 0, y: 3 })).body;
+  await send('DELETE', '/api/item/' + card.id);
+  await send('DELETE', '/api/item/' + col.id);
+  const back = (await send('POST', '/api/item/' + card.id + '/restore')).body;
+  assert.deepEqual([back.parentItemId, back.x, back.y], [null, 900, 700]);
+});
+
+test('F1.5 uploaded audio and video are served inline (still nosniff)', async () => {
+  const up = (await uploadBlob('x', 'video/mp4', 'clip.mp4')).body;
+  const r = await fetch(base + up.src);
+  assert.equal(r.headers.get('content-disposition'), null);
+  assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+  fs.rmSync(uploadPath(up.src), { force: true });
+});

@@ -110,8 +110,9 @@ async function flushSave(id, keepalive = false) {
   }
 }
 
-export function flushAllSaves() {
-  return Promise.all([...pending.keys()].map(id => flushSave(id, true)));
+// keepalive (64 KB body cap) is only needed while the page is going away.
+export function flushAllSaves(keepalive = true) {
+  return Promise.all([...pending.keys()].map(id => flushSave(id, keepalive)));
 }
 // Send queued edits before the tab is closed, reloaded or backgrounded.
 document.addEventListener('visibilitychange', () => {
@@ -141,8 +142,9 @@ export function forgetUndo(id) {
 }
 
 export async function undoDelete(id = trashed[trashed.length - 1]) {
-  if (!id) return;
-  trashed.splice(trashed.indexOf(id), 1);
+  const i = trashed.indexOf(id);
+  if (i === -1) return; // already restored or purged from the Trash sheet
+  trashed.splice(i, 1);
   if (await api.restore(id)) {
     await reloadView();
     toast('Restored');

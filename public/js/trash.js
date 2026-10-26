@@ -58,7 +58,12 @@ function row(entry) {
 }
 
 async function load() {
-  const { items = [] } = await api.trash();
+  const r = await api.trash();
+  if (!r) {
+    toast('Could not load the trash — check your connection');
+    return;
+  }
+  const items = r.items || [];
   el('trashList').replaceChildren(...items.map(row));
   el('trashEmptyNote').hidden = items.length > 0;
   el('trashEmpty').disabled = items.length === 0;
