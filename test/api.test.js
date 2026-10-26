@@ -418,3 +418,59 @@ test('uploads: active content downloads instead of rendering on our origin', asy
   const p = await fetch(base + png.src);
   assert.equal(p.headers.get('content-disposition'), null, 'images still display inline');
 });
+
+test('upload mime allow-list: office docs, zip and json in; executables out', async () => {
+  const allowed = [
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/zip',
+    'application/json',
+    'text/plain',
+  ];
+  for (const type of allowed) {
+    const fd = new FormData();
+    fd.append('file', new Blob(['x'], { type }), 'f.bin');
+    const r = await fetch(base + '/api/upload', { method: 'POST', body: fd });
+    assert.equal(r.status, 200, type);
+    fs.rmSync(path.join(__dirname, '..', 'public', (await r.json()).src), { force: true });
+  }
+  const fd = new FormData();
+  fd.append('file', new Blob(['MZ'], { type: 'application/x-msdownload' }), 'evil.exe');
+  assert.equal((await fetch(base + '/api/upload', { method: 'POST', body: fd })).status, 400);
+});
+
+test('missing ids: 404 on canvas/item routes, 400 on a bad target canvas', async () => {
+  const canvasId = await root();
+  assert.equal((await get('/api/canvas/c_nope')).status, 404);
+  assert.equal((await send('PATCH', '/api/canvas/c_nope', { title: 'x' })).status, 404);
+  assert.equal((await send('PATCH', '/api/item/i_nope', { x: 1 })).status, 404);
+  assert.equal((await send('DELETE', '/api/item/i_nope')).status, 404);
+  assert.equal((await send('POST', '/api/item/i_nope/restore')).status, 404);
+  assert.equal((await send('POST', '/api/item/i_nope/copy', { canvasId })).status, 404);
+  const note = (await send('POST', '/api/item', { canvasId, type: 'note' })).body;
+  assert.equal((await send('POST', '/api/item/' + note.id + '/move', { canvasId: 'c_nope' })).status, 400);
+});
+
+test('board cards: create with icon/colour, patch colour and icon through to the child canvas', async () => {
+  const canvasId = await root();
+  const board = (
+    await send('POST', '/api/item', { canvasId, type: 'board', color: 'red', data: { title: 'B', icon: 'star' } })
+  ).body;
+  assert.equal(board._childColor, 'red');
+  assert.equal(board._childIcon, 'star');
+  await send('PATCH', '/api/item/' + board.id, { color: 'green', data: { icon: 'heart' } });
+  const child = (await get('/api/canvas/' + board.data.childCanvasId)).body.canvas;
+  assert.equal(child.color, 'green');
+  assert.equal(child.icon, 'heart');
+  const patched = (await send('PATCH', '/api/canvas/' + child.id, { icon: 'moon' })).body;
+  assert.equal(patched.icon, 'moon');
+});
+
+test('bulk patch skips unknown ids and accepts an empty body', async () => {
+  assert.deepEqual((await send('PATCH', '/api/items', { updates: [{ id: 'i_nope', x: 1 }] })).body, { ok: true });
+  assert.deepEqual((await send('PATCH', '/api/items', {})).body, { ok: true });
+});

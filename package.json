@@ -6,8 +6,12 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test",
-    "test:e2e": "playwright test"
+    "test": "node --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 \"test/*.test.js\"",
+    "test:ui": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "lint": "oxlint --deny-warnings",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "engines": {
     "node": ">=18"

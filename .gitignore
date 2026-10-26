@@ -11,3 +11,6 @@ playwright-report/
 
 # Tailscale sidecar auth key
 .env
+
+# test coverage output
+coverage/

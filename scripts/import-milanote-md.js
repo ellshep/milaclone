@@ -408,7 +408,7 @@ otherwise a link card is created.`);
   console.log('done:', stats);
 }
 
-module.exports = { parseMd, parseBlocks, gridPos, rid };
+module.exports = { parseMd, parseBlocks, gridPos, rid, parseArgs, importFile };
 
 if (require.main === module) {
   main().catch(err => {

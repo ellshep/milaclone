@@ -9,6 +9,9 @@ const PORT = 4322;
 module.exports = defineConfig({
   testDir: './e2e',
   fullyParallel: true,
+  // CI: a stray test.only fails the run, and flakes fail instead of being retried away.
+  forbidOnly: !!process.env.CI,
+  retries: 0,
   // `list` for readable console output plus `html` so a report is always
   // written to playwright-report/ (the CI job uploads it as an artifact).
   // open: 'never' keeps it from auto-launching a browser during local runs.

@@ -1,17 +1,18 @@
 # milaclone roadmap
 
 The implementation plan for closing the gaps found in [`milanote-feature-map.md`](milanote-feature-map.md).
-Scope was agreed on 2026-10-26: **40 Do · 4 Later · 1 Drop** across P1–P7, plus a P0 quality-gate phase.
+Scope was agreed on 2026-10-26: **40 Do · 4 Later · 1 Drop** across P1–P7. P0, the quality gates, shipped before implementation started.
 
 Work through it top to bottom. Tick a box only when its acceptance check passes **as an automated test in CI** (unit/API in `test/`, UI in `e2e/`), unless the check says otherwise.
 
 ## Ground rules
 
-- **Order:** P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7 (D10). No phase starts until the one before it is merged.
+- **Order:** P1 → P2 → P3 → P4 → P5 → P6 → P7 (D10). No phase starts until the one before it is merged.
 - **Shipping (D9):** one branch and one PR per phase (`phase/pN-<slug>`), merged by the agent with `gh pr merge --squash` once every required check is green. A phase too large for one reviewable PR may split into `pNa`, `pNb`, which are merged in order.
 - **Never** merge with `--admin`, skip or `.only` tests, lower the coverage floor, or edit branch protection to get a PR through. If CI stays red after two honest fix attempts, stop and report.
 - Every PR body lists the feature IDs it closes and links the tests that prove each acceptance check.
 - Before merging, run a review pass (`/code-review`) on the diff and fix what it confirms.
+- Merging: `gh pr merge --squash --auto` queues the merge, and GitHub completes it once all six required checks pass. Never pass `--admin`.
 - Update `CLAUDE.md` in the same PR when a phase changes architecture (the build step, new item types, new endpoints).
 - Every new endpoint keeps the existing invariants: it filters `trashedBy IS NULL`, it is covered by `test/api.test.js`, and uploads keep the `setUploadHeaders` treatment.
 
@@ -28,38 +29,20 @@ Work through it top to bottom. Tick a box only when its acceptance check passes 
 | D7  | Lines, first version      | Straight lines only, with arrowheads, dashed style, colour and a label.                                                                                                                                                         |
 | D8  | Dark mode                 | Follow `prefers-color-scheme`. No in-app switch.                                                                                                                                                                                |
 | D9  | Shipping                  | One PR per phase, merged by the agent when CI is green, before the next phase starts.                                                                                                                                           |
-| D10 | Phase order               | As planned: P1 → P7, after P0.                                                                                                                                                                                                  |
+| D10 | Phase order               | As planned: P1 → P7; P0 shipped first.                                                                                                                                                                                          |
 
-## P0 · Quality gates
+## P0 · Quality gates — done before the goal
 
-Requested in the scope submission: thorough, enforced CI before any auto-merged phase. Today `main` has **no branch protection**, and CI runs only `npm test` and `npm run test:e2e`.
+Set up in the `chore/quality-gates` PR, at the user's request, so auto-merged phases ship behind enforced checks.
 
-- [ ] **G1 Branch protection on `main`.**
-  - Require PRs, and require the `Unit / API tests`, `E2E tests`, `Lint` and `Docker smoke` checks.
-  - Require branches to be up to date before merging, and enforce the rules for admins too.
-  - Block force-pushes and deletion.
-  - Acceptance: `gh api repos/ellshep/milaclone/branches/main/protection` lists all four checks, and a direct push to `main` is rejected.
-  - Changing repo settings needs the user's go-ahead in the goal. If that isn't given, G1 is the user's step: do it, then confirm.
-- [ ] **G2 Coverage floor.**
-  - `npm test` runs `node --test --experimental-test-coverage` with `--test-coverage-lines`, `--test-coverage-branches` and `--test-coverage-functions` thresholds set to the current measured values, rounded down.
-  - Each phase may raise the floor but never lower it.
-  - Acceptance: CI fails when a threshold is missed.
-- [ ] **G3 Lint.**
-  - Add ESLint (flat config, `eslint` + `globals` as devDeps, `recommended` rules).
-  - Use browser globals for `public/js/` and node globals elsewhere. `no-undef` and `no-unused-vars` are errors, which matters because the frontend has no build step to catch a broken import.
-  - Add an `npm run lint` script and a `Lint` CI job.
-  - Acceptance: an undefined identifier in `public/js/*.js` fails the job.
-- [ ] **G4 Docker smoke.**
-  - A CI job builds the `Dockerfile` image, runs it, and polls `/api/health`.
-  - Once P4 lands, it also fetches `/vendor/editor.js`.
-  - Acceptance: the job fails if the image doesn't build or the server doesn't come up. This is the guard for the build step added at boot in P4.
-- [ ] **G5 Strict Playwright.**
-  - Set `forbidOnly: !!process.env.CI` and `retries: 0`, so a flake fails the run instead of hiding.
-  - Keep both the chromium and mobile-webkit projects.
-  - Acceptance: a committed `test.only` fails CI.
-- [ ] **G6 Required-test convention.**
-  - Add a PR template with a checklist of feature IDs to tests.
-  - Acceptance: the template exists, and the P0 PR itself uses it.
+- [x] **G1 Branch protection on `main`.** PRs required. Six required checks: `Lint`, `Format`, `Unit / API tests`, `UI unit tests`, `E2E tests`, `Docker smoke`. Branches must be up to date before merging. Admins are included, and force-pushes and deletion are blocked. Auto-merge and delete-branch-on-merge are on, and all merge methods are allowed.
+- [x] **G2 Coverage floor at 80%.** `npm test` fails when backend line, branch or function coverage drops under 80%. Vitest applies the same floor per file to the front-end modules listed in `vitest.config.mjs`. A phase may raise either floor but never lower it.
+- [x] **G3 Lint and format.** oxlint (`--deny-warnings`, with `no-undef` as an error) and a Prettier check run as separate required checks.
+- [x] **G4 Docker smoke.** CI builds the image, boots it, creates an item through the API and loads the page. Once P4 lands, it also fetches `/vendor/editor.js`.
+- [x] **G5 Strict Playwright.** `forbidOnly` is on in CI, `retries` is 0, and every job has a timeout. Browser binaries are cached per Playwright version.
+- [x] **G6 PR template.** `.github/pull_request_template.md` maps each feature ID to its test.
+- [x] **Security.** Dependabot alerts and security updates are on. Secret scanning with push protection was already enabled.
+- [x] **UI unit tests.** Vitest and jsdom cover the front-end modules in `test/ui/`. Each phase adds Vitest tests for any pure front-end logic it introduces and puts that module in the coverage thresholds. Playwright covers the rest.
 
 ## P1 · Robustness tail
 
