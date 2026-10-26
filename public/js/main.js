@@ -1,11 +1,19 @@
 'use strict';
 
-import { state } from './state.js';
+import { state, dom } from './state.js';
 import { api } from './api.js';
 import { refreshIcons, toast } from './util.js';
 import { loadCam, applyCam, initViewport } from './viewport.js';
 import { render, renderCrumbs } from './cards.js';
-import { deselect, renameSelected, deleteItem, exitEdit, undoDelete, flushAllSaves } from './editing.js';
+import {
+  deselect,
+  renameSelected,
+  deleteSelection,
+  exitEdit,
+  undoDelete,
+  flushAllSaves,
+  selectIds,
+} from './editing.js';
 import { closePalette, closeCtx } from './menus.js';
 import { duplicateSelected } from './clipboard.js';
 import { arm, disarm, initTools } from './tools.js';
@@ -30,7 +38,7 @@ export async function openCanvas(id, { replace = false } = {}) {
     return;
   }
   state.cam = loadCam(id);
-  state.selectedId = null;
+  selectIds([]);
   state.editingId = null;
   closeCtx();
   renderCrumbs();
@@ -63,6 +71,16 @@ document.addEventListener('keydown', e => {
     closeCtx();
   }
   if (typing) return;
+  // Space held = pan mode, unless a focused control should get the keypress.
+  const control = ae && ae.closest('button, a, select, summary, [role="button"], [tabindex]:not([tabindex="-1"])');
+  if (e.key === ' ' && !control) {
+    e.preventDefault(); // no page scroll
+    if (!state.spaceDown) {
+      state.spaceDown = true;
+      dom.stage.classList.add('space-pan');
+    }
+    return;
+  }
   const mod = e.metaKey || e.ctrlKey;
   // cmd+C / X / V arrive as copy/cut/paste events, handled in capture.js.
   if (mod && e.key.toLowerCase() === 'd') {
@@ -80,9 +98,14 @@ document.addEventListener('keydown', e => {
     renameSelected();
     return;
   }
-  if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedId) {
+  if ((e.key === 'Delete' || e.key === 'Backspace') && state.selection.size) {
     e.preventDefault();
-    deleteItem(state.selectedId);
+    deleteSelection();
+  }
+  if (mod && e.key.toLowerCase() === 'a') {
+    e.preventDefault();
+    selectIds(state.view.items.filter(i => !i.parentItemId).map(i => i.id));
+    return;
   }
   const map = { n: 'note', l: 'link', t: 'todo', b: 'board', c: 'column', m: 'comment' };
   if (map[e.key.toLowerCase()] && !mod) {
@@ -114,6 +137,13 @@ document.addEventListener('visibilitychange', async () => {
     /* offline: the next focus or navigation tries again */
   }
 });
+
+const endSpacePan = () => {
+  state.spaceDown = false;
+  dom.stage.classList.remove('space-pan');
+};
+document.addEventListener('keyup', e => e.key === ' ' && endSpacePan());
+window.addEventListener('blur', endSpacePan);
 
 window.addEventListener('hashchange', () => {
   const id = location.hash.slice(1);

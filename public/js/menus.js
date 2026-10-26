@@ -2,9 +2,9 @@
 
 import { state, dom, COLORS, BOARD_ICONS } from './state.js';
 import { api } from './api.js';
-import { colorVar, lucideEl, refreshIcons, isLocked } from './util.js';
+import { colorVar, lucideEl, refreshIcons, isLocked, zRange } from './util.js';
 import { refreshItem } from './cards.js';
-import { select, renameSelected, deleteItem } from './editing.js';
+import { select, renameSelected, deleteSelection, selectedItems } from './editing.js';
 import { copySelected, pasteClipboard, duplicateSelected, toggleLock } from './clipboard.js';
 
 // The floating color/icon palette and the right-click context menu.
@@ -21,11 +21,15 @@ export function openPalette(it, anchor, mode = 'auto') {
       const sw = document.createElement('div');
       sw.className = 'sw' + ((it.color || it._childColor) === c ? ' sel' : '');
       sw.style.background = colorVar(c);
+      // Recolours the whole selection when this card is part of it.
       sw.onclick = () => {
-        it.color = c;
-        if (it.type === 'board') it._childColor = c;
-        api.patch(it.id, { color: c });
-        refreshItem(it);
+        const targets = state.selection.has(it.id) && state.selection.size > 1 ? selectedItems() : [it];
+        for (const t of targets) {
+          t.color = c;
+          if (t.type === 'board') t._childColor = c;
+          api.patch(t.id, { color: c });
+          refreshItem(t);
+        }
         closePalette();
       };
       dom.palette.appendChild(sw);
@@ -76,7 +80,8 @@ export function closePalette() {
 export function openCtx(e, it) {
   e.preventDefault();
   e.stopPropagation();
-  select(it.id);
+  if (!state.selection.has(it.id)) select(it.id); // right-clicking inside a group keeps it
+  const many = state.selection.size > 1;
   const locked = isLocked(it);
   const mac = /Mac|iPhone|iPad/.test(navigator.platform);
   const mod = mac ? '⌘' : 'Ctrl+';
@@ -86,13 +91,25 @@ export function openCtx(e, it) {
     { label: 'Paste', hint: mod + 'V', fn: () => pasteClipboard(), disabled: !state.clipboard },
     { label: 'Duplicate', hint: mod + 'D', fn: () => duplicateSelected() },
     { sep: true },
-    { label: 'Rename', hint: 'Return', fn: () => renameSelected() },
+    ...(it.parentItemId
+      ? []
+      : [
+          { label: 'Bring to Front', fn: () => restack(it, 'front') },
+          { label: 'Send to Back', fn: () => restack(it, 'back') },
+          { sep: true },
+        ]),
+    ...(many ? [] : [{ label: 'Rename', hint: 'Return', fn: () => renameSelected() }]),
     { label: locked ? 'Unlock Position' : 'Lock Position', fn: () => toggleLock() },
     ...(it.type === 'image'
       ? [{ label: it.data.transparent ? 'Show Background' : 'Transparent Background', fn: () => toggleTransparent(it) }]
       : []),
     { sep: true },
-    { label: 'Move to Trash', hint: 'Delete', danger: true, fn: () => deleteItem(it.id) },
+    {
+      label: many ? `Move ${state.selection.size} to Trash` : 'Move to Trash',
+      hint: 'Delete',
+      danger: true,
+      fn: () => deleteSelection(),
+    },
   ];
   dom.ctxmenu.innerHTML = '';
   rows.forEach(r => {
@@ -126,6 +143,19 @@ export function openCtx(e, it) {
   if (top + mh > window.innerHeight) top = window.innerHeight - mh - 8;
   dom.ctxmenu.style.left = left + 'px';
   dom.ctxmenu.style.top = top + 'px';
+}
+
+// Stacking order: the selection (or just this card) goes above or below every
+// other free card on the board, keeping its own internal order.
+function restack(it, where) {
+  const group = (state.selection.has(it.id) ? selectedItems() : [it]).filter(i => !i.parentItemId);
+  const [lo, hi] = zRange(state.view.items);
+  const ordered = group.sort((a, b) => (a.z || 0) - (b.z || 0));
+  let z = where === 'front' ? hi : lo - ordered.length - 1;
+  for (const g of ordered) g.z = ++z;
+  api.patchMany(ordered.map(g => ({ id: g.id, z: g.z })));
+  for (const g of ordered) refreshItem(g);
+  closeCtx();
 }
 
 function toggleTransparent(it) {

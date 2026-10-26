@@ -154,10 +154,12 @@ describe('capture helpers', () => {
     [undefined, undefined, 'file'],
   ])('fileIcon(%s, %s)', (name, mime, icon) => expect(fileIcon(name, mime)).toBe(icon));
 
-  it('clip markers round-trip and reject other text', () => {
-    expect(parseClipMarker(clipMarker('i_aB-9', false))).toEqual({ id: 'i_aB-9', cut: false });
-    expect(parseClipMarker(clipMarker('i_x', true))).toEqual({ id: 'i_x', cut: true });
+  it('clip markers round-trip one or many ids and reject other text', () => {
+    expect(parseClipMarker(clipMarker('i_aB-9', false))).toEqual({ ids: ['i_aB-9'], cut: false });
+    expect(clipMarker(['i_a', 'i_b'], true)).toBe('milaclone:item:i_a,i_b:cut');
+    expect(parseClipMarker(clipMarker(['i_a', 'i_b'], true))).toEqual({ ids: ['i_a', 'i_b'], cut: true });
     expect(parseClipMarker('milaclone:item:i_x:move')).toBeNull();
+    expect(parseClipMarker('milaclone:item:i_x,:copy')).toBeNull();
     expect(parseClipMarker('hello')).toBeNull();
     expect(parseClipMarker(undefined)).toBeNull();
   });

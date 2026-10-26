@@ -13,7 +13,7 @@ import { disarm } from './tools.js';
 const el = id => document.getElementById(id);
 
 function selectedBoard() {
-  if (!state.selectedId) return null;
+  if (!state.selectedId || state.selection.size > 1) return null;
   const it = state.view.items.find(i => i.id === state.selectedId);
   return it && it.type === 'board' ? it : null;
 }

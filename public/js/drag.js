@@ -1,24 +1,35 @@
 'use strict';
 
-import { state, dom } from './state.js';
+import { state, dom, elMap } from './state.js';
 import { api } from './api.js';
-import { isLocked } from './util.js';
+import { isLocked, zRange } from './util.js';
 import { screenToWorld } from './viewport.js';
-import { select, enterEdit } from './editing.js';
+import { select, enterEdit, toggleSelect, selectedItems } from './editing.js';
 import { render } from './cards.js';
 
-// Dragging cards (free-move + in/out of columns) and resizing.
+// Dragging cards (free-move + in/out of columns, several at once) and resizing.
 
 export function onItemPointerDown(e, it, el) {
-  if (e.button !== 0) return;
-  if (state.armed) return;
+  if (e.button !== 0) return; // middle-drag falls through to the stage and pans
+  if (state.armed || state.spaceDown) return; // space-drag pans too
   if (e.target.closest('[data-nodrag]')) {
     e.stopPropagation();
     return;
   }
   if (el.classList.contains('editing') && e.target.closest('[data-edit]')) return;
   e.stopPropagation();
-  select(it.id);
+  if (e.shiftKey) {
+    // Shift-click would also extend the page's text selection, and a text
+    // selection makes cmd+C copy that text instead of the cards.
+    e.preventDefault();
+    window.getSelection()?.removeAllRanges();
+    toggleSelect(it.id);
+    return;
+  }
+  // Pressing a card that's part of a multi-selection keeps the group for a drag;
+  // a plain click (no move) narrows the selection to this card on release.
+  const inGroup = state.selection.has(it.id) && state.selection.size > 1;
+  if (!inGroup) select(it.id);
   if (isLocked(it)) return;
 
   const start = { sx: e.clientX, sy: e.clientY };
@@ -26,7 +37,13 @@ export function onItemPointerDown(e, it, el) {
   let moved = false;
   const rect = el.getBoundingClientRect();
   const startWorld = screenToWorld(rect.left, rect.top);
-  state.drag = { it, el, start, startWorld, fromColumn, moved: false, dropCol: null };
+  // Free, unlocked companions move by the same delta; cards in columns stay put.
+  const others = inGroup
+    ? selectedItems()
+        .filter(o => o.id !== it.id && !o.parentItemId && !isLocked(o) && elMap.get(o.id))
+        .map(o => ({ it: o, el: elMap.get(o.id), x: o.x, y: o.y }))
+    : [];
+  state.drag = { it, el, start, startWorld, fromColumn, moved: false, dropCol: null, others };
   el.setPointerCapture(e.pointerId);
 
   const move = ev => {
@@ -37,18 +54,26 @@ export function onItemPointerDown(e, it, el) {
       moved = true;
       state.drag.moved = true;
       el.classList.add('dragging');
+      // Dragging raises the cards above everything else, keeping their own order.
+      let z = zRange(state.view.items)[1];
+      for (const c of [...others.map(o => o.it), it].sort((a, b) => (a.z || 0) - (b.z || 0))) c.z = ++z;
+      for (const o of others) o.el.style.zIndex = o.it.z;
+      el.style.zIndex = fromColumn ? 99999 : it.z;
       if (fromColumn) {
         dom.world.appendChild(el);
         el.classList.remove('in-column');
         el.style.width = (it.w || 240) + 'px';
-        el.style.zIndex = 99999;
       }
     }
     const wx = startWorld.x + dx / state.cam.scale;
     const wy = startWorld.y + dy / state.cam.scale;
     el.style.left = wx + 'px';
     el.style.top = wy + 'px';
-    highlightColumn(ev, it);
+    for (const o of others) {
+      o.el.style.left = o.x + dx / state.cam.scale + 'px';
+      o.el.style.top = o.y + dy / state.cam.scale + 'px';
+    }
+    if (!others.length) highlightColumn(ev, it);
   };
 
   const up = ev => {
@@ -57,6 +82,7 @@ export function onItemPointerDown(e, it, el) {
     document.removeEventListener('pointerup', up);
     el.classList.remove('dragging');
     if (!moved) {
+      if (inGroup) select(it.id);
       if (it.type !== 'board') maybeEdit(el, ev);
       state.drag = null;
       return;
@@ -109,7 +135,7 @@ async function finishDrag(ev) {
     it.y = order;
     const sibs = state.view.items.filter(k => k.parentItemId === state.drag.dropCol).sort((a, b) => a.y - b.y);
     sibs.forEach((s, i) => (s.y = i));
-    await api.patch(it.id, { parentItemId: it.parentItemId, canvasId: state.view.canvas.id });
+    await api.patch(it.id, { parentItemId: it.parentItemId, canvasId: state.view.canvas.id, z: it.z });
     await api.patchMany(sibs.map(s => ({ id: s.id, y: s.y })));
     render();
   } else {
@@ -119,7 +145,15 @@ async function finishDrag(ev) {
     it.x = wx;
     it.y = wy;
     it.parentItemId = null;
-    await api.patch(it.id, { x: wx, y: wy, parentItemId: null });
+    const { others } = state.drag;
+    for (const o of others) {
+      o.it.x = Math.round(parseFloat(o.el.style.left));
+      o.it.y = Math.round(parseFloat(o.el.style.top));
+    }
+    await api.patchMany([
+      { id: it.id, x: wx, y: wy, z: it.z, parentItemId: null },
+      ...others.map(o => ({ id: o.it.id, x: o.it.x, y: o.it.y, z: o.it.z })),
+    ]);
     if (wasChild) render();
   }
   state.drag = null;

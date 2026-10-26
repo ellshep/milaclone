@@ -66,6 +66,12 @@ export function toast(msg, action) {
 
 // ---- Capture helpers (pure; unit-tested in test/ui/util.test.mjs) ----------
 
+// Lowest and highest stacking order among the free cards on this board.
+export function zRange(items) {
+  const zs = items.filter(i => !i.parentItemId).map(i => i.z || 0);
+  return [Math.min(0, ...zs), Math.max(0, ...zs)];
+}
+
 export const isUrl = s => /^https?:\/\/\S+$/i.test(String(s || '').trim());
 
 // YouTube, Vimeo and Spotify links play inline as an iframe; null for anything
@@ -121,9 +127,10 @@ export function fileIcon(name, mime) {
 
 // Copying a card puts this marker on the system clipboard, so cmd+V of it (even
 // in another tab) still deep-copies the card instead of pasting text.
+// Several selected cards travel as a comma-separated id list.
 const CLIP = 'milaclone:item:';
-export const clipMarker = (id, cut) => `${CLIP}${id}:${cut ? 'cut' : 'copy'}`;
+export const clipMarker = (ids, cut) => `${CLIP}${[].concat(ids).join(',')}:${cut ? 'cut' : 'copy'}`;
 export function parseClipMarker(text) {
-  const m = new RegExp(`^${CLIP}([\\w-]+):(copy|cut)$`).exec(String(text || '').trim());
-  return m ? { id: m[1], cut: m[2] === 'cut' } : null;
+  const m = new RegExp(`^${CLIP}([\\w-]+(?:,[\\w-]+)*):(copy|cut)$`).exec(String(text || '').trim());
+  return m ? { ids: m[1].split(','), cut: m[2] === 'cut' } : null;
 }

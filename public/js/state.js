@@ -57,7 +57,9 @@ export const state = {
   view: { canvas: null, items: [], breadcrumb: [] },
   cam: { x: 80, y: 60, scale: 1 },
   armed: null,
-  selectedId: null,
+  selectedId: null, // the primary selected card (rename, board chrome)
+  selection: new Set(), // every selected card id, primary included
+  spaceDown: false, // space held: dragging pans instead of selecting
   editingId: null,
   clipboard: null,
   pendingImageWorld: null,

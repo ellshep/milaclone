@@ -5,7 +5,7 @@ import { api } from './api.js';
 import { imageSize, isUrl, toast, clipMarker, parseClipMarker } from './util.js';
 import { screenToWorld } from './viewport.js';
 import { render } from './cards.js';
-import { select } from './editing.js';
+import { select, selectedItems } from './editing.js';
 import { copySelected, pasteClipboard } from './clipboard.js';
 import { isQuickNotesOpen } from './quicknotes.js';
 
@@ -91,9 +91,15 @@ function canvasOwnsClipboard() {
 }
 
 function onCopy(e, cut) {
-  if (!canvasOwnsClipboard() || !state.selectedId || String(window.getSelection() || '')) return;
+  if (!canvasOwnsClipboard() || !state.selection.size || String(window.getSelection() || '')) return;
   e.preventDefault();
-  e.clipboardData.setData('text/plain', clipMarker(state.selectedId, cut));
+  e.clipboardData.setData(
+    'text/plain',
+    clipMarker(
+      selectedItems().map(i => i.id),
+      cut
+    )
+  );
   copySelected(cut, true);
 }
 
@@ -105,9 +111,10 @@ export async function pasteData(dt) {
   const text = dt.getData('text/plain');
   const marker = parseClipMarker(text);
   if (marker) {
-    const pendingCut = state.clipboard && state.clipboard.cut && state.clipboard.id === marker.id;
-    if (marker.cut && movedCuts.has(marker.id) && !pendingCut) return null; // a cut moves once
-    if (marker.cut) movedCuts.add(marker.id);
+    const key = marker.ids.join(',');
+    const pendingCut = state.clipboard && state.clipboard.cut && state.clipboard.ids.join(',') === key;
+    if (marker.cut && movedCuts.has(key) && !pendingCut) return null; // a cut moves once
+    if (marker.cut) movedCuts.add(key);
     state.clipboard = marker;
     return pasteClipboard();
   }
