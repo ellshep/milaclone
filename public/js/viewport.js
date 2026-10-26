@@ -1,7 +1,6 @@
 'use strict';
 
 import { state, dom, elMap } from './state.js';
-import { toast } from './util.js';
 
 // Camera / pan / zoom for the infinite canvas, plus screen<->world mapping.
 
@@ -119,7 +118,6 @@ export function initViewport() {
   document.getElementById('zoomIn').onclick = () => zoomBy(1.2);
   document.getElementById('zoomOut').onclick = () => zoomBy(1 / 1.2);
   document.getElementById('zoomReset').onclick = resetZoom;
-  document.getElementById('exportBtn').onclick = () => toast('Tip: your boards auto-save to the server');
 
   dom.stage.addEventListener(
     'wheel',

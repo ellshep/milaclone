@@ -2597,7 +2597,8 @@ body.qn-open .toast {
 
 /* ---- Trash sheet ------------------------------------------------------- */
 #trashDialog,
-#shortcutsDialog {
+#shortcutsDialog,
+#searchDialog {
   width: min(440px, calc(100vw - 32px));
   max-height: min(560px, calc(100vh - 64px));
   padding: 0;
@@ -2608,12 +2609,14 @@ body.qn-open .toast {
   font-family: var(--sans);
 }
 #trashDialog[open],
-#shortcutsDialog[open] {
+#shortcutsDialog[open],
+#searchDialog[open] {
   display: flex;
   flex-direction: column;
 }
 #trashDialog::backdrop,
-#shortcutsDialog::backdrop {
+#shortcutsDialog::backdrop,
+#searchDialog::backdrop {
   background: rgba(28, 30, 38, 0.25);
 }
 .trash-head,
@@ -2870,4 +2873,105 @@ body.qn-open .toast {
 }
 .rich[data-empty] > p:only-child {
   display: none;
+}
+
+/* ---- Search ------------------------------------------------------------- */
+#searchDialog {
+  margin-top: 12vh;
+  width: min(560px, calc(100vw - 32px));
+}
+#searchInput {
+  font: 16px var(--sans);
+  padding: 14px 18px;
+  border: none;
+  border-bottom: 1px solid var(--card-border);
+  outline: none;
+  color: var(--ink);
+  background: none;
+}
+#searchResults {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+}
+#searchResults:empty {
+  display: none;
+}
+.sr-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.sr-item:hover,
+.sr-item:focus-visible {
+  background: #f1f1f3;
+}
+.sr-item :is(svg, i) {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--ink-soft);
+}
+.sr-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.sr-title,
+.sr-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sr-path {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+#searchEmpty {
+  margin: 0;
+  padding: 14px 18px;
+  color: var(--ink-soft);
+}
+
+/* ---- Export menu -------------------------------------------------------- */
+#exportMenu {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--rail-border);
+  border-radius: 10px;
+  box-shadow: var(--card-shadow-hover);
+}
+#exportMenu[hidden] {
+  display: none;
+}
+#exportMenu a {
+  padding: 8px 10px;
+  border-radius: 7px;
+  color: var(--ink);
+  text-decoration: none;
+}
+#exportMenu a:hover {
+  background: #f1f1f3;
+}
+.top-right button.ghost {
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 }

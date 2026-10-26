@@ -4,6 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const {
   db,
@@ -21,6 +22,7 @@ const {
   RICH_TYPES,
   toRich,
 } = require('./db');
+const { exportMarkdown } = require('./export-md');
 
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -416,6 +418,99 @@ router.get('/api/todos', (req, res) => {
       };
     });
   res.json({ rootCanvasId: rootCanvasId(), lists });
+});
+
+// ---- Search ----------------------------------------------------------------
+// Board titles and card text: rich bodies (`data.text`), titles, link URLs, file
+// names and to-do tasks. Trashed rows are tagged, so `trashedBy IS NULL` skips
+// them and everything inside a trashed board.
+const searchItems = db.prepare(`
+  SELECT id, canvasId, type, data FROM items
+  WHERE trashedBy IS NULL AND type != 'board' AND (
+    json_extract(data, '$.text') LIKE @q ESCAPE '\\' OR json_extract(data, '$.title') LIKE @q ESCAPE '\\'
+    OR json_extract(data, '$.url') LIKE @q ESCAPE '\\' OR json_extract(data, '$.name') LIKE @q ESCAPE '\\'
+    OR json_extract(data, '$.caption') LIKE @q ESCAPE '\\'
+    OR EXISTS (SELECT 1 FROM json_each(items.data, '$.tasks') WHERE json_extract(value, '$.text') LIKE @q ESCAPE '\\')
+  ) ORDER BY createdAt DESC LIMIT 50`);
+const searchBoards = db.prepare(
+  `SELECT id, title FROM canvases WHERE trashedBy IS NULL AND title LIKE @q ESCAPE '\\' ORDER BY createdAt DESC LIMIT 25`
+);
+
+// The first line of the card that contains the query (or its first line).
+function snippet(data, q) {
+  const lines = [data.title, data.text, data.caption, data.name, data.url, ...(data.tasks || []).map(t => t.text)]
+    .filter(Boolean)
+    .flatMap(s => String(s).split('\n'))
+    .map(l => l.trim())
+    .filter(Boolean);
+  const hit = lines.find(l => l.toLowerCase().includes(q.toLowerCase())) || lines[0] || '';
+  return hit.slice(0, 140);
+}
+
+router.get('/api/search', (req, res) => {
+  const q = String(req.query.q || '')
+    .trim()
+    .slice(0, 100);
+  if (!q) return res.json({ results: [] });
+  const like = { q: '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%' };
+  const trails = new Map(); // many results share a board
+  const trail = id =>
+    trails.get(id) ||
+    trails
+      .set(
+        id,
+        breadcrumb(id).map(c => c.title)
+      )
+      .get(id);
+  const boards = searchBoards
+    .all(like)
+    .map(c => ({ kind: 'board', canvasId: c.id, title: c.title, path: trail(c.id) }));
+  const cards = searchItems.all(like).map(r => ({
+    kind: 'item',
+    id: r.id,
+    canvasId: r.canvasId,
+    type: r.type,
+    title: snippet(JSON.parse(r.data || '{}'), q),
+    path: trail(r.canvasId),
+  }));
+  res.json({ results: [...boards, ...cards] });
+});
+
+// ---- Export ----------------------------------------------------------------
+// res.attachment encodes any Unicode; only path separators and control characters go.
+const fileName = s =>
+  String(s || '')
+    // oxlint-disable-next-line no-control-regex -- stripping control characters is the point
+    .replace(/[\\/\x00-\x1f\x7f]+/g, '')
+    .trim() || 'board';
+
+router.get('/api/canvas/:id/export.md', (req, res) => {
+  // Upload links need an absolute URL. Behind Tailscale Serve the request looks
+  // like plain http, so the page passes its own origin.
+  const origin = /^https?:\/\/[^/?#\s]+$/.test(req.query.origin)
+    ? req.query.origin
+    : req.protocol + '://' + req.get('host');
+  const md = exportMarkdown(req.params.id, origin);
+  if (md == null) return res.status(404).json({ error: 'not found' });
+  const title = stmt.getCanvas.get(req.params.id).title;
+  res
+    .attachment(fileName(title) + '.md')
+    .type('text/markdown')
+    .send(md);
+});
+
+// A consistent snapshot of the whole database (better-sqlite3's online backup).
+router.get('/api/backup', async (req, res) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'milaclone-backup-')); // one per request
+  const tmp = path.join(dir, 'board.db');
+  try {
+    await db.backup(tmp);
+  } catch (e) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    return res.status(500).json({ error: 'backup failed: ' + e.message });
+  }
+  const day = new Date().toISOString().slice(0, 10);
+  res.download(tmp, `milaclone-${day}.db`, () => fs.rmSync(dir, { recursive: true, force: true }));
 });
 
 // ---- Trash -----------------------------------------------------------------

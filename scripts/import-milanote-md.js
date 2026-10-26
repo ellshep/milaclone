@@ -63,8 +63,8 @@ function sectionIsTodo(lines, start) {
 
 function flushNote(blocks, title, bodyLines) {
   const body = bodyLines.map(cleanLine).filter(Boolean).join('\n').trim();
-  // ponytail: empty ## headings produce nothing
-  if (!body) return;
+  // an empty `##` heading is still something the user wrote: keep it as a note
+  if (!body && !title) return;
   blocks.push({ kind: 'note', title: title || '', body });
 }
 
@@ -145,10 +145,12 @@ function parseBlocks(lines) {
     const task = t.match(RE_TASK);
     if (task) {
       if (mode !== 'todo') {
+        // a `##` heading straight above the tasks titles this list
+        const title = mode === 'note' && !noteBody.some(Boolean) ? noteTitle : '';
+        if (title) noteTitle = '';
         flush();
         mode = 'todo';
-        todoTitle = noteTitle || 'To-do';
-        noteTitle = '';
+        todoTitle = title || 'To-do';
       }
       todoTasks.push({ done: task[1].toLowerCase() === 'x', text: cleanLine(task[2]) });
       continue;

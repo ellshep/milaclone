@@ -32,10 +32,20 @@
           <i data-lucide="smartphone"></i>
           <span class="top-phone-badge" id="phoneNotesBadge" hidden>0</span>
         </button>
+        <button
+          type="button"
+          class="top-phone"
+          id="searchBtn"
+          aria-label="Search"
+          title="Search (⌘K)"
+          aria-haspopup="dialog"
+        >
+          <i data-lucide="search"></i>
+        </button>
         <button type="button" class="top-phone" id="trashBtn" aria-label="Trash" title="Trash" aria-haspopup="dialog">
           <i data-lucide="trash-2"></i>
         </button>
-        <span class="ghost" id="exportBtn">Export</span>
+        <button type="button" class="ghost" id="exportBtn" aria-haspopup="menu" aria-expanded="false">Export</button>
         <div class="zoomwrap">
           <button id="zoomOut" title="Zoom out">−</button>
           <span class="lvl" id="zoomLvl">100%</span>
@@ -296,7 +306,9 @@
       <button data-act="zoomin">Zoom in</button>
       <button data-act="zoomout">Zoom out</button>
       <button data-act="reset">Reset view</button>
-      <button data-act="export">Export</button>
+      <button data-act="search">Search</button>
+      <button data-act="export">Export board (Markdown)</button>
+      <button data-act="backup">Download database backup</button>
       <button data-act="trash">Trash</button>
     </div>
 
@@ -360,11 +372,26 @@
         <dd>Back, forward</dd>
         <dt>⌘U</dt>
         <dd>Up to the parent board</dd>
+        <dt>⌘K</dt>
+        <dd>Search every board</dd>
         <dt>/</dt>
         <dd>This list</dd>
         <dt>Esc</dt>
         <dd>Deselect, close menus</dd>
       </dl>
+    </dialog>
+
+    <div id="exportMenu" role="menu" hidden>
+      <a role="menuitem" id="exportMd" download>This board as Markdown</a>
+      <a role="menuitem" href="/api/backup" download title="Every board and card; uploaded files aren't included"
+        >Database backup (.db)</a
+      >
+    </div>
+
+    <dialog id="searchDialog" aria-label="Search">
+      <input id="searchInput" type="search" placeholder="Search boards and cards…" autocomplete="off" />
+      <ul id="searchResults"></ul>
+      <p id="searchEmpty" hidden>Nothing matches.</p>
     </dialog>
 
     <div id="mBoardSheet" hidden>
