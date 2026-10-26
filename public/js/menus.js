@@ -88,6 +88,9 @@ export function openCtx(e, it) {
     { sep: true },
     { label: 'Rename', hint: 'Return', fn: () => renameSelected() },
     { label: locked ? 'Unlock Position' : 'Lock Position', fn: () => toggleLock() },
+    ...(it.type === 'image'
+      ? [{ label: it.data.transparent ? 'Show Background' : 'Transparent Background', fn: () => toggleTransparent(it) }]
+      : []),
     { sep: true },
     { label: 'Move to Trash', hint: 'Delete', danger: true, fn: () => deleteItem(it.id) },
   ];
@@ -123,6 +126,14 @@ export function openCtx(e, it) {
   if (top + mh > window.innerHeight) top = window.innerHeight - mh - 8;
   dom.ctxmenu.style.left = left + 'px';
   dom.ctxmenu.style.top = top + 'px';
+}
+
+function toggleTransparent(it) {
+  const transparent = !it.data.transparent;
+  it.data = Object.assign({}, it.data, { transparent });
+  api.patch(it.id, { data: { transparent } });
+  refreshItem(it);
+  closeCtx();
 }
 
 export function closeCtx() {

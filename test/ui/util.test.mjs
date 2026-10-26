@@ -9,6 +9,11 @@ import {
   normalizeUrl,
   imageSize,
   toast,
+  isUrl,
+  embedUrl,
+  fileIcon,
+  clipMarker,
+  parseClipMarker,
 } from '../../public/js/util.js';
 import { dom } from '../../public/js/state.js';
 
@@ -100,5 +105,60 @@ describe('util', () => {
     btn.click();
     expect(fn).toHaveBeenCalledOnce();
     expect(dom.toastEl.classList.contains('show')).toBe(false);
+  });
+});
+
+describe('capture helpers', () => {
+  it('isUrl accepts http(s) only', () => {
+    expect(isUrl('https://a.b/c')).toBe(true);
+    expect(isUrl(' http://x.y ')).toBe(true);
+    expect(isUrl('example.com')).toBe(false);
+    expect(isUrl('https://a b')).toBe(false);
+    expect(isUrl(null)).toBe(false);
+  });
+
+  it.each([
+    ['https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
+    ['https://m.youtube.com/shorts/abc_123', 'https://www.youtube-nocookie.com/embed/abc_123'],
+    ['https://youtu.be/dQw4w9WgXcQ?si=x', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
+    ['https://vimeo.com/76979871', 'https://player.vimeo.com/video/76979871'],
+    [
+      'https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC',
+      'https://open.spotify.com/embed/track/4uLU6hMCjMI75M1A2tKUQC',
+    ],
+    ['https://open.spotify.com/intl-de/album/1A2B', 'https://open.spotify.com/embed/album/1A2B'],
+  ])('embedUrl(%s)', (input, out) => expect(embedUrl(input)).toBe(out));
+
+  it.each([
+    'https://example.com/watch?v=x',
+    'https://www.youtube.com/watch',
+    'https://www.youtube.com/channel/UC1',
+    'https://www.youtube.com/watch?v=<script>',
+    'https://youtu.be/',
+    'https://vimeo.com/channels/staff',
+    'https://open.spotify.com/user/abc',
+    'not a url',
+    '',
+  ])('embedUrl(%s) is null', input => expect(embedUrl(input)).toBeNull());
+
+  it.each([
+    ['photo.PNG', 'image/png', 'file-image'],
+    ['a.mp3', 'audio/mpeg', 'file-audio'],
+    ['a.mov', 'video/quicktime', 'file-video'],
+    ['report.pdf', 'application/pdf', 'file-text'],
+    ['sheet.XLSX', '', 'file-spreadsheet'],
+    ['deck.pptx', '', 'presentation'],
+    ['bundle.zip', 'application/zip', 'file-archive'],
+    ['data.json', 'application/json', 'file-json'],
+    ['mystery', '', 'file'],
+    [undefined, undefined, 'file'],
+  ])('fileIcon(%s, %s)', (name, mime, icon) => expect(fileIcon(name, mime)).toBe(icon));
+
+  it('clip markers round-trip and reject other text', () => {
+    expect(parseClipMarker(clipMarker('i_aB-9', false))).toEqual({ id: 'i_aB-9', cut: false });
+    expect(parseClipMarker(clipMarker('i_x', true))).toEqual({ id: 'i_x', cut: true });
+    expect(parseClipMarker('milaclone:item:i_x:move')).toBeNull();
+    expect(parseClipMarker('hello')).toBeNull();
+    expect(parseClipMarker(undefined)).toBeNull();
   });
 });

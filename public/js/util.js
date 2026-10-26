@@ -63,3 +63,67 @@ export function toast(msg, action) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), action ? 6000 : 2200);
 }
+
+// ---- Capture helpers (pure; unit-tested in test/ui/util.test.mjs) ----------
+
+export const isUrl = s => /^https?:\/\/\S+$/i.test(String(s || '').trim());
+
+// YouTube, Vimeo and Spotify links play inline as an iframe; null for anything
+// else. Built from the URL alone: the server never fetches it.
+export function embedUrl(u) {
+  let url;
+  try {
+    url = new URL(String(u || '').trim());
+  } catch {
+    return null;
+  }
+  const host = url.hostname.replace(/^(www\.|m\.)/, '');
+  const seg = url.pathname.split('/').filter(Boolean);
+  const id = s => (s && /^[\w-]+$/.test(s) ? s : null);
+  if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    const v =
+      url.pathname === '/watch' ? url.searchParams.get('v') : ['shorts', 'embed', 'live'].includes(seg[0]) && seg[1];
+    return id(v) ? 'https://www.youtube-nocookie.com/embed/' + v : null;
+  }
+  if (host === 'youtu.be') return id(seg[0]) ? 'https://www.youtube-nocookie.com/embed/' + seg[0] : null;
+  if (host === 'vimeo.com' && /^\d+$/.test(seg[0] || '')) return 'https://player.vimeo.com/video/' + seg[0];
+  if (host === 'open.spotify.com') {
+    const kinds = ['track', 'album', 'playlist', 'episode', 'show', 'artist'];
+    const i = seg[0] && seg[0].startsWith('intl-') ? 1 : 0; // /intl-de/track/…
+    if (kinds.includes(seg[i]) && id(seg[i + 1])) return `https://open.spotify.com/embed/${seg[i]}/${seg[i + 1]}`;
+  }
+  return null;
+}
+
+// A lucide icon name for a file card, by MIME type first, then extension.
+export function fileIcon(name, mime) {
+  const m = String(mime || '');
+  const ext = (String(name || '').match(/\.([a-z0-9]+)$/i) || [])[1]?.toLowerCase();
+  if (m.startsWith('image/')) return 'file-image';
+  if (m.startsWith('audio/')) return 'file-audio';
+  if (m.startsWith('video/')) return 'file-video';
+  const byExt = {
+    pdf: 'file-text',
+    doc: 'file-text',
+    docx: 'file-text',
+    txt: 'file-text',
+    md: 'file-text',
+    xls: 'file-spreadsheet',
+    xlsx: 'file-spreadsheet',
+    csv: 'file-spreadsheet',
+    ppt: 'presentation',
+    pptx: 'presentation',
+    zip: 'file-archive',
+    json: 'file-json',
+  };
+  return byExt[ext] || 'file';
+}
+
+// Copying a card puts this marker on the system clipboard, so cmd+V of it (even
+// in another tab) still deep-copies the card instead of pasting text.
+const CLIP = 'milaclone:item:';
+export const clipMarker = (id, cut) => `${CLIP}${id}:${cut ? 'cut' : 'copy'}`;
+export function parseClipMarker(text) {
+  const m = new RegExp(`^${CLIP}([\\w-]+):(copy|cut)$`).exec(String(text || '').trim());
+  return m ? { id: m[1], cut: m[2] === 'cut' } : null;
+}

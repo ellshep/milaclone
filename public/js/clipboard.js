@@ -2,7 +2,7 @@
 
 import { state } from './state.js';
 import { api } from './api.js';
-import { isLocked, toast } from './util.js';
+import { isLocked, toast, clipMarker } from './util.js';
 import { refreshItem } from './cards.js';
 import { select } from './editing.js';
 import { closeCtx } from './menus.js';
@@ -13,9 +13,20 @@ import { reloadView } from './main.js';
 // column's cards, a board's whole nested tree) or, for cut, the move — nothing
 // is deleted, so a cut that is never pasted loses nothing.
 
-export function copySelected(cut) {
+// `viaEvent`: a keyboard copy already put the marker on the system clipboard.
+// The context menu has no copy event, so it writes it here; until that write is
+// known to have landed (it can't on plain-http LAN, where navigator.clipboard is
+// missing) cmd+V pastes this card rather than whatever text the clipboard holds.
+export function copySelected(cut, viaEvent = false) {
   if (!state.selectedId) return;
-  state.clipboard = { id: state.selectedId, cut: !!cut };
+  const clip = { id: state.selectedId, cut: !!cut, unsynced: !viaEvent };
+  state.clipboard = clip;
+  if (!viaEvent && navigator.clipboard) {
+    navigator.clipboard.writeText(clipMarker(clip.id, cut)).then(
+      () => (clip.unsynced = false),
+      () => {}
+    );
+  }
   toast(cut ? 'Cut' : 'Copied');
   closeCtx();
 }

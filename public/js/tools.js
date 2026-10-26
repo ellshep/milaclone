@@ -1,12 +1,11 @@
 'use strict';
 
 import { state, dom } from './state.js';
-import { api } from './api.js';
-import { toast, imageSize } from './util.js';
+import { toast } from './util.js';
+import { addFiles } from './capture.js';
 import { screenToWorld, applyCam } from './viewport.js';
 import { createAt, defaultsFor } from './create.js';
-import { select, deselect } from './editing.js';
-import { render } from './cards.js';
+import { deselect } from './editing.js';
 
 // Toolbar arming, canvas panning + placing new cards, and file/image uploads.
 
@@ -72,56 +71,15 @@ export function initTools() {
     document.addEventListener('pointerup', up);
   });
 
-  dom.fileInput.addEventListener('change', async () => {
-    const file = dom.fileInput.files[0];
-    dom.fileInput.value = '';
-    if (!file) return;
-    toast('Uploading image…');
-    const res = await api.upload(file);
-    if (res.error) {
-      toast('Upload failed: ' + res.error);
-      return;
-    }
-    const dim = await imageSize(res.src);
-    const w = state.pendingImageWorld || screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
-    const it = await api.create({
-      canvasId: state.view.canvas.id,
-      type: 'image',
-      x: Math.round(w.x - 130),
-      y: Math.round(w.y - 90),
-      w: 260,
-      data: { src: res.src, name: res.name, naturalW: dim.w, naturalH: dim.h },
+  // Picked files land where the tool was clicked (several at once lay out in a grid).
+  const onPicked = (input, key) =>
+    input.addEventListener('change', () => {
+      const files = [...input.files];
+      input.value = '';
+      const at = state[key] || undefined;
+      state[key] = null;
+      if (files.length) addFiles(files, at);
     });
-    state.view.items.push(it);
-    render();
-    select(it.id);
-    toast('Image added');
-    state.pendingImageWorld = null;
-  });
-
-  dom.uploadInput.addEventListener('change', async () => {
-    const file = dom.uploadInput.files[0];
-    dom.uploadInput.value = '';
-    if (!file) return;
-    toast('Uploading file…');
-    const res = await api.upload(file);
-    if (res.error) {
-      toast('Upload failed: ' + res.error);
-      return;
-    }
-    const w = state.pendingUploadWorld || screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
-    const it = await api.create({
-      canvasId: state.view.canvas.id,
-      type: 'file',
-      x: Math.round(w.x - 110),
-      y: Math.round(w.y - 40),
-      w: 220,
-      data: { src: res.src, name: res.name, mime: res.mime || file.type },
-    });
-    state.view.items.push(it);
-    render();
-    select(it.id);
-    toast('File added');
-    state.pendingUploadWorld = null;
-  });
+  onPicked(dom.fileInput, 'pendingImageWorld');
+  onPicked(dom.uploadInput, 'pendingUploadWorld');
 }
