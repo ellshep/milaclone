@@ -5,13 +5,14 @@ import { api } from './api.js';
 import { refreshIcons, toast } from './util.js';
 import { loadCam, applyCam, initViewport } from './viewport.js';
 import { render, renderCrumbs } from './cards.js';
-import { deselect, renameSelected, deleteItem, exitEdit, undoDelete } from './editing.js';
+import { deselect, renameSelected, deleteItem, exitEdit, undoDelete, flushAllSaves } from './editing.js';
 import { closePalette, closeCtx } from './menus.js';
 import { copySelected, pasteClipboard, duplicateSelected } from './clipboard.js';
 import { arm, disarm, initTools } from './tools.js';
 import { initMobile, updateMobileChrome } from './mobile.js';
 import { initBoardChrome, updateSelectionChrome } from './boardchrome.js';
 import { initQuickNotes, isQuickNotesOpen } from './quicknotes.js';
+import { initTrash } from './trash.js';
 
 // Entry point: canvas loading/navigation, global keyboard + pointer handling,
 // and boot. Wiring for the viewport and toolbar lives in their own modules and
@@ -50,6 +51,7 @@ export async function reloadView() {
 
 document.addEventListener('keydown', e => {
   if (isQuickNotesOpen()) return; // Quick notes owns the keyboard while it's up
+  if (document.querySelector('dialog[open]')) return; // so does a modal sheet
   const ae = document.activeElement;
   const typing = ae && (ae.isContentEditable || (/^(INPUT|TEXTAREA)$/.test(ae.tagName) && !ae.readOnly));
   if (e.key === 'Escape') {
@@ -112,6 +114,19 @@ document.addEventListener(
   true
 );
 
+// Another device may have changed this board while the tab was in the
+// background: once our own queued edits have landed, show the server's copy.
+// Skipped mid-edit so a caret or half-typed field isn't replaced.
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || !state.view.canvas) return;
+  try {
+    await flushAllSaves(false);
+    if (!state.editingId && !state.drag && !isQuickNotesOpen()) await reloadView();
+  } catch {
+    /* offline: the next focus or navigation tries again */
+  }
+});
+
 window.addEventListener('hashchange', () => {
   const id = location.hash.slice(1);
   if (id && (!state.view.canvas || id !== state.view.canvas.id)) openCanvas(id);
@@ -122,6 +137,7 @@ initMobile();
 initBoardChrome();
 initQuickNotes();
 initTools();
+initTrash();
 
 (async function boot() {
   refreshIcons();

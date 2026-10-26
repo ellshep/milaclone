@@ -440,7 +440,7 @@ test('upload mime allow-list: office docs, zip and json in; executables out', as
   }
   const fd = new FormData();
   fd.append('file', new Blob(['MZ'], { type: 'application/x-msdownload' }), 'evil.exe');
-  assert.equal((await fetch(base + '/api/upload', { method: 'POST', body: fd })).status, 400);
+  assert.equal((await fetch(base + '/api/upload', { method: 'POST', body: fd })).status, 415);
 });
 
 test('missing ids: 404 on canvas/item routes, 400 on a bad target canvas', async () => {
@@ -473,4 +473,166 @@ test('board cards: create with icon/colour, patch colour and icon through to the
 test('bulk patch skips unknown ids and accepts an empty body', async () => {
   assert.deepEqual((await send('PATCH', '/api/items', { updates: [{ id: 'i_nope', x: 1 }] })).body, { ok: true });
   assert.deepEqual((await send('PATCH', '/api/items', {})).body, { ok: true });
+});
+
+// ---- P1 · Robustness tail ---------------------------------------------------
+
+const uploadBlob = async (bytes, type, name) => {
+  const fd = new FormData();
+  fd.append('file', new Blob([bytes], { type }), name);
+  const r = await fetch(base + '/api/upload', { method: 'POST', body: fd });
+  return { status: r.status, body: await r.json() };
+};
+const uploadPath = src => path.join(__dirname, '..', 'public', src);
+
+test('F1.5 audio and video upload; rejections say why', async () => {
+  for (const [type, name] of [
+    ['audio/mpeg', 'song.mp3'],
+    ['video/mp4', 'clip.mp4'],
+  ]) {
+    const r = await uploadBlob('x', type, name);
+    assert.equal(r.status, 200, type);
+    assert.equal(r.body.mime, type);
+    fs.rmSync(uploadPath(r.body.src), { force: true });
+  }
+  const bad = await uploadBlob('MZ', 'application/x-msdownload', 'evil.exe');
+  assert.equal(bad.status, 415);
+  assert.match(bad.body.error, /application\/x-msdownload files can't be uploaded/);
+
+  const big = await uploadBlob(Buffer.alloc(25 * 1024 * 1024 + 1), 'text/plain', 'big.txt');
+  assert.equal(big.status, 413);
+  assert.match(big.body.error, /25 MB/);
+
+  const none = await fetch(base + '/api/upload', { method: 'POST', body: new FormData() });
+  assert.equal(none.status, 400);
+});
+
+test('F1.1 trash lists each delete once and restore brings back the whole subtree', async () => {
+  const canvasId = await root();
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Trip' } })).body;
+  const inner = board.data.childCanvasId;
+  const note = (await send('POST', '/api/item', { canvasId: inner, type: 'note', data: { title: 'Pack' } })).body;
+  await send('DELETE', '/api/item/' + board.id);
+
+  const listed = (await get('/api/trash')).body.items;
+  const entry = listed.find(i => i.id === board.id);
+  assert.deepEqual(
+    { type: entry.type, title: entry.title, canvasId: entry.canvasId, restorable: entry.restorable },
+    { type: 'board', title: 'Trip', canvasId, restorable: true }
+  );
+  assert.ok(entry.trashedAt > 0);
+  assert.ok(!listed.some(i => i.id === note.id), 'contents are not listed separately');
+
+  assert.equal((await send('POST', '/api/item/' + board.id + '/restore')).status, 200);
+  assert.ok(!(await get('/api/trash')).body.items.some(i => i.id === board.id));
+  const back = (await get('/api/canvas/' + inner)).body;
+  assert.ok(back.items.some(i => i.id === note.id));
+});
+
+test('F1.1 restore refuses an item whose board is trashed, and frees a card whose column is gone', async () => {
+  const canvasId = await root();
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Outer' } })).body;
+  const inner = board.data.childCanvasId;
+  const note = (await send('POST', '/api/item', { canvasId: inner, type: 'note', data: { title: 'first' } })).body;
+  await send('DELETE', '/api/item/' + note.id);
+  await send('DELETE', '/api/item/' + board.id);
+  const entry = (await get('/api/trash')).body.items.find(i => i.id === note.id);
+  assert.equal(entry.restorable, false);
+  const r = await send('POST', '/api/item/' + note.id + '/restore');
+  assert.equal(r.status, 409);
+  assert.match(r.body.error, /board is in the trash/);
+
+  const col = (await send('POST', '/api/item', { canvasId, type: 'column', data: { title: 'Col' } })).body;
+  const card = (await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: col.id })).body;
+  await send('DELETE', '/api/item/' + card.id);
+  await send('DELETE', '/api/item/' + col.id);
+  const restored = (await send('POST', '/api/item/' + card.id + '/restore')).body;
+  assert.equal(restored.parentItemId, null);
+});
+
+test('F1.2 empty trash hard-deletes rows and unlinks only unreferenced uploads', async () => {
+  const canvasId = await root();
+  const shared = (await uploadBlob('a', 'text/plain', 'shared.txt')).body;
+  const orphan = (await uploadBlob('b', 'text/plain', 'orphan.txt')).body;
+  const keep = (await send('POST', '/api/item', { canvasId, type: 'file', data: { src: shared.src } })).body;
+  const copy = (await send('POST', '/api/item/' + keep.id + '/copy', { canvasId, x: 0, y: 0 })).body;
+  const gone = (await send('POST', '/api/item', { canvasId, type: 'file', data: { src: orphan.src } })).body;
+  await send('DELETE', '/api/item/' + copy.id);
+  await send('DELETE', '/api/item/' + gone.id);
+
+  const r = await send('DELETE', '/api/trash');
+  assert.equal(r.status, 200);
+  assert.ok(r.body.items >= 2);
+  assert.equal(r.body.files, 1);
+  assert.deepEqual((await get('/api/trash')).body.items, []);
+  assert.equal((await send('POST', '/api/item/' + gone.id + '/restore')).status, 404);
+  assert.ok(fs.existsSync(uploadPath(shared.src)), 'still used by a live item');
+  assert.ok(!fs.existsSync(uploadPath(orphan.src)), 'nothing references it any more');
+  fs.rmSync(uploadPath(shared.src), { force: true });
+});
+
+test('F1.3 a card can only be parented to a live column on its own canvas', async () => {
+  const canvasId = await root();
+  const other = (await send('POST', '/api/item', { canvasId, type: 'board' })).body.data.childCanvasId;
+  const col = (await send('POST', '/api/item', { canvasId, type: 'column' })).body;
+  const farCol = (await send('POST', '/api/item', { canvasId: other, type: 'column' })).body;
+  const deadCol = (await send('POST', '/api/item', { canvasId, type: 'column' })).body;
+  await send('DELETE', '/api/item/' + deadCol.id);
+  const note = (await send('POST', '/api/item', { canvasId, type: 'note' })).body;
+  const notCol = (await send('POST', '/api/item', { canvasId, type: 'note' })).body;
+
+  for (const parentItemId of ['i_missing', deadCol.id, farCol.id, notCol.id, note.id]) {
+    const r = await send('PATCH', '/api/item/' + note.id, { parentItemId });
+    assert.equal(r.status, 400, parentItemId);
+    assert.equal(r.body.error, 'bad parentItemId');
+  }
+  assert.equal((await send('PATCH', '/api/item/' + note.id, { parentItemId: col.id })).body.parentItemId, col.id);
+  assert.equal((await send('PATCH', '/api/item/' + note.id, { parentItemId: null })).body.parentItemId, null);
+
+  const bulk = await send('PATCH', '/api/items', { updates: [{ id: note.id, parentItemId: farCol.id }] });
+  assert.equal(bulk.status, 400);
+  assert.equal((await send('PATCH', '/api/items', { updates: [{ id: note.id, parentItemId: col.id }] })).status, 200);
+});
+
+test('F1.3 the parent rule also holds on create, on a canvas move, and for columns', async () => {
+  const canvasId = await root();
+  const other = (await send('POST', '/api/item', { canvasId, type: 'board' })).body.data.childCanvasId;
+  const col = (await send('POST', '/api/item', { canvasId, type: 'column' })).body;
+  const col2 = (await send('POST', '/api/item', { canvasId, type: 'column' })).body;
+
+  assert.equal((await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: 'i_missing' })).status, 400);
+  assert.equal((await send('POST', '/api/item', { canvasId, type: 'column', parentItemId: col.id })).status, 400);
+  const inCol = (await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: col.id })).body;
+  assert.equal(inCol.parentItemId, col.id);
+
+  // moving canvases without clearing the parent would strand the card
+  assert.equal((await send('PATCH', '/api/item/' + inCol.id, { canvasId: other })).status, 400);
+  const moved = await send('PATCH', '/api/item/' + inCol.id, { canvasId: other, parentItemId: null });
+  assert.equal(moved.body.canvasId, other);
+
+  const cycle = await send('PATCH', '/api/items', {
+    updates: [
+      { id: col.id, parentItemId: col2.id },
+      { id: col2.id, parentItemId: col.id },
+    ],
+  });
+  assert.equal(cycle.status, 400);
+});
+
+test('F1.1 a card freed from a deleted column comes back where the column stood', async () => {
+  const canvasId = await root();
+  const col = (await send('POST', '/api/item', { canvasId, type: 'column', x: 900, y: 700 })).body;
+  const card = (await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: col.id, x: 0, y: 3 })).body;
+  await send('DELETE', '/api/item/' + card.id);
+  await send('DELETE', '/api/item/' + col.id);
+  const back = (await send('POST', '/api/item/' + card.id + '/restore')).body;
+  assert.deepEqual([back.parentItemId, back.x, back.y], [null, 900, 700]);
+});
+
+test('F1.5 uploaded audio and video are served inline (still nosniff)', async () => {
+  const up = (await uploadBlob('x', 'video/mp4', 'clip.mp4')).body;
+  const r = await fetch(base + up.src);
+  assert.equal(r.headers.get('content-disposition'), null);
+  assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+  fs.rmSync(uploadPath(up.src), { force: true });
 });

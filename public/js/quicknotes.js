@@ -168,8 +168,13 @@ function adoptMerged(list, saved) {
   render();
 }
 // Queued edits go out before the tab closes or the phone backgrounds the app.
-document.addEventListener('visibilitychange', () => {
+// …and coming back, pick up edits made elsewhere once ours have landed.
+document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'hidden') flushSaves(null, true);
+  else if (qn.loaded) {
+    await Promise.all(flushSaves(null));
+    load().catch(() => {});
+  }
 });
 window.addEventListener('pagehide', () => flushSaves(null, true));
 const saveTasks = list => save(list, { tasks: list.tasks });

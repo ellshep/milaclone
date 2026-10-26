@@ -30,7 +30,6 @@ test('double-tap opens a board card on mobile Safari', async ({ page }) => {
   const y = box.y + box.height / 2;
 
   await page.touchscreen.tap(x, y);
-  await page.waitForTimeout(120);
   await page.touchscreen.tap(x, y);
 
   await expect.poll(() => page.evaluate(() => location.hash)).toBe('#' + board.childId);

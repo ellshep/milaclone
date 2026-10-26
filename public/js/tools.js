@@ -79,7 +79,7 @@ export function initTools() {
     toast('Uploading image…');
     const res = await api.upload(file);
     if (res.error) {
-      toast('Upload failed');
+      toast('Upload failed: ' + res.error);
       return;
     }
     const dim = await imageSize(res.src);
@@ -106,7 +106,7 @@ export function initTools() {
     toast('Uploading file…');
     const res = await api.upload(file);
     if (res.error) {
-      toast('Upload failed');
+      toast('Upload failed: ' + res.error);
       return;
     }
     const w = state.pendingUploadWorld || screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
