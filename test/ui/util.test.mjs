@@ -16,6 +16,9 @@ import {
   parseClipMarker,
   snap,
   zRange,
+  docToDom,
+  isTyping,
+  isEmptyDoc,
 } from '../../public/js/util.js';
 import { dom } from '../../public/js/state.js';
 
@@ -107,6 +110,86 @@ describe('util', () => {
     btn.click();
     expect(fn).toHaveBeenCalledOnce();
     expect(dom.toastEl.classList.contains('show')).toBe(false);
+  });
+});
+
+describe('rich text', () => {
+  const html = doc => {
+    const d = document.createElement('div');
+    d.appendChild(docToDom(doc));
+    return d.innerHTML;
+  };
+  const t = (text, marks) => ({ type: 'text', text, marks });
+
+  it('renders blocks and marks as DOM', () => {
+    const doc = {
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 9 }, content: [t('H')] },
+        {
+          type: 'paragraph',
+          content: [t('b', [{ type: 'bold' }, { type: 'italic' }]), t('=', [{ type: 'highlight' }])],
+        },
+        { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [t('li')] }] }] },
+        { type: 'orderedList', attrs: { start: 3 }, content: [] },
+        { type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: true }, content: [] }] },
+        { type: 'codeBlock', content: [t('x()')] },
+        { type: 'blockquote', content: [] },
+        { type: 'horizontalRule' },
+        { type: 'mystery', content: [t('kept')] },
+        { type: 'paragraph', content: [t('a'), { type: 'hardBreak' }, t('b', [{ type: 'unknownMark' }])] },
+      ],
+    };
+    expect(html(doc)).toBe(
+      '<h6>H</h6><p><em><strong>b</strong></em><mark>=</mark></p><ul><li><p>li</p></li></ul><ol start="3"></ol>' +
+        '<ul data-type="taskList"><li data-checked="true"><input type="checkbox" disabled=""><div></div></li></ul>' +
+        '<pre><code>x()</code></pre><blockquote></blockquote><hr><div>kept</div><p>a<br>b</p>'
+    );
+    expect(html(null)).toBe('');
+  });
+
+  it('isEmptyDoc: only a lone empty paragraph (or nothing) is empty', () => {
+    expect(isEmptyDoc(null)).toBe(true);
+    expect(isEmptyDoc({ type: 'doc', content: [{ type: 'paragraph' }] })).toBe(true);
+    expect(isEmptyDoc({ type: 'doc', content: [{ type: 'horizontalRule' }] })).toBe(false);
+    expect(isEmptyDoc({ type: 'doc', content: [t('x')] })).toBe(false);
+  });
+
+  it('never injects markup or unsafe links', () => {
+    const link = href => ({ type: 'link', attrs: { href } });
+    const doc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            t('<img src=x onerror=alert(1)>'),
+            t('ok', [link('https://e.com')]),
+            t('bad', [link('javascript:alert(1)')]),
+          ],
+        },
+      ],
+    };
+    const out = html(doc);
+    expect(out).toContain('&lt;img');
+    expect(out).toContain('<a href="https://e.com" target="_blank" rel="noopener noreferrer">ok</a>');
+    expect(out).toContain('<a target="_blank" rel="noopener noreferrer">bad</a>');
+  });
+
+  it('isTyping: text fields and an edited rich body have the keyboard', () => {
+    const card = document.createElement('div');
+    card.innerHTML = '<input id="i"><input id="ro" readonly><div data-rich tabindex="-1" id="r"></div>';
+    document.body.appendChild(card);
+    const focus = id => document.getElementById(id).focus();
+    focus('i');
+    expect(isTyping()).toBe(true);
+    focus('ro');
+    expect(isTyping()).toBe(false);
+    focus('r');
+    expect(isTyping()).toBe(false); // a static body isn't being edited
+    card.classList.add('editing');
+    expect(isTyping()).toBe(true);
+    card.remove();
   });
 });
 

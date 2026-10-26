@@ -72,6 +72,82 @@ export function zRange(items) {
   return [Math.min(0, ...zs), Math.max(0, ...zs)];
 }
 
+// A text field or rich-text body has the keyboard: canvas shortcuts stand down.
+// A rich body counts while its editor is still loading, so early keys don't arm tools.
+export function isTyping() {
+  const ae = document.activeElement;
+  return (
+    !!ae &&
+    (ae.isContentEditable ||
+      (/^(INPUT|TEXTAREA)$/.test(ae.tagName) && !ae.readOnly) ||
+      !!ae.closest('.editing [data-rich]'))
+  );
+}
+
+// ---- Rich text --------------------------------------------------------------
+// The static view of a TipTap doc (a note or comment that isn't being edited),
+// built as DOM nodes, never innerHTML, so stored text can't inject markup.
+// Unknown nodes keep their children; links only ever get http(s)/mailto hrefs.
+const BLOCK_TAGS = {
+  paragraph: 'p',
+  blockquote: 'blockquote',
+  bulletList: 'ul',
+  orderedList: 'ol',
+  listItem: 'li',
+  taskList: 'ul',
+  horizontalRule: 'hr',
+  hardBreak: 'br',
+};
+const MARK_TAGS = { bold: 'strong', italic: 'em', strike: 's', underline: 'u', code: 'code', highlight: 'mark' };
+const safeHref = h => (/^(https?:|mailto:)/i.test(String(h || '')) ? String(h) : null);
+
+// A body with nothing in it (a lone empty paragraph) shows its placeholder.
+export function isEmptyDoc(doc) {
+  const c = (doc && doc.content) || [];
+  return !c.length || (c.length === 1 && c[0].type === 'paragraph' && !(c[0].content || []).length);
+}
+
+export function docToDom(node) {
+  if (!node) return document.createDocumentFragment();
+  if (node.type === 'text') {
+    let el = document.createTextNode(node.text || '');
+    for (const m of node.marks || []) {
+      const tag = m.type === 'link' ? 'a' : MARK_TAGS[m.type];
+      if (!tag) continue;
+      const w = document.createElement(tag);
+      if (tag === 'a') {
+        const href = safeHref(m.attrs && m.attrs.href);
+        if (href) w.href = href;
+        w.target = '_blank';
+        w.rel = 'noopener noreferrer';
+      }
+      w.appendChild(el);
+      el = w;
+    }
+    return el;
+  }
+  const level = Math.min(6, Math.max(1, (node.attrs && node.attrs.level) || 1));
+  let el, inner;
+  if (node.type === 'doc') el = inner = document.createDocumentFragment();
+  else if (node.type === 'heading') el = inner = document.createElement('h' + level);
+  else if (node.type === 'codeBlock') {
+    el = document.createElement('pre');
+    inner = el.appendChild(document.createElement('code'));
+  } else if (node.type === 'taskItem') {
+    el = document.createElement('li');
+    el.dataset.checked = String(!!(node.attrs && node.attrs.checked));
+    const box = el.appendChild(document.createElement('input'));
+    box.type = 'checkbox';
+    box.checked = el.dataset.checked === 'true';
+    box.disabled = true;
+    inner = el.appendChild(document.createElement('div'));
+  } else el = inner = document.createElement(BLOCK_TAGS[node.type] || 'div');
+  if (node.type === 'taskList') el.dataset.type = 'taskList';
+  if (node.type === 'orderedList' && node.attrs && node.attrs.start > 1) el.start = node.attrs.start;
+  for (const c of node.content || []) inner.appendChild(docToDom(c));
+  return el;
+}
+
 // Cards snap to a 10 px grid while dragged; `free` (shift held) turns it off.
 export const GRID = 10;
 export const snap = (v, free) => (free ? v : Math.round(v / GRID) * GRID);

@@ -1,7 +1,19 @@
 'use strict';
 
 import { state, dom, elMap } from './state.js';
-import { colorVar, lucideEl, refreshIcons, autoGrow, isLocked, rid, normalizeUrl, embedUrl, fileIcon } from './util.js';
+import {
+  colorVar,
+  lucideEl,
+  refreshIcons,
+  autoGrow,
+  isLocked,
+  rid,
+  normalizeUrl,
+  embedUrl,
+  fileIcon,
+  docToDom,
+  isEmptyDoc,
+} from './util.js';
 import { select, enterEdit, exitEdit, saveData, deleteItem, trackTasks } from './editing.js';
 import { openPalette, openCtx } from './menus.js';
 import { updateSelectionChrome } from './boardchrome.js';
@@ -18,7 +30,11 @@ export function childrenOf(id) {
   return state.view.items.filter(it => it.parentItemId === id).sort((a, b) => (a.y || 0) - (b.y || 0));
 }
 
+// Re-rendering a card mid-edit would orphan its TipTap editor: finish the edit first.
+const leaveRichEdit = el => el && el.querySelector('[data-rich]') && el.dataset.id === state.editingId && exitEdit();
+
 export function render() {
+  leaveRichEdit(elMap.get(state.editingId));
   dom.world.innerHTML = '';
   elMap.clear();
   const free = state.view.items.filter(it => !it.parentItemId);
@@ -78,13 +94,12 @@ function renameBoard(b) {
   };
   input.onblur = async () => {
     const title = input.value.trim();
-    if (!cancel && title && title !== canvas.title) {
-      const old = canvas.title;
-      canvas.title = crumb.title = b.lastChild.textContent = title;
-      if (!(await api.patchCanvas(canvas.id, { title }))) canvas.title = crumb.title = b.lastChild.textContent = old;
-      if (state.view.canvas === canvas) updateMobileChrome();
-    }
     input.replaceWith(b);
+    if (cancel || !title || title === canvas.title) return;
+    const old = canvas.title;
+    canvas.title = crumb.title = b.lastChild.textContent = title;
+    if (!(await api.patchCanvas(canvas.id, { title }))) canvas.title = crumb.title = b.lastChild.textContent = old;
+    if (state.view.canvas === canvas) updateMobileChrome();
   };
 }
 
@@ -188,16 +203,21 @@ function buildNote(el, it) {
     a.style.background = colorVar(it.color);
     el.appendChild(a);
   }
-  const t = makeField('area', 'ntitle', it.data.title, 'Title');
-  const b = makeField('area', 'nbody', it.data.body, 'Write a note…');
-  t.addEventListener('input', () => saveData(it, { title: t.value }));
-  b.addEventListener('input', () => saveData(it, { body: b.value }));
-  el.appendChild(t);
-  el.appendChild(b);
-  requestAnimationFrame(() => {
-    autoGrow(t);
-    autoGrow(b);
-  });
+  el.appendChild(richField('nbody', it, 'Write a note…'));
+}
+
+// A note/comment body: the static render of data.doc; editing the card swaps
+// in TipTap (rich.js).
+function richField(cls, it, placeholder) {
+  const f = document.createElement('div');
+  f.className = cls + ' rich';
+  f.dataset.edit = '';
+  f.dataset.rich = '';
+  f.dataset.placeholder = placeholder;
+  f.tabIndex = -1;
+  f.toggleAttribute('data-empty', isEmptyDoc(it.data.doc));
+  f.appendChild(docToDom(it.data.doc));
+  return f;
 }
 
 function buildComment(el, it) {
@@ -206,10 +226,7 @@ function buildComment(el, it) {
   mark.className = 'cmark';
   mark.appendChild(lucideEl('message-circle'));
   el.appendChild(mark);
-  const b = makeField('area', 'cbody', it.data.body, 'Add a comment…');
-  b.addEventListener('input', () => saveData(it, { body: b.value }));
-  el.appendChild(b);
-  requestAnimationFrame(() => autoGrow(b));
+  el.appendChild(richField('cbody', it, 'Add a comment…'));
 }
 
 function buildTodo(el, it) {
@@ -484,6 +501,7 @@ function buildColumn(el, it) {
 export function refreshItem(it) {
   const old = elMap.get(it.id);
   if (!old) return;
+  leaveRichEdit(old);
   const fresh = renderItem(it);
   old.replaceWith(fresh);
   elMap.set(it.id, fresh);

@@ -50,7 +50,7 @@ test('F2.1 pasting an image, a URL and text creates image, link and note cards',
   await expect(page.locator('#world > .item.type-link .lurl')).toHaveValue('https://example.com/page');
 
   await paste(page, { text: 'Remember the milk' });
-  await expect(page.locator('#world > .item.type-note .nbody')).toHaveValue('Remember the milk');
+  await expect(page.locator('#world > .item.type-note .nbody')).toHaveText('Remember the milk');
   await expect(items(page)).toHaveCount(3);
 });
 
@@ -263,7 +263,7 @@ test('an Office-style paste (text + html + rendered picture) pastes the text', a
     dt.items.add(new File([Uint8Array.from(atob(png), c => c.charCodeAt(0))], 'image.png', { type: 'image/png' }));
     document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
   }, PNG_B64);
-  await expect(page.locator('#world > .item.type-note .nbody')).toHaveValue('Q3\t42');
+  await expect(page.locator('#world > .item.type-note .nbody')).toHaveText('Q3\t42');
   await expect(page.locator('#world > .item.type-image')).toHaveCount(0);
 });
 

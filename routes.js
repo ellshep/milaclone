@@ -18,6 +18,8 @@ const {
   emptyTrash,
   copyItemDeep,
   moveItemDeep,
+  RICH_TYPES,
+  toRich,
 } = require('./db');
 
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
@@ -209,6 +211,7 @@ router.post('/api/item', (req, res) => {
     data: b.data || {},
     createdAt: Date.now(),
   };
+  if (RICH_TYPES.has(item.type)) item.data = toRich(item.data);
 
   db.transaction(() => {
     // A board item owns a freshly created child canvas.
@@ -264,6 +267,13 @@ router.patch('/api/item/:id', (req, res) => {
     if (Array.isArray(b.baseTasks) && Array.isArray(b.data.tasks) && Array.isArray(stored)) {
       it.data.tasks = mergeTasks(b.baseTasks, stored, b.data.tasks);
     }
+  }
+
+  // A client from before rich text may still send title/body: rebuild the body
+  // from them so the edit isn't stored somewhere nothing renders.
+  if (RICH_TYPES.has(it.type) && b.data && (b.data.title != null || b.data.body != null)) {
+    const { doc, text, ...rest } = it.data; // oxlint-disable-line no-unused-vars -- dropped on purpose
+    it.data = toRich(rest);
   }
 
   const isBoard = it.type === 'board' && it.data && it.data.childCanvasId;

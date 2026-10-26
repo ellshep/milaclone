@@ -2,7 +2,7 @@
 
 import { state, dom } from './state.js';
 import { api } from './api.js';
-import { refreshIcons, toast, GRID } from './util.js';
+import { refreshIcons, toast, GRID, isTyping } from './util.js';
 import { loadCam, applyCam, initViewport, zoomBy, zoomToFit, resetZoom } from './viewport.js';
 import { render, renderCrumbs } from './cards.js';
 import {
@@ -71,7 +71,7 @@ document.addEventListener('keydown', e => {
   if (isQuickNotesOpen()) return; // Quick notes owns the keyboard while it's up
   if (document.querySelector('dialog[open]')) return; // so does a modal sheet
   const ae = document.activeElement;
-  const typing = ae && (ae.isContentEditable || (/^(INPUT|TEXTAREA)$/.test(ae.tagName) && !ae.readOnly));
+  const typing = isTyping();
   if (e.key === 'Escape') {
     disarm();
     deselect();

@@ -7,6 +7,7 @@ import { render, renderCrumbs, refreshItem } from './cards.js';
 import { closePalette, closeCtx } from './menus.js';
 import { updateSelectionChrome } from './boardchrome.js';
 import { reloadView } from './main.js';
+import { startRich, stopRich } from './rich.js';
 
 // Selection, inline-edit mode, debounced saves, and deletion.
 
@@ -58,12 +59,16 @@ export function enterEdit(el) {
     f.readOnly = false;
     f.tabIndex = 0;
   });
+  const it = state.view.items.find(i => i.id === el.dataset.id);
+  el.querySelectorAll('[data-rich]').forEach(f => startRich(f, it));
 }
 
 export function exitEdit() {
   if (!state.editingId) return;
   const el = elMap.get(state.editingId);
   if (el) {
+    const it = state.view.items.find(i => i.id === state.editingId);
+    el.querySelectorAll('[data-rich]').forEach(f => stopRich(f, it));
     el.classList.remove('editing');
     el.querySelectorAll('[data-edit]').forEach(f => {
       f.readOnly = true;

@@ -2,7 +2,7 @@
 
 import { state, dom } from './state.js';
 import { api } from './api.js';
-import { imageSize, isUrl, toast, clipMarker, parseClipMarker } from './util.js';
+import { imageSize, isUrl, toast, clipMarker, parseClipMarker, isTyping } from './util.js';
 import { screenToWorld } from './viewport.js';
 import { render } from './cards.js';
 import { select, selectedItems } from './editing.js';
@@ -85,9 +85,7 @@ export async function addText(text, at = pointerWorld()) {
 // Keyboard copy/paste is left to the browser while typing, or while a modal or
 // Quick notes owns the screen.
 function canvasOwnsClipboard() {
-  const ae = document.activeElement;
-  const typing = ae && (ae.isContentEditable || (/^(INPUT|TEXTAREA)$/.test(ae.tagName) && !ae.readOnly));
-  return !typing && !isQuickNotesOpen() && !document.querySelector('dialog[open]') && !!state.view.canvas;
+  return !isTyping() && !isQuickNotesOpen() && !document.querySelector('dialog[open]') && !!state.view.canvas;
 }
 
 function onCopy(e, cut) {

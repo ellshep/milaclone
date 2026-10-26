@@ -7,6 +7,17 @@ const { DB_FILE } = require('./db');
 const PORT = process.env.PORT || 4321;
 const HOST = process.env.HOST || '0.0.0.0';
 
+// Bundle the TipTap editor (public/js/editor.js + its npm deps) into
+// public/vendor/editor.js. Cards import() it the first time a note is edited.
+require('esbuild').buildSync({
+  entryPoints: [path.join(__dirname, 'public/js/editor.js')],
+  outfile: path.join(__dirname, 'public/vendor/editor.js'),
+  bundle: true,
+  format: 'esm',
+  minify: true,
+  logLevel: 'warning',
+});
+
 const app = express();
 app.use(express.json({ limit: '5mb' }));
 // The generic handler can also reach public/uploads (e.g. via an encoded URL), so

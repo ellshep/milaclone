@@ -17,7 +17,14 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@tiptap/core": "3.31.4",
+    "@tiptap/extension-highlight": "3.31.4",
+    "@tiptap/extension-list": "3.31.4",
+    "@tiptap/extensions": "3.31.4",
+    "@tiptap/pm": "3.31.4",
+    "@tiptap/starter-kit": "3.31.4",
     "better-sqlite3": "^13.0.1",
+    "esbuild": "0.28.2",
     "express": "^4.21.2",
     "multer": "^2.1.1"
   },

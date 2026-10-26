@@ -253,8 +253,50 @@ function moveItemDeep(itemId, canvasId, x, y) {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Rich text: notes and comments keep one body, `data.doc` (TipTap JSON) plus
+// `data.text` (its plain text, for search, the trash list and other readers).
+// Plain-text writes (`title` / `body`, from older clients, the importer or a
+// paste) are converted here, and old rows once at boot.
+// ---------------------------------------------------------------------------
+const RICH_TYPES = new Set(['note', 'comment']);
+const para = line => (line ? { type: 'paragraph', content: [{ type: 'text', text: line }] } : { type: 'paragraph' });
+
+const docText = n =>
+  n.type === 'text' ? n.text || '' : (n.content || []).map(docText).join(n.type === 'doc' ? '\n' : '');
+
+function toRich(data) {
+  if (data.doc) return typeof data.text === 'string' ? data : { ...data, text: docText(data.doc).trim() };
+  const { title, body, ...rest } = data;
+  const text = String(body ?? rest.text ?? '');
+  const content = [];
+  if (title) content.push({ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: String(title) }] });
+  if (text || !content.length) content.push(...text.split('\n').map(para));
+  return { ...rest, doc: { type: 'doc', content }, text: [title, text].filter(Boolean).join('\n') };
+}
+
+// Converts every note/comment still on title + body (trashed ones too), after
+// a backup copy of the database. Returns the backup path, or null if nothing to do.
+function migrateRichText() {
+  const rows = db
+    .prepare("SELECT id, data FROM items WHERE type IN ('note', 'comment') AND json_extract(data, '$.doc') IS NULL")
+    .all();
+  if (!rows.length) return null;
+  const backup = path.join(DATA_DIR, `board.pre-richtext-${Date.now()}.db`);
+  db.prepare('VACUUM INTO ?').run(backup); // consistent snapshot, synchronous (unlike db.backup())
+  const update = db.prepare('UPDATE items SET data = ? WHERE id = ?');
+  db.transaction(() => {
+    for (const r of rows) update.run(JSON.stringify(toRich(JSON.parse(r.data || '{}'))), r.id);
+  })();
+  return backup;
+}
+migrateRichText();
+
 module.exports = {
   DB_FILE,
+  RICH_TYPES,
+  toRich,
+  migrateRichText,
   db,
   stmt,
   id,
