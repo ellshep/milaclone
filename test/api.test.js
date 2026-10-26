@@ -16,7 +16,10 @@ process.env.DATA_DIR = TMP;
 const express = require('express');
 const app = express();
 app.use(express.json());
-app.use(require('../routes'));
+const routes = require('../routes');
+app.use(routes);
+// mirror server.js: the generic static handler sits behind the routes
+app.use(express.static(path.join(__dirname, '..', 'public'), { setHeaders: routes.setUploadHeaders }));
 
 let base;
 let server;
@@ -328,6 +331,11 @@ test('uploads: active content downloads instead of rendering on our origin', asy
   assert.equal(r.status, 200);
   assert.equal(r.headers.get('content-disposition'), 'attachment');
   assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+
+  // an encoded path that skips the /uploads mount must not dodge the headers
+  const encoded = await fetch(base + html.src.replace('/uploads/', '/%75ploads/'));
+  assert.equal(encoded.status, 200);
+  assert.equal(encoded.headers.get('content-disposition'), 'attachment');
 
   const png = await upload('png', 'image/png', 'pic.png');
   const p = await fetch(base + png.src);

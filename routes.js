@@ -39,12 +39,17 @@ const router = express.Router();
 // (HTML, SVG, XML, …) is forced to download instead of rendering. Only file types
 // that are inert as documents are shown inline. <img> ignores Content-Disposition,
 // so SVG images still display on the canvas.
+// This keys off the *resolved* file path that express.static hands to setHeaders,
+// not the request URL: an encoded URL (e.g. /%75ploads/x.html) can miss a route
+// mount yet still resolve to an upload through the generic public/ handler, so
+// server.js passes this same function to that handler too.
 const INLINE_UPLOAD = /\.(png|jpe?g|gif|webp|avif|bmp|pdf|txt|csv|json)$/i;
-router.use('/uploads', (req, res, next) => {
+function setUploadHeaders(res, filePath) {
+  if (!path.resolve(filePath).startsWith(UPLOAD_DIR + path.sep)) return;
   res.set('X-Content-Type-Options', 'nosniff');
-  if (!INLINE_UPLOAD.test(req.path)) res.set('Content-Disposition', 'attachment');
-  next();
-}, express.static(UPLOAD_DIR));
+  if (!INLINE_UPLOAD.test(filePath)) res.set('Content-Disposition', 'attachment');
+}
+router.use('/uploads', express.static(UPLOAD_DIR, { setHeaders: setUploadHeaders }));
 
 // Three-way merge of a todo's task array. `base` is the list the client last got
 // from the server, `mine` its edited copy, `server` what is stored now (another
@@ -310,3 +315,4 @@ router.post('/api/upload', upload.single('file'), (req, res) => {
 router.get('/api/health', (req, res) => res.json({ ok: true }));
 
 module.exports = router;
+module.exports.setUploadHeaders = setUploadHeaders;
