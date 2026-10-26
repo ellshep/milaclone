@@ -33,9 +33,18 @@ export function imageSize(src) {
 }
 
 let toastTimer;
-export function toast(msg) {
-  dom.toastEl.textContent = msg;
-  dom.toastEl.classList.add('show');
+// `action` = { label, fn } adds a button (e.g. Undo) and keeps the toast up longer.
+export function toast(msg, action) {
+  const t = dom.toastEl;
+  t.textContent = msg;
+  t.classList.toggle('has-action', !!action);
+  if (action) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'toast-action'; b.textContent = action.label;
+    b.onclick = () => { t.classList.remove('show'); action.fn(); };
+    t.appendChild(b);
+  }
+  t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => dom.toastEl.classList.remove('show'), 2200);
+  toastTimer = setTimeout(() => t.classList.remove('show'), action ? 6000 : 2200);
 }

@@ -2,7 +2,7 @@
 
 import { state, dom, elMap } from './state.js';
 import { colorVar, lucideEl, refreshIcons, autoGrow, isLocked, rid, normalizeUrl } from './util.js';
-import { select, enterEdit, exitEdit, saveData, deleteItem } from './editing.js';
+import { select, enterEdit, exitEdit, saveData, deleteItem, trackTasks } from './editing.js';
 import { openPalette, openCtx } from './menus.js';
 import { updateSelectionChrome } from './boardchrome.js';
 import { onItemPointerDown, startResize } from './drag.js';
@@ -145,6 +145,7 @@ function buildComment(el, it) {
 
 function buildTodo(el, it) {
   el.classList.add('todo');
+  trackTasks(it);
   const title = makeField('input', 'ttitle', it.data.title, 'To-do');
   title.addEventListener('input', () => saveData(it, { title: title.value }));
   el.appendChild(title);

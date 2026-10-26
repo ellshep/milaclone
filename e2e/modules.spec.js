@@ -10,6 +10,7 @@ const { freshCanvas, place, leaveEdit } = require('./helpers');
 
 const PATCH = r => r.url().includes('/api/item/') && r.request().method() === 'PATCH';
 const CREATE = r => r.url().endsWith('/api/item') && r.request().method() === 'POST';
+const PASTED = r => /\/api\/item\/[^/]+\/(copy|move)$/.test(r.url());
 
 test('context menu: copy then paste yields a second note', async ({ page }) => {
   await freshCanvas(page);
@@ -21,7 +22,7 @@ test('context menu: copy then paste yields a second note', async ({ page }) => {
   await page.locator('#ctxmenu .ctx-item', { hasText: 'Copy' }).click();
 
   await note.first().click({ button: 'right' });
-  const created = page.waitForResponse(CREATE);
+  const created = page.waitForResponse(PASTED);
   await page.locator('#ctxmenu .ctx-item', { hasText: 'Paste' }).click();
   await created;
 
@@ -38,11 +39,11 @@ test('context menu: cut then paste keeps a single note (moves it)', async ({ pag
   await page.locator('#ctxmenu .ctx-item', { hasText: 'Cut' }).click();
 
   await note.click({ button: 'right' });
-  const created = page.waitForResponse(CREATE);
+  const moved = page.waitForResponse(PASTED);
   await page.locator('#ctxmenu .ctx-item', { hasText: 'Paste' }).click();
-  await created;
+  await moved;
 
-  // cut removes the original as part of the paste, so the count stays at 1
+  // cut + paste moves the original, so the count stays at 1
   await expect(note).toHaveCount(1);
 });
 
