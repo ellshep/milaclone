@@ -5,7 +5,8 @@ import { toast } from './util.js';
 import { addFiles } from './capture.js';
 import { screenToWorld, applyCam } from './viewport.js';
 import { createAt, defaultsFor } from './create.js';
-import { deselect } from './editing.js';
+import { deselect, selectIds } from './editing.js';
+import { elMap } from './state.js';
 
 // Toolbar arming, canvas panning + placing new cards, and file/image uploads.
 
@@ -21,6 +22,56 @@ export function disarm() {
   state.armed = null;
   dom.stage.classList.remove('armed');
   document.querySelectorAll('.tool.armed, .mtool.armed').forEach(b => b.classList.remove('armed'));
+}
+
+// Selection box: every free card it touches is selected (shift adds to the
+// current selection). The selection updates live while dragging. Card rects are
+// measured once (nothing moves mid-box), and the stage captures the pointer so a
+// release outside the window still ends the box.
+function startMarquee(e) {
+  const base = e.shiftKey ? [...state.selection] : [];
+  if (!e.shiftKey) deselect();
+  const box = document.createElement('div');
+  box.className = 'marquee';
+  dom.stage.appendChild(box);
+  const sr = dom.stage.getBoundingClientRect();
+  const cards = state.view.items
+    .filter(i => !i.parentItemId && elMap.get(i.id))
+    .map(i => ({ id: i.id, r: elMap.get(i.id).getBoundingClientRect() }));
+  const sx = e.clientX,
+    sy = e.clientY;
+  let moved = false;
+  let lastHit = '';
+  dom.stage.setPointerCapture(e.pointerId);
+  const move = ev => {
+    const l = Math.min(sx, ev.clientX),
+      t = Math.min(sy, ev.clientY),
+      r = Math.max(sx, ev.clientX),
+      b = Math.max(sy, ev.clientY);
+    if (!moved && r - l < 3 && b - t < 3) return;
+    moved = true;
+    Object.assign(box.style, {
+      left: l - sr.left + 'px',
+      top: t - sr.top + 'px',
+      width: r - l + 'px',
+      height: b - t + 'px',
+    });
+    const hit = cards.filter(c => c.r.left < r && c.r.right > l && c.r.top < b && c.r.bottom > t).map(c => c.id);
+    const key = hit.join(',');
+    if (key !== lastHit) {
+      lastHit = key;
+      selectIds([...new Set([...base, ...hit])]);
+    }
+  };
+  const end = () => {
+    box.remove();
+    dom.stage.removeEventListener('pointermove', move);
+    dom.stage.removeEventListener('pointerup', end);
+    dom.stage.removeEventListener('pointercancel', end);
+  };
+  dom.stage.addEventListener('pointermove', move);
+  dom.stage.addEventListener('pointerup', end);
+  dom.stage.addEventListener('pointercancel', end);
 }
 
 // Wire up the rail buttons, canvas pan/place, and the upload inputs. Called once at boot.
@@ -52,6 +103,13 @@ export function initTools() {
       } else createAt(t, w.x - defaultsFor(t).w / 2, w.y - 20);
       return;
     }
+    // Left-drag on empty canvas draws a selection box; space-drag, middle-drag
+    // and touch pan (decision D2).
+    if (e.button === 0 && !state.spaceDown && e.pointerType !== 'touch') {
+      startMarquee(e);
+      return;
+    }
+    e.preventDefault(); // middle-click autoscroll
     deselect();
     state.pan = { sx: e.clientX, sy: e.clientY, cx: state.cam.x, cy: state.cam.y };
     dom.stage.classList.add('panning');

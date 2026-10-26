@@ -185,8 +185,9 @@ test('F2.5 image caption and transparent background survive a reload', async ({ 
   await card.click();
   await page.keyboard.press('Enter');
   const caption = card.getByRole('textbox', { name: 'Caption' });
+  const saved = page.waitForResponse(r => r.url().includes('/api/item/') && r.request().method() === 'PATCH');
   await caption.fill('Sunset over the bay');
-  await page.waitForResponse(r => r.url().includes('/api/item/') && r.request().method() === 'PATCH');
+  await saved;
 
   await page.reload();
   await expect(card).toHaveClass(/transparent/);

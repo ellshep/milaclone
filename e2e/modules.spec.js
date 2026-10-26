@@ -82,7 +82,8 @@ test('free-dragging a note persists its new position across reload', async ({ pa
   const note = page.locator('.item.type-note');
   const before = await note.boundingBox();
 
-  const moved = page.waitForResponse(PATCH);
+  // drops are saved in one bulk PATCH (the card plus any group it moved with)
+  const moved = page.waitForResponse(r => r.url().endsWith('/api/items') && r.request().method() === 'PATCH');
   await page.mouse.move(before.x + before.width / 2, before.y + 16);
   await page.mouse.down();
   await page.mouse.move(before.x + before.width / 2 + 180, before.y + 16 + 70, { steps: 10 });
@@ -135,17 +136,29 @@ test('Enter renames the selected board and the name persists', async ({ page }) 
   await expect(page.locator('.item.type-board .btitle')).toHaveValue('Renamed');
 });
 
-test('dragging empty canvas pans the world', async ({ page }) => {
+// Decision D2: left-drag on empty canvas selects; space-drag and middle-drag pan.
+test('space-drag and middle-drag pan the world; plain left-drag does not', async ({ page }) => {
   await freshCanvas(page);
-  const transformBefore = await page.locator('#world').evaluate(el => el.style.transform);
+  const transform = () => page.locator('#world').evaluate(el => el.style.transform);
+  const drag = async (button = 'left') => {
+    await page.mouse.move(700, 300);
+    await page.mouse.down({ button });
+    await page.mouse.move(500, 500, { steps: 10 });
+    await page.mouse.up({ button });
+  };
 
-  await page.mouse.move(700, 300);
-  await page.mouse.down();
-  await page.mouse.move(500, 500, { steps: 10 });
-  await page.mouse.up();
+  const t0 = await transform();
+  await drag();
+  expect(await transform()).toBe(t0);
 
-  const transformAfter = await page.locator('#world').evaluate(el => el.style.transform);
-  expect(transformAfter).not.toBe(transformBefore);
+  await page.keyboard.down('Space');
+  await drag();
+  await page.keyboard.up('Space');
+  const t1 = await transform();
+  expect(t1).not.toBe(t0);
+
+  await drag('middle');
+  expect(await transform()).not.toBe(t1);
 });
 
 test('board selection chrome replaces the badge with rail actions', async ({ page }) => {

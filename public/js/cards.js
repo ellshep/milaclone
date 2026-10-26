@@ -73,13 +73,13 @@ export function renderItem(it) {
   const el = document.createElement('div');
   el.className = 'item type-' + it.type;
   el.dataset.id = it.id;
-  if (it.id === state.selectedId) el.classList.add('selected');
+  if (state.selection.has(it.id)) el.classList.add('selected');
   if (isLocked(it)) el.classList.add('locked');
   if (!it.parentItemId) {
     el.style.left = it.x + 'px';
     el.style.top = it.y + 'px';
     el.style.width = (it.w || 240) + 'px';
-    el.style.zIndex = it.z || 1;
+    el.style.zIndex = it.z ?? 1; // may be negative after Send to Back
   } else {
     el.classList.add('in-column');
   }

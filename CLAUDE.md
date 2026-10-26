@@ -36,6 +36,7 @@ Three-file Node backend + vanilla ES-module frontend, no build step.
 
 **Frontend** (`public/js/*.js`, ES modules loaded via `<script type="module">` from `index.html`):
 
+- **Selection** is a set: `state.selection` holds every selected id and `state.selectedId` is the primary one (rename, board chrome). Go through `select` / `selectIds` / `toggleSelect` in `editing.js`, never assign either field directly; `selectedItems()` drops cards whose column is also selected. Left-drag on empty canvas draws the selection box (`tools.js`); space-drag, middle-drag and touch pan (decision D2). Copy/cut/duplicate/delete/colour act on the whole selection — the clipboard and its marker carry an id list, and paste keeps the cards' relative layout. Dragging raises cards (`z`); Bring to Front / Send to Back renumber `z` (it may go negative).
 - `state.js` is the shared mutable app state. Because ES module bindings can't be reassigned by importers, anything that mutates at runtime (`view`, `cam`, `selectedId`, `drag`, …) lives as a field on the exported `state` object; collections mutated in place (`elMap`) are exported directly.
 - `main.js` is the entry point: boots, wires global keyboard/pointer handlers, and owns `openCanvas(id)` — the single navigation primitive that fetches, resets selection, and updates `location.hash`.
 - `cards.js` owns all DOM rendering for items. `render()` clears `#world` and re-renders everything; `refreshItem(it)` swaps a single card. Cards inside a column render as children of the column's DOM, not directly under `#world`.

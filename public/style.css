@@ -2724,3 +2724,21 @@ body.qn-open .toast {
   color: var(--ink-soft);
   font-size: 14px;
 }
+
+/* ---- Selection box + space-to-pan -------------------------------------- */
+.marquee {
+  position: absolute;
+  z-index: 50;
+  border: 1px solid var(--select);
+  background: color-mix(in srgb, var(--select) 10%, transparent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+#stage.space-pan,
+#stage.space-pan .item {
+  cursor: grab;
+}
+#stage.space-pan.panning,
+#stage.space-pan.panning .item {
+  cursor: grabbing;
+}

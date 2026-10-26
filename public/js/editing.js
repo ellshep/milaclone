@@ -10,15 +10,39 @@ import { reloadView } from './main.js';
 
 // Selection, inline-edit mode, debounced saves, and deletion.
 
-export function select(id) {
-  if (state.selectedId === id) return;
-  if (state.editingId && state.editingId !== id) exitEdit();
-  if (state.selectedId && elMap.get(state.selectedId)) elMap.get(state.selectedId).classList.remove('selected');
-  state.selectedId = id;
-  if (id && elMap.get(id)) elMap.get(id).classList.add('selected');
+function paintSelection() {
+  for (const [id, el] of elMap) el.classList.toggle('selected', state.selection.has(id));
+}
+
+// Replace the selection. `primary` (default: the last id) is what rename and
+// the board chrome act on.
+export function selectIds(ids, primary = ids[ids.length - 1] ?? null) {
+  if (state.editingId && !(ids.length === 1 && ids[0] === state.editingId)) exitEdit();
+  state.selection = new Set(ids);
+  state.selectedId = primary;
+  paintSelection();
   closePalette();
   closeCtx();
   updateSelectionChrome();
+}
+
+export function select(id) {
+  if (state.selectedId === id && state.selection.size === (id ? 1 : 0)) return;
+  selectIds(id ? [id] : []);
+}
+
+// Shift-click: add a card to the selection, or take it out.
+export function toggleSelect(id) {
+  const ids = [...state.selection];
+  if (state.selection.has(id)) selectIds(ids.filter(x => x !== id));
+  else selectIds([...ids, id]);
+}
+
+// Selected cards, minus any inside a column that is itself selected (the
+// column carries them along).
+export function selectedItems() {
+  const items = state.view.items.filter(i => state.selection.has(i.id));
+  return items.filter(i => !i.parentItemId || !state.selection.has(i.parentItemId));
 }
 
 export function deselect() {
@@ -120,32 +144,44 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', flushAllSaves);
 
-// Deleting moves the item to the server-side trash; Undo (toast or cmd+Z)
-// restores it with everything that was inside it.
+// Deleting moves items to the server-side trash; Undo (toast or cmd+Z)
+// restores them with everything that was inside them. Each undo entry is the
+// list of ids one delete action trashed.
 const trashed = [];
-export async function deleteItem(id) {
-  await flushSave(id); // keep last-second edits so Undo brings them back too
-  await api.remove(id);
-  trashed.push(id);
-  state.view.items = state.view.items.filter(x => x.parentItemId !== id && x.id !== id);
-  if (state.selectedId === id) state.selectedId = null;
+export async function deleteItems(ids) {
+  if (!ids.length) return;
+  await Promise.all(ids.map(id => flushSave(id))); // keep last-second edits so Undo brings them back too
+  await Promise.all(ids.map(id => api.remove(id)));
+  const entry = [...ids];
+  trashed.push(entry);
+  const gone = new Set(ids);
+  state.view.items = state.view.items.filter(x => !gone.has(x.id) && !gone.has(x.parentItemId));
+  state.selection = new Set([...state.selection].filter(id => !gone.has(id)));
+  if (gone.has(state.selectedId)) state.selectedId = [...state.selection].pop() ?? null;
   closeCtx();
   render();
   updateSelectionChrome();
-  toast('Moved to trash', { label: 'Undo', fn: () => undoDelete(id) });
+  const msg = ids.length === 1 ? 'Moved to trash' : `Moved ${ids.length} cards to trash`;
+  toast(msg, { label: 'Undo', fn: () => undoDelete(entry) });
 }
+export const deleteItem = id => deleteItems([id]);
+export const deleteSelection = () => deleteItems(selectedItems().map(i => i.id));
 
 // The Trash sheet restored or purged it: cmd+Z must not try again. No id = all.
 export function forgetUndo(id) {
   if (id === undefined) trashed.length = 0;
-  else if (trashed.includes(id)) trashed.splice(trashed.indexOf(id), 1);
+  for (const entry of trashed) if (entry.includes(id)) entry.splice(entry.indexOf(id), 1);
+  // an emptied entry would make the next cmd+Z a no-op (a stale toast Undo still finds nothing to do)
+  for (let i = trashed.length - 1; i >= 0; i--) if (!trashed[i].length) trashed.splice(i, 1);
 }
 
-export async function undoDelete(id = trashed[trashed.length - 1]) {
-  const i = trashed.indexOf(id);
-  if (i === -1) return; // already restored or purged from the Trash sheet
+export async function undoDelete(entry = trashed[trashed.length - 1]) {
+  const i = trashed.indexOf(entry);
+  if (i === -1) return; // already undone
   trashed.splice(i, 1);
-  if (await api.restore(id)) {
+  if (!entry.length) return; // everything in it was restored or purged from the Trash sheet
+  const restored = await Promise.all(entry.map(id => api.restore(id)));
+  if (restored.some(Boolean)) {
     await reloadView();
     toast('Restored');
   }

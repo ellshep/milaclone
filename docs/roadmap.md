@@ -87,16 +87,16 @@ Set up in the `chore/quality-gates` PR, at the user's request, so auto-merged ph
 
 ## P3 · Canvas mechanics
 
-- [ ] **F3.1 Multi-select and selection box** (L).
+- [x] **F3.1 Multi-select and selection box** (L).
   - A selection set replaces `state.selectedId`.
   - Left-drag on empty canvas draws a selection box. Shift-click toggles a card in or out of the selection.
   - Space-drag or middle-drag pans.
   - Acceptance (e2e): a selection box around three cards selects all three, and space-drag pans without selecting.
-- [ ] **F3.2 Group actions** (M).
+- [x] **F3.2 Group actions** (M).
   - Move, delete, copy, duplicate and colour every selected card. cmd+A selects all.
   - A group delete can be undone with a single toast Undo, which restores each item.
   - Acceptance (e2e): dragging two selected cards moves both. Deleting both and pressing Undo restores both.
-- [ ] **F3.4 Stacking order** (S).
+- [x] **F3.4 Stacking order** (S).
   - Each card gets a `z` value. Dragging a card raises it, and the menu has bring-to-front and send-to-back.
   - Acceptance: the order persists after a reload.
 - [ ] **F3.5 Grid snap and arrow-key nudge** (S).
