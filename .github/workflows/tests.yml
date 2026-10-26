@@ -71,31 +71,26 @@ jobs:
     name: E2E tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Microsoft's image ships the browsers and their system libraries, so the job
+    # no longer waits on apt (whose mirrors timed out this step repeatedly).
+    # Keep the tag in step with @playwright/test in package-lock.json.
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # The image has no compiler; better-sqlite3 ships prebuilt binaries, so
+      # skip the node-gyp rebuild npm would otherwise run for its binding.gyp.
+      - run: npm ci --ignore-scripts
 
-      # Browser binaries are cached per Playwright version; system deps always come from apt.
-      - name: Read Playwright version
-        id: pw
-        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        id: pw-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
-      - name: Install Playwright browsers
-        if: steps.pw-cache.outputs.cache-hit != 'true'
+      # A no-op when the image matches; fetches the right browsers (no apt) if a
+      # dependency bump got ahead of the image tag.
+      - name: Ensure Playwright browsers
         timeout-minutes: 8
-        run: npx playwright install --with-deps chromium webkit
-      - name: Install Playwright system deps
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        timeout-minutes: 8
-        run: npx playwright install-deps chromium webkit
+        run: npx playwright install chromium webkit
 
       - name: Run e2e tests
         run: npm run test:e2e
