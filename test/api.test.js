@@ -336,6 +336,9 @@ test('uploads: active content downloads instead of rendering on our origin', asy
   const encoded = await fetch(base + html.src.replace('/uploads/', '/%75ploads/'));
   assert.equal(encoded.status, 200);
   assert.equal(encoded.headers.get('content-disposition'), 'attachment');
+  // on a case-insensitive disk (macOS) a re-cased directory resolves to the same folder
+  const recased = await fetch(base + html.src.replace('/uploads/', '/%55ploads/'));
+  if (recased.status === 200) assert.equal(recased.headers.get('content-disposition'), 'attachment');
 
   const png = await upload('png', 'image/png', 'pic.png');
   const p = await fetch(base + png.src);

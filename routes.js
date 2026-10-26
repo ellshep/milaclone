@@ -39,13 +39,25 @@ const router = express.Router();
 // (HTML, SVG, XML, …) is forced to download instead of rendering. Only file types
 // that are inert as documents are shown inline. <img> ignores Content-Disposition,
 // so SVG images still display on the canvas.
-// This keys off the *resolved* file path that express.static hands to setHeaders,
-// not the request URL: an encoded URL (e.g. /%75ploads/x.html) can miss a route
-// mount yet still resolve to an upload through the generic public/ handler, so
-// server.js passes this same function to that handler too.
+// This keys off the file express.static actually resolved, not the request URL:
+// an encoded or re-cased URL (/%75ploads/x.html, /Uploads/… on a case-insensitive
+// disk) can miss the route mount yet still reach an upload through the generic
+// public/ handler, so server.js passes this same function to that handler too.
+// Whether a file is an upload is decided by directory identity (device + inode),
+// not by comparing path strings, so case folding, Unicode or symlinks can't dodge it.
 const INLINE_UPLOAD = /\.(png|jpe?g|gif|webp|avif|bmp|pdf|txt|csv|json)$/i;
+function isUpload(filePath) {
+  try {
+    const up = fs.statSync(UPLOAD_DIR);
+    for (let d = path.dirname(filePath), prev; d !== prev; prev = d, d = path.dirname(d)) {
+      const s = fs.statSync(d);
+      if (s.ino === up.ino && s.dev === up.dev) return true;
+    }
+    return false;
+  } catch (e) { return true; }   // can't tell: treat as untrusted
+}
 function setUploadHeaders(res, filePath) {
-  if (!path.resolve(filePath).startsWith(UPLOAD_DIR + path.sep)) return;
+  if (!isUpload(filePath)) return;
   res.set('X-Content-Type-Options', 'nosniff');
   if (!INLINE_UPLOAD.test(filePath)) res.set('Content-Disposition', 'attachment');
 }
