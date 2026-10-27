@@ -202,6 +202,12 @@ test('F2.6 audio files get a player and a matching icon', async ({ page }) => {
   await expect(card.locator('.ficon [data-lucide="file-audio"], .ficon svg.lucide-file-audio')).toHaveCount(1);
 });
 
+test('video files seek past 0 so Safari paints a thumbnail', async ({ page }) => {
+  await freshCanvas(page);
+  await page.setInputFiles('#uploadInput', { name: 'clip.mp4', mimeType: 'video/mp4', buffer: Buffer.from('ftyp') });
+  await expect(page.locator('#world > .item.type-file video')).toHaveAttribute('src', /^\/uploads\/.+\.mp4#t=0\.1$/);
+});
+
 // ---- review regressions ----------------------------------------------------
 
 test('clicking an image selects it without editing, so Delete removes it', async ({ page }) => {

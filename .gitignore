@@ -17,3 +17,9 @@ coverage/
 
 # esbuild output (server.js builds it at boot)
 public/vendor/
+
+# Local tooling and private notes
+.claude/
+.lavish/
+.impeccable/
+.private/

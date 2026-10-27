@@ -28,6 +28,9 @@ test('F6.2: typing #ff8800 into a new note makes a swatch that copies its hex', 
   const sw = page.locator('.item.type-swatch');
   await expect(sw.locator('.sw-hex')).toHaveValue('#ff8800');
   await expect(sw.locator('.sw-chip')).toHaveCSS('background-color', 'rgb(255, 136, 0)');
+  const chip = await sw.locator('.sw-chip').boundingBox();
+  expect(chip.width).toBeGreaterThan(0);
+  expect(chip.height).toBeCloseTo(chip.width, 0); // the colour shows as a square
 
   await sw.locator('.sw-chip').click();
   await expect(page.getByText('Copied #ff8800')).toBeVisible();

@@ -98,7 +98,7 @@ test suites.
 
 ## Area 1 — Text content elements (Card, Document, Link/rich media, Comments, Color swatch, rich-text editor)
 
-Milanote paths are relative to the extracted sources (`src/...`). milaclone paths are relative to `/Users/ellingtonshephard/code_projects/milaclone`.
+Milanote paths are relative to the extracted sources (`src/...`). milaclone paths are relative to the repo root.
 "Observed" = read in source. "Inferred" = deduced from file names / constants, not read in detail.
 
 Baseline fact for milaclone: every text field is a plain `<textarea>`/`<input>` built by `makeField` (`public/js/cards.js:46-54`). There is no rich-text editor, no contenteditable on the canvas, and no `paste`/`drop` handler anywhere in `public/js/` (grep: none). Item types: note, todo, link, image, file, comment, board, column (`public/js/cards.js:70-77`).
@@ -336,7 +336,7 @@ Legend: **Obs** = read in source, **Inf** = inferred (not directly confirmed). M
 ## 4 — Canvas & workspace interaction: Milanote 3.18.141 vs milaclone
 
 Sources: Milanote paths are under the extracted source maps (printed with `src.cjs`). milaclone refs are
-`/Users/ellingtonshephard/code_projects/milaclone/...` file:line. **[S]** = observed in source,
+`file:line` relative to the repo root. **[S]** = observed in source,
 **[I]** = inferred (from names, comments or general Milanote knowledge, not traced end to end).
 
 Background on milaclone: one global `keydown` handler (`public/js/main.js:34-52`), a single-selection model
@@ -486,7 +486,7 @@ Bindings below are from `shortcutModalUtils.tsx` [S].
 
 ## Area 5: Platform and cross-cutting features (Milanote 3.18.141 vs milaclone)
 
-Milanote paths are relative to the extracted sources (`node src.cjs <path>`). milaclone refs are `file:line` in `/Users/ellingtonshephard/code_projects/milaclone`.
+Milanote paths are relative to the extracted sources (`node src.cjs <path>`). milaclone refs are `file:line` in the repo root.
 **[obs]** means I read it in source. **[inf]** means I inferred it from file/constant names without reading the logic.
 
 ## Feature map
