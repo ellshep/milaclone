@@ -535,7 +535,7 @@ textarea {
   padding: 8px;
 }
 .swatch-card .sw-chip {
-  height: 84px;
+  aspect-ratio: 1;
   border-radius: 6px;
   box-shadow: inset 0 0 0 1px var(--card-border);
   cursor: copy;

@@ -162,7 +162,9 @@ test('a diagonal line is boxed by its stroke, and cmd+D never makes a hidden cop
   const id = await freshCanvas(page);
   await post(page, { canvasId: id, type: 'line', data: { from: { x: 200, y: 150 }, to: { x: 700, y: 550 } } });
   await page.reload();
-  const s = await page.locator('#lines .line-stroke').boundingBox();
+  const stroke = page.locator('#lines .line-stroke');
+  await expect(stroke).toBeVisible(); // boundingBox() doesn't wait for the line layer to draw
+  const s = await stroke.boundingBox();
   // A box in the empty lower-left corner of the line's bounding box: not selected.
   await page.mouse.move(s.x + 10, s.y + s.height - 60);
   await page.mouse.down();

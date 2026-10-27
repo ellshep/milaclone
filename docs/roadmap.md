@@ -1,6 +1,6 @@
 # milaclone roadmap
 
-The implementation plan for closing the gaps found in [`milanote-feature-map.md`](milanote-feature-map.md).
+The implementation plan for closing the gaps found in a feature comparison against Milanote (kept privately, not in this repo).
 Scope was agreed on 2026-10-26: **40 Do · 4 Later · 1 Drop** across P1–P7. P0, the quality gates, shipped before implementation started.
 
 Work through it top to bottom. Tick a box only when its acceptance check passes **as an automated test in CI** (unit/API in `test/`, UI in `e2e/`), unless the check says otherwise.
