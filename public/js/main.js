@@ -1,6 +1,6 @@
 'use strict';
 
-import { state, dom } from './state.js';
+import { state, dom, elMap } from './state.js';
 import { api } from './api.js';
 import { refreshIcons, toast, GRID, isTyping } from './util.js';
 import { loadCam, applyCam, initViewport, zoomBy, zoomToFit, resetZoom } from './viewport.js';
@@ -26,6 +26,7 @@ import { initCapture } from './capture.js';
 import { initLightbox } from './lightbox.js';
 import { initDocument } from './document.js';
 import { initLines } from './lines.js';
+import { initLabels, resetFilter } from './labels.js';
 import { initSearch, openSearch } from './search.js';
 import { initExport } from './export.js';
 
@@ -48,12 +49,14 @@ export async function openCanvas(id, { replace = false } = {}) {
   // The URL moved to another board meanwhile (its hashchange event is still
   // queued): that navigation wins, so don't overwrite its hash with ours.
   if (location.hash !== hashAtStart && location.hash.slice(1) !== id) return;
+  const prevId = state.view.canvas?.id;
   state.view = view;
   if (state.view.error) {
     if (id !== state.rootCanvasId) return openCanvas(state.rootCanvasId, { replace: true });
     toast('Board not found');
     return;
   }
+  if (prevId !== id) resetFilter(); // a filter belongs to its board
   state.cam = loadCam(id);
   selectIds([]);
   state.editingId = null;
@@ -164,7 +167,12 @@ document.addEventListener('keydown', e => {
   }
   if (mod && e.key.toLowerCase() === 'a') {
     e.preventDefault();
-    selectIds(state.view.items.filter(i => !i.parentItemId).map(i => i.id));
+    // Not the cards a label filter has dimmed or hidden: Delete must only hit what you see.
+    selectIds(
+      state.view.items
+        .filter(i => !i.parentItemId && !elMap.get(i.id)?.classList.contains('filtered-out'))
+        .map(i => i.id)
+    );
     return;
   }
   const map = { n: 'note', l: 'link', t: 'todo', b: 'board', c: 'column', m: 'comment' };
@@ -224,6 +232,7 @@ initCapture();
 initLightbox();
 initDocument();
 initLines();
+initLabels();
 initSearch();
 initExport();
 

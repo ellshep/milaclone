@@ -24,10 +24,11 @@ import {
   wordLabel,
   tableText,
   clampIndents,
+  labelColor,
   dueInfo,
   daysUntil,
 } from '../../public/js/util.js';
-import { dom } from '../../public/js/state.js';
+import { dom, COLORS } from '../../public/js/state.js';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -35,6 +36,13 @@ afterEach(() => {
 });
 
 describe('util', () => {
+  it('labelColor gives a stable palette colour per name, case-insensitively', () => {
+    expect(labelColor('Urgent')).toBe(labelColor('urgent'));
+    expect(COLORS).toContain(labelColor('anything at all'));
+    const seen = new Set(['a', 'b', 'c', 'design', 'bug', 'later', 'idea', 'q3'].map(labelColor));
+    expect(seen.size).toBeGreaterThan(2);
+  });
+
   it('clampIndents keeps nesting at most one level under the task above', () => {
     const t = [{ indent: 1 }, { indent: 0 }, { indent: 3 }, { indent: 2 }, {}];
     const changed = clampIndents(t);

@@ -282,3 +282,11 @@ export function clampIndents(tasks, max = 4) {
   }
   return changed;
 }
+
+// A label's colour comes from its name, so the same label looks the same on
+// every card and board without a label registry.
+export function labelColor(name) {
+  let h = 0;
+  for (const ch of String(name).toLowerCase()) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  return COLORS[h % COLORS.length];
+}

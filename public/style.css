@@ -3056,6 +3056,7 @@ body.qn-open .toast {
 #trashDialog,
 #shortcutsDialog,
 #templateDialog,
+#labelDialog,
 #searchDialog {
   background: var(--rail-bg);
   width: min(440px, calc(100vw - 32px));
@@ -3070,6 +3071,7 @@ body.qn-open .toast {
 #trashDialog[open],
 #shortcutsDialog[open],
 #templateDialog[open],
+#labelDialog[open],
 #searchDialog[open] {
   display: flex;
   flex-direction: column;
@@ -3077,6 +3079,7 @@ body.qn-open .toast {
 #trashDialog::backdrop,
 #shortcutsDialog::backdrop,
 #templateDialog::backdrop,
+#labelDialog::backdrop,
 #searchDialog::backdrop {
   background: rgba(28, 30, 38, 0.25);
 }
@@ -3406,7 +3409,8 @@ body.qn-open .toast {
 }
 
 /* ---- Export menu -------------------------------------------------------- */
-#exportMenu {
+#exportMenu,
+#filterMenu {
   position: fixed;
   z-index: 70;
   display: flex;
@@ -3418,7 +3422,8 @@ body.qn-open .toast {
   border-radius: 10px;
   box-shadow: var(--card-shadow-hover);
 }
-#exportMenu[hidden] {
+#exportMenu[hidden],
+#filterMenu[hidden] {
   display: none;
 }
 #exportMenu a {
@@ -3457,4 +3462,77 @@ body.qn-open .toast {
 }
 #templateList .tpl-pick:hover {
   background: var(--hover);
+}
+
+/* ---------- labels (labels.js) ---------- */
+.card-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.col-head .card-labels {
+  margin: 0;
+}
+.label-chip {
+  padding: 1px 7px;
+  border-radius: 9px;
+  color: #fff;
+  font: 600 11px var(--sans);
+  white-space: nowrap;
+}
+.label-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+.item.filtered-out {
+  opacity: 0.18;
+}
+body.filter-hide .item.filtered-out {
+  display: none;
+}
+#filterBtn.on {
+  color: var(--accent);
+  font-weight: 600;
+}
+#filterMenu {
+  max-width: 300px;
+}
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.filter-row:hover {
+  background: var(--hover);
+}
+.filter-mode {
+  margin-top: 4px;
+  border-top: 1px solid var(--rail-border);
+  border-radius: 0;
+  color: var(--ink-soft);
+}
+.filter-empty {
+  margin: 6px 10px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+#labelList {
+  padding: 6px;
+  overflow: auto;
+}
+#labelNew {
+  margin: 6px 12px 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--ink);
+  font: 14px var(--sans);
 }

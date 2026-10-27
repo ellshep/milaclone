@@ -30,6 +30,7 @@ import { openLightbox } from './lightbox.js';
 import { updateMobileChrome } from './mobile.js';
 import { openDocument } from './document.js';
 import { drawLines } from './lines.js';
+import { labelChips, applyFilter } from './labels.js';
 
 // Rendering of the canvas and every card type. This module owns the DOM for
 // items; other modules ask it to (re)render when data changes.
@@ -52,7 +53,7 @@ export function render() {
     dom.world.appendChild(el);
     elMap.set(it.id, el);
   }
-  drawLines();
+  applyFilter(); // and redraws the lines, whose ends may have just hidden
   dom.hint.style.display = state.view.items.length ? 'none' : 'block';
   refreshIcons(dom.world);
 }
@@ -156,6 +157,9 @@ export function renderItem(it) {
   else if (it.type === 'document') buildDocument(el, it);
   else if (it.type === 'sketch') buildSketch(el, it);
   else if (it.type === 'shortcut') buildShortcut(el, it);
+
+  const chips = labelChips(it);
+  if (chips) (el.querySelector('.col-head') || el).appendChild(chips);
 
   // Boards use the rail / mobile footer for color·icon·rename·delete.
   // Other cards keep the floating properties badge.
@@ -921,4 +925,5 @@ export function refreshItem(it) {
     }
   }
   if (it.type === 'board' && it.id === state.selectedId) updateSelectionChrome();
+  applyFilter(); // after elMap holds the fresh column children
 }

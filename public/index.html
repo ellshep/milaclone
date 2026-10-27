@@ -45,6 +45,7 @@
         <button type="button" class="top-phone" id="trashBtn" aria-label="Trash" title="Trash" aria-haspopup="dialog">
           <i data-lucide="trash-2"></i>
         </button>
+        <button type="button" class="ghost" id="filterBtn" aria-haspopup="menu" aria-expanded="false">Filter</button>
         <button type="button" class="ghost" id="exportBtn" aria-haspopup="menu" aria-expanded="false">Export</button>
         <div class="zoomwrap">
           <button id="zoomOut" title="Zoom out">−</button>
@@ -418,6 +419,17 @@
         <dt>Esc</dt>
         <dd>Deselect, close menus</dd>
       </dl>
+    </dialog>
+
+    <div id="filterMenu" hidden></div>
+
+    <dialog id="labelDialog" aria-labelledby="labelTitle">
+      <form method="dialog" class="trash-head">
+        <h2 id="labelTitle">Labels</h2>
+        <button class="top-phone" aria-label="Close"><i data-lucide="x"></i></button>
+      </form>
+      <div id="labelList"></div>
+      <input id="labelNew" placeholder="New label — press Return" maxlength="40" aria-label="New label" />
     </dialog>
 
     <div id="exportMenu" role="menu" hidden>
