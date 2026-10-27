@@ -91,6 +91,17 @@ html,
 body {
   height: 100%;
   margin: 0;
+  overscroll-behavior: none; /* no pull-to-refresh or rubber-band, in the browser or the home-screen app */
+}
+/* A long press on a card is the app's, not iOS's link/image callout; fields keep theirs. */
+#stage,
+.item {
+  -webkit-touch-callout: none;
+}
+.item input,
+.item textarea,
+.item [contenteditable='true'] {
+  -webkit-touch-callout: default;
 }
 body {
   font-family: var(--sans);

@@ -29,7 +29,7 @@ pads `env(safe-area-inset-*)`. There is an in-app back button (`#mBack`). A
 failed write toasts "Could not save — check your connection" (`api.js`
 `write`).
 
-- [ ] **U2.1 Manifest and icons.**
+- [x] **U2.1 Manifest and icons.**
   - `public/manifest.webmanifest`:
     - `name`/`short_name` "Mila", `display: standalone`, `start_url: "/"`.
     - `background_color` and `theme_color` from the `:root` tokens.
@@ -45,7 +45,7 @@ failed write toasts "Could not save — check your connection" (`api.js`
   - `Dockerfile` needs no change, because it copies all of `public/`.
   - Acceptance: Playwright fetches the manifest. The test checks the fields
     and that every listed icon returns 200 with an image content type.
-- [ ] **U2.2 Network-first service worker.**
+- [x] **U2.2 Network-first service worker.**
   - `public/sw.js`:
     - Same-origin `GET`s go to the network first, which updates the cache.
     - When the network fails, they fall back to the cached copy.
@@ -70,6 +70,8 @@ failed write toasts "Could not save — check your connection" (`api.js`
     2. Check the icon and name.
     3. Check the notch and home bar.
     4. Turn on Airplane mode and confirm it still opens.
+  - The Playwright part has landed (`e2e/mobile-board.spec.js`). The box stays
+    open until the iPhone checks are done.
 
 Out of scope: offline editing, Web Share Target (iOS doesn't support it) and
 push notifications.
