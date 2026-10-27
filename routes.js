@@ -105,11 +105,6 @@ function setUploadHeaders(res, filePath) {
   if (!INLINE_UPLOAD.test(filePath)) res.set('Content-Disposition', 'attachment');
 }
 router.use('/uploads', express.static(UPLOAD_DIR, { setHeaders: setUploadHeaders }));
-// The service worker is re-checked on every launch so an update lands right away.
-router.get('/sw.js', (req, res) => {
-  res.set('Cache-Control', 'no-cache');
-  res.sendFile(path.join(__dirname, 'public', 'sw.js'));
-});
 
 // Three-way merge of a todo's task array. `base` is the list the client last got
 // from the server, `mine` its edited copy, `server` what is stored now (another

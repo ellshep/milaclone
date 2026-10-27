@@ -23,6 +23,11 @@ const app = express();
 // it applies the same upload safety headers to anything it resolves in there.
 const routes = require('./routes');
 app.use(routes);
+// The service worker is re-checked on every launch so an update lands right away.
+app.get('/sw.js', (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'sw.js'));
+});
 app.use(express.static(path.join(__dirname, 'public'), { setHeaders: routes.setUploadHeaders }));
 
 app.listen(PORT, HOST, () => {
