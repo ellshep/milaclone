@@ -804,9 +804,25 @@ test('a compressed JSON body is refused, not inflated', async () => {
   assert.equal(r.status, 415);
 });
 
+// server.js itself (not the mirror above) owns /sw.js, so boot the real server for this one.
 test('U2.2 the service worker is served no-cache so updates land on the next launch', async () => {
-  const r = await fetch(base + '/sw.js');
-  assert.equal(r.status, 200);
-  assert.equal(r.headers.get('cache-control'), 'no-cache');
-  assert.match(r.headers.get('content-type'), /javascript/);
+  const { spawn } = require('child_process');
+  const port = 40000 + Math.floor(Math.random() * 20000);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-sw-'));
+  const srv = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
+    env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dir },
+    stdio: 'ignore',
+  });
+  try {
+    let r;
+    for (let i = 0; i < 100 && !r; i++) {
+      r = await fetch(`http://127.0.0.1:${port}/sw.js`).catch(() => new Promise(ok => setTimeout(ok, 100)));
+    }
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('cache-control'), 'no-cache');
+    assert.match(r.headers.get('content-type'), /javascript/);
+  } finally {
+    srv.kill();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
