@@ -4,7 +4,7 @@ A self-hosted, Milanote-style visual board for notes, tasks, links, images and
 nested boards. It's a small Node.js app, and everything lives in one SQLite
 file you own.
 
-![A board with a column, notes joined by lines, a nested to-do list, colour swatches, a table and a sketch](docs/screenshots/board-light.png)
+![A board with a column, notes joined by lines, a nested to-do list, colour swatches, a table, a document, a video and an audio clip](docs/screenshots/board-light.png)
 
 ## Features
 
