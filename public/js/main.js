@@ -24,6 +24,7 @@ import { initQuickNotes, isQuickNotesOpen } from './quicknotes.js';
 import { initTrash } from './trash.js';
 import { initCapture } from './capture.js';
 import { initLightbox } from './lightbox.js';
+import { initDocument } from './document.js';
 import { initSearch, openSearch } from './search.js';
 import { initExport } from './export.js';
 
@@ -186,7 +187,9 @@ document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible' || !state.view.canvas) return;
   try {
     await flushAllSaves(false);
-    if (!state.editingId && !state.drag && !isQuickNotesOpen()) await reloadView();
+    if (!state.editingId && !state.drag && !isQuickNotesOpen() && !document.querySelector('dialog[open]')) {
+      await reloadView();
+    }
   } catch {
     /* offline: the next focus or navigation tries again */
   }
@@ -214,6 +217,7 @@ initTools();
 initTrash();
 initCapture();
 initLightbox();
+initDocument();
 initSearch();
 initExport();
 

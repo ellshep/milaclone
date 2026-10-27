@@ -110,6 +110,19 @@ test('patch item moves and updates color', async () => {
   assert.equal((await send('PATCH', '/api/item/badid', { x: 1 })).status, 404);
 });
 
+test('PATCH turns a note into a swatch, and no other type change', async () => {
+  const canvasId = await root();
+  const note = (await send('POST', '/api/item', { canvasId, type: 'note', data: { body: '#ff8800' } })).body;
+  const sw = (await send('PATCH', '/api/item/' + note.id, { type: 'swatch', data: { hex: '#ff8800' } })).body;
+  assert.equal(sw.type, 'swatch');
+  const stored = (await get('/api/canvas/' + canvasId)).body.items.find(i => i.id === note.id);
+  assert.equal(stored.type, 'swatch');
+  assert.equal(stored.data.hex, '#ff8800');
+  const todo = (await send('POST', '/api/item', { canvasId, type: 'todo' })).body;
+  assert.equal((await send('PATCH', '/api/item/' + todo.id, { type: 'swatch' })).body.type, 'todo');
+  assert.equal((await send('PATCH', '/api/item/' + sw.id, { type: 'note' })).body.type, 'swatch');
+});
+
 test('board item creates + syncs a child canvas', async () => {
   const canvasId = await root();
   const board = (

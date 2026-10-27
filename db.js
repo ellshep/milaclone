@@ -69,7 +69,8 @@ const stmt = {
   childCount: db.prepare(`SELECT COUNT(*) AS c FROM items WHERE canvasId = ? AND parentItemId IS NULL AND ${LIVE}`),
   insertItem: db.prepare(`INSERT INTO items (id, canvasId, parentItemId, type, x, y, w, h, z, color, data, createdAt)
                           VALUES (@id, @canvasId, @parentItemId, @type, @x, @y, @w, @h, @z, @color, @data, @createdAt)`),
-  updateItem: db.prepare(`UPDATE items SET canvasId=@canvasId, parentItemId=@parentItemId, x=@x, y=@y, w=@w, h=@h,
+  updateItem:
+    db.prepare(`UPDATE items SET canvasId=@canvasId, parentItemId=@parentItemId, type=@type, x=@x, y=@y, w=@w, h=@h,
                           z=@z, color=@color, data=@data WHERE id=@id`),
   trashItem: db.prepare(`UPDATE items SET trashedBy = ?, trashedAt = ? WHERE id = ?`),
   restoreItems: db.prepare(`UPDATE items SET trashedBy = NULL, trashedAt = NULL WHERE trashedBy = ?`),

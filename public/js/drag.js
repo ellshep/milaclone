@@ -16,8 +16,8 @@ export function onItemPointerDown(e, it, el) {
     e.stopPropagation();
     return;
   }
+  e.stopPropagation(); // else the stage starts a selection box, which ends the edit
   if (el.classList.contains('editing') && e.target.closest('[data-edit]')) return;
-  e.stopPropagation();
   if (e.shiftKey) {
     // Shift-click would also extend the page's text selection, and a text
     // selection makes cmd+C copy that text instead of the cards.
