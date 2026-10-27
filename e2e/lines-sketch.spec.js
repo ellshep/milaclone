@@ -83,8 +83,8 @@ test('F6.1: a line between two cards follows a card when it moves, and survives 
   await expect(page.locator('#lines .line-label')).toHaveText('depends on');
   await expect(page.locator('#lines .line-head')).toHaveCount(2);
   await expect(page.locator('#lines .line-stroke')).toHaveAttribute('stroke-dasharray', '7 6');
-  const after = await stroke(page);
-  expect(after[3] - before[3]).toBeGreaterThan(150);
+  // Poll: the line is redrawn as the cards settle (fonts, layout) after the reload.
+  await expect.poll(async () => (await stroke(page))[3] - before[3]).toBeGreaterThan(150);
 
   // Trashing an attached card hides the line; Undo brings both back.
   await cardB.click({ button: 'right' });
@@ -162,9 +162,9 @@ test('a diagonal line is boxed by its stroke, and cmd+D never makes a hidden cop
   const id = await freshCanvas(page);
   await post(page, { canvasId: id, type: 'line', data: { from: { x: 200, y: 150 }, to: { x: 700, y: 550 } } });
   await page.reload();
-  const stroke = page.locator('#lines .line-stroke');
-  await expect(stroke).toBeVisible(); // boundingBox() doesn't wait for the line layer to draw
-  const s = await stroke.boundingBox();
+  // boundingBox() doesn't wait, and the line layer may redraw (replacing the stroke) mid-read.
+  let s;
+  await expect.poll(async () => (s = await page.locator('#lines .line-stroke').boundingBox())).not.toBeNull();
   // A box in the empty lower-left corner of the line's bounding box: not selected.
   await page.mouse.move(s.x + 10, s.y + s.height - 60);
   await page.mouse.down();

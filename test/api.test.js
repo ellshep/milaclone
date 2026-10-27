@@ -803,3 +803,10 @@ test('a compressed JSON body is refused, not inflated', async () => {
   });
   assert.equal(r.status, 415);
 });
+
+test('U2.2 the service worker is served no-cache so updates land on the next launch', async () => {
+  const r = await fetch(base + '/sw.js');
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('cache-control'), 'no-cache');
+  assert.match(r.headers.get('content-type'), /javascript/);
+});

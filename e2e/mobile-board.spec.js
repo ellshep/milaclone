@@ -102,3 +102,27 @@ test('board selection footer offers color icon rename and delete', async ({ page
   await page.locator('#mBoardSheet [data-act="delete"]').tap();
   await expect(page.locator('.item.type-board')).toHaveCount(0);
 });
+
+test('U2.3 no rubber-band or pull-to-refresh, and no iOS callout on cards (fields keep it)', async ({ page }) => {
+  const canvasId = await freshCanvas(page);
+  await page.evaluate(
+    canvasId =>
+      fetch('/api/item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canvasId, type: 'board', x: 40, y: 160, data: { title: 'Callout' } }),
+      }),
+    canvasId
+  );
+  await page.goto('/#' + canvasId);
+  await expect(page.locator('.item.type-board')).toBeVisible();
+  expect(await page.locator('html').evaluate(el => getComputedStyle(el).overscrollBehaviorY)).toBe('none');
+  expect(await page.locator('body').evaluate(el => getComputedStyle(el).overscrollBehaviorY)).toBe('none');
+  // -webkit-touch-callout exists only in iOS WebKit (desktop builds drop it from the CSSOM),
+  // so check the shipped rules; the computed value is part of the iPhone check.
+  const sheet = (await (await page.request.get('/style.css')).text()).replace(/\s+/g, ' ');
+  expect(sheet).toContain('#stage, .item { -webkit-touch-callout: none; }');
+  expect(sheet).toContain(
+    ".item input, .item textarea, .item [contenteditable='true'] { -webkit-touch-callout: default; }"
+  );
+});
