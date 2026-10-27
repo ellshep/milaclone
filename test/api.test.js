@@ -733,3 +733,64 @@ test('lines travel with their cards: trashed, restored, purged, and copied only 
   const left = (await get('/api/canvas/' + c)).body.items.map(i => i.id);
   assert.ok(!left.includes(line.id));
 });
+
+test('F7.5 a shortcut carries its target board, and reads as broken once that board is trashed', async () => {
+  const canvasId = await root();
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Target' } })).body;
+  const sc = (
+    await send('POST', '/api/item', { canvasId, type: 'shortcut', data: { targetCanvasId: board.data.childCanvasId } })
+  ).body;
+  const target = async () => (await get('/api/canvas/' + canvasId)).body.items.find(i => i.id === sc.id)._target;
+  assert.equal((await target()).title, 'Target');
+  await send('DELETE', '/api/item/' + board.id);
+  assert.equal(await target(), null);
+  await send('POST', `/api/item/${board.id}/restore`);
+  assert.equal((await target()).title, 'Target');
+});
+
+test('F7.6 a template copy is deep: editing it leaves the template unchanged', async () => {
+  const canvasId = await root();
+  const tpl = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Weekly review' } })).body;
+  const note = (
+    await send('POST', '/api/item', { canvasId: tpl.data.childCanvasId, type: 'note', data: { body: 'Wins' } })
+  ).body;
+  const copy = (await send('POST', `/api/item/${tpl.id}/copy`, { canvasId, x: 0, y: 0 })).body;
+  assert.notEqual(copy.data.childCanvasId, tpl.data.childCanvasId);
+  const [copied] = (await get('/api/canvas/' + copy.data.childCanvasId)).body.items;
+  assert.notEqual(copied.id, note.id);
+  assert.equal(copied.data.text, 'Wins');
+  await send('PATCH', '/api/item/' + copied.id, { data: { body: 'Wins and lessons' } });
+  await send('PATCH', '/api/canvas/' + copy.data.childCanvasId, { title: 'Week 43' });
+  const [orig] = (await get('/api/canvas/' + tpl.data.childCanvasId)).body.items;
+  assert.equal(orig.data.text, 'Wins');
+  assert.equal((await get('/api/canvas/' + tpl.data.childCanvasId)).body.canvas.title, 'Weekly review');
+});
+
+test('F7.5 shortcuts need a live target, are titled in Trash, and follow a copied board', async () => {
+  const canvasId = await root();
+  assert.equal((await send('POST', '/api/item', { canvasId, type: 'shortcut', data: {} })).status, 400);
+  assert.equal(
+    (await send('POST', '/api/item', { canvasId, type: 'shortcut', data: { targetCanvasId: 'c_nope' } })).status,
+    400
+  );
+  // A board holding a nested board plus a shortcut to it: the copy's shortcut opens the copy's board.
+  const outer = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Outer' } })).body;
+  const inner = (
+    await send('POST', '/api/item', { canvasId: outer.data.childCanvasId, type: 'board', data: { title: 'Inner' } })
+  ).body;
+  const sc = (
+    await send('POST', '/api/item', {
+      canvasId: outer.data.childCanvasId,
+      type: 'shortcut',
+      data: { targetCanvasId: inner.data.childCanvasId },
+    })
+  ).body;
+  const copy = (await send('POST', `/api/item/${outer.id}/copy`, { canvasId, x: 0, y: 0 })).body;
+  const copied = (await get('/api/canvas/' + copy.data.childCanvasId)).body.items;
+  const copiedInner = copied.find(i => i.type === 'board');
+  assert.equal(copied.find(i => i.type === 'shortcut').data.targetCanvasId, copiedInner.data.childCanvasId);
+
+  await send('DELETE', '/api/item/' + sc.id);
+  const entry = (await get('/api/trash')).body.items.find(t => t.id === sc.id);
+  assert.equal(entry.title, 'Shortcut to Inner');
+});

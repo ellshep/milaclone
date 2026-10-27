@@ -4,7 +4,8 @@ import { state, dom, elMap } from './state.js';
 import { api } from './api.js';
 import { lucideEl, refreshIcons } from './util.js';
 import { applyCam } from './viewport.js';
-import { selectIds } from './editing.js';
+import { selectIds, saveData } from './editing.js';
+import { refreshItem } from './cards.js';
 import { openCanvas } from './main.js';
 
 // Global search (cmd+K / the topbar button): a <dialog> listing boards and cards
@@ -66,6 +67,10 @@ async function go(r) {
   if (!it) return;
   // A card inside a column is shown by centring its column.
   const at = (it.parentItemId && state.view.items.find(i => i.id === it.parentItemId)) || it;
+  if (at !== it && at.data.collapsed) {
+    saveData(at, { collapsed: false }); // never select a card nobody can see
+    refreshItem(at);
+  }
   const card = elMap.get(at.id);
   const s = dom.stage.getBoundingClientRect();
   state.cam.x = s.width / 2 - (at.x + (card?.offsetWidth || 0) / 2) * state.cam.scale;

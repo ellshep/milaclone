@@ -239,6 +239,8 @@ function copyItemDeep(itemId, canvasId, x, y) {
     if (!isRoot && strandedLine(r, map)) return;
     const data = r.data ? JSON.parse(r.data) : {};
     if (data.childCanvasId) data.childCanvasId = map.get(data.childCanvasId);
+    // A shortcut to a board copied alongside it opens the copy, not the original.
+    if (map.has(data.targetCanvasId)) data.targetCanvasId = map.get(data.targetCanvasId);
     for (const end of [data.from, data.to]) if (end && map.has(end.id)) end.id = map.get(end.id);
     stmt.insertItem.run({
       ...r,

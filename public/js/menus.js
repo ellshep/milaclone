@@ -2,8 +2,8 @@
 
 import { state, dom, elMap, COLORS, BOARD_ICONS } from './state.js';
 import { api } from './api.js';
-import { colorVar, lucideEl, refreshIcons, isLocked, zRange } from './util.js';
-import { refreshItem } from './cards.js';
+import { colorVar, lucideEl, refreshIcons, isLocked, zRange, toast } from './util.js';
+import { refreshItem, render } from './cards.js';
 import { select, renameSelected, deleteSelection, selectedItems } from './editing.js';
 import { copySelected, pasteClipboard, duplicateSelected, toggleLock } from './clipboard.js';
 import { setLine, editLabel } from './lines.js';
@@ -125,8 +125,11 @@ export function openCtx(e, it) {
                 { label: 'Send to Back', fn: () => restack(it, 'back') },
                 { sep: true },
               ]),
-          ...(many ? [] : [{ label: 'Rename', hint: 'Return', fn: () => renameSelected() }]),
+          ...(many || !elMap.get(it.id)?.querySelector('[data-edit]')
+            ? []
+            : [{ label: 'Rename', hint: 'Return', fn: () => renameSelected() }]),
           { label: locked ? 'Unlock Position' : 'Lock Position', fn: () => toggleLock() },
+          ...(it.type === 'board' && !many ? [{ label: 'Create Shortcut', fn: () => createShortcut(it) }] : []),
           ...(it.type === 'image'
             ? [
                 {
@@ -196,4 +199,22 @@ function toggleTransparent(it) {
 export function closeCtx() {
   dom.ctxmenu.classList.remove('open');
   dom.ctxmenu.innerHTML = '';
+}
+
+// F7.5: an alias card for `board`, placed beside it; cut/paste it to any board.
+async function createShortcut(board) {
+  const it = await api.create({
+    canvasId: state.view.canvas.id,
+    type: 'shortcut',
+    x: board.x + 180,
+    y: board.y,
+    w: 152,
+    data: { targetCanvasId: board.data.childCanvasId },
+  });
+  if (!it || it.error) return;
+  it._target = { title: board._childTitle, color: board._childColor, icon: board._childIcon };
+  state.view.items.push(it);
+  render();
+  select(it.id);
+  toast('Shortcut made — cut and paste it onto any board');
 }

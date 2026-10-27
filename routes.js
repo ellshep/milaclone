@@ -177,6 +177,13 @@ router.get('/api/canvas/:id', (req, res) => {
         _childIcon: child ? child.icon || 'layout-grid' : 'layout-grid',
       });
     }
+    // A shortcut shows its target board, or null once that board is trashed.
+    if (it.type === 'shortcut') {
+      const t = it.data && stmt.getCanvas.get(it.data.targetCanvasId);
+      return Object.assign({}, it, {
+        _target: t ? { title: t.title, color: t.color, icon: t.icon || 'layout-grid' } : null,
+      });
+    }
     return it;
   });
   res.json({ canvas, items, breadcrumb: breadcrumb(canvas.id) });
@@ -199,6 +206,9 @@ router.post('/api/item', (req, res) => {
   if (!stmt.getCanvas.get(b.canvasId)) return res.status(400).json({ error: 'bad canvasId' });
   if (badParent(b.parentItemId, b.canvasId, null, b.type || 'note')) {
     return res.status(400).json({ error: 'bad parentItemId' });
+  }
+  if (b.type === 'shortcut' && !stmt.getCanvas.get(b.data && b.data.targetCanvasId)) {
+    return res.status(400).json({ error: 'bad targetCanvasId' });
   }
 
   const item = {
@@ -522,9 +532,10 @@ router.get('/api/backup', async (req, res) => {
 // ---- Trash -----------------------------------------------------------------
 // One entry per delete (the item the user deleted, not everything inside it).
 const trashTitle = (row, data) => {
-  if (row.type === 'board') {
-    const c = data.childCanvasId && stmt.anyCanvas.get(data.childCanvasId);
-    return (c && c.title) || 'Board';
+  if (row.type === 'board' || row.type === 'shortcut') {
+    const cid = row.type === 'board' ? data.childCanvasId : data.targetCanvasId;
+    const c = cid && stmt.anyCanvas.get(cid);
+    return (row.type === 'shortcut' ? 'Shortcut to ' : '') + ((c && c.title) || 'Board');
   }
   const t = data.title || data.name || data.body || data.text || data.url || '';
   return String(t).split('\n')[0].trim().slice(0, 80);

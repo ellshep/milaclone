@@ -8,6 +8,7 @@ import { createAt, defaultsFor } from './create.js';
 import { deselect, selectIds } from './editing.js';
 import { elMap } from './state.js';
 import { startLine } from './lines.js';
+import { pickTemplate } from './templates.js';
 
 // Toolbar arming, canvas panning + placing new cards, and file/image uploads.
 
@@ -16,7 +17,8 @@ export function arm(tool, btn) {
   state.armed = tool;
   dom.stage.classList.add('armed');
   btn.classList.add('armed');
-  toast(tool === 'line' ? 'Drag from a card or point to another' : 'Tap the canvas to place your ' + tool);
+  const hint = { line: 'Drag from a card or point to another', template: 'Tap where the copy should go' };
+  toast(hint[tool] || 'Tap the canvas to place your ' + tool);
 }
 
 export function disarm() {
@@ -115,6 +117,7 @@ export function initTools() {
       const t = state.armed;
       disarm();
       if (t === 'line') return e.button === 0 && startLine(e);
+      if (t === 'template') return pickTemplate(w);
       if (t === 'image') {
         state.pendingImageWorld = w;
         dom.fileInput.click();

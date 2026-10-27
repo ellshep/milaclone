@@ -1086,6 +1086,34 @@ textarea {
   margin-top: 3px;
 }
 
+.shortcut .tile {
+  position: relative;
+}
+.shortcut .sc-badge {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--card-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.board.shortcut .sc-badge svg {
+  width: 12px;
+  height: 12px;
+  color: var(--ink);
+}
+.shortcut.broken .tile svg {
+  color: var(--ink-soft);
+}
+.shortcut.broken .btitle {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+
 /* ---------- column ---------- */
 .column {
   background: var(--column-bg);
@@ -1112,6 +1140,46 @@ textarea {
   border: none;
   background: none;
   width: 100%;
+}
+.column .col-count {
+  flex: none;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--hover);
+  color: var(--ink-soft);
+  font: 600 11.5px var(--sans);
+  text-align: center;
+}
+.column .col-fold {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.column .col-fold:hover {
+  background: var(--hover);
+}
+.column .col-fold svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.15s;
+}
+.column.collapsed .col-fold svg {
+  transform: rotate(-90deg);
+}
+.column.collapsed .col-head {
+  margin-bottom: 0;
+}
+.column.collapsed .col-body {
+  display: none;
 }
 .column .col-body {
   display: flex;
@@ -2987,6 +3055,7 @@ body.qn-open .toast {
 /* ---- Trash sheet ------------------------------------------------------- */
 #trashDialog,
 #shortcutsDialog,
+#templateDialog,
 #searchDialog {
   background: var(--rail-bg);
   width: min(440px, calc(100vw - 32px));
@@ -3000,12 +3069,14 @@ body.qn-open .toast {
 }
 #trashDialog[open],
 #shortcutsDialog[open],
+#templateDialog[open],
 #searchDialog[open] {
   display: flex;
   flex-direction: column;
 }
 #trashDialog::backdrop,
 #shortcutsDialog::backdrop,
+#templateDialog::backdrop,
 #searchDialog::backdrop {
   background: rgba(28, 30, 38, 0.25);
 }
@@ -3365,4 +3436,25 @@ body.qn-open .toast {
   font: inherit;
   color: inherit;
   cursor: pointer;
+}
+
+#templateList {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow: auto;
+}
+#templateList .tpl-pick {
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: 600 14px var(--serif);
+  text-align: left;
+  cursor: pointer;
+}
+#templateList .tpl-pick:hover {
+  background: var(--hover);
 }
