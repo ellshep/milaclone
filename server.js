@@ -19,7 +19,6 @@ require('esbuild').buildSync({
 });
 
 const app = express();
-app.use(express.json({ limit: '5mb' }));
 // The generic handler can also reach public/uploads (e.g. via an encoded URL), so
 // it applies the same upload safety headers to anything it resolves in there.
 const routes = require('./routes');

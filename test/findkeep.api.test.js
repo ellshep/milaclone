@@ -18,7 +18,6 @@ const routes = require('../routes');
 const { importFile, parseMd } = require('../scripts/import-milanote-md.js');
 
 const app = express();
-app.use(express.json());
 app.use(routes);
 let base, server;
 test.before(async () => {
