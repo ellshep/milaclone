@@ -24,6 +24,19 @@ export function defaultsFor(type) {
       return { w: 220, data: {} };
     case 'file':
       return { w: 220, data: {} };
+    case 'table':
+      return {
+        w: 360,
+        data: {
+          rows: [
+            ['', '', ''],
+            ['', '', ''],
+          ],
+          text: '',
+        },
+      };
+    case 'document':
+      return { w: 220, data: { title: '' } };
     default:
       return { w: 240, data: {} };
   }
@@ -33,6 +46,7 @@ export async function createAt(type, wx, wy) {
   const d = defaultsFor(type);
   const body = Object.assign({ canvasId: state.view.canvas.id, type, x: Math.round(wx), y: Math.round(wy) }, d);
   const it = await api.create(body);
+  it._fresh = true; // editing.js: a new note typed as a hex code becomes a swatch
   state.view.items.push(it);
   render();
   select(it.id);

@@ -10,20 +10,27 @@ import { saveData } from './editing.js';
 
 let bundle = null;
 
+// The editor module, or null (after a toast) if it can't be fetched.
+export async function loadEditor() {
+  bundle ||= import('/vendor/editor.js');
+  try {
+    return await bundle;
+  } catch {
+    bundle = null; // let the next edit retry
+    toast('Could not load the editor — check your connection');
+    return null;
+  }
+}
+
 export async function startRich(field, it) {
   // Editable at once, inside the user's tap, so a phone opens its keyboard; the
   // editor takes over the focus when it mounts.
   // ponytail: keys typed while the bundle is first loading are dropped.
   field.contentEditable = 'true';
   field.onfocus = () => field.editor && field.editor.commands.focus(); // callers focus [data-edit]
-  bundle ||= import('/vendor/editor.js');
-  let mod;
-  try {
-    mod = await bundle;
-  } catch {
-    bundle = null; // let the next edit retry
+  const mod = await loadEditor();
+  if (!mod) {
     field.contentEditable = 'false';
-    toast('Could not load the editor — check your connection');
     return;
   }
   // The edit may have ended (or the card re-rendered) while the bundle loaded.

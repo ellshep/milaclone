@@ -2,7 +2,7 @@
 
 import { state, dom } from './state.js';
 import { api } from './api.js';
-import { imageSize, isUrl, toast, clipMarker, parseClipMarker, isTyping } from './util.js';
+import { imageSize, isUrl, toast, clipMarker, parseClipMarker, isTyping, hexColor } from './util.js';
 import { screenToWorld } from './viewport.js';
 import { render } from './cards.js';
 import { select, selectedItems } from './editing.js';
@@ -73,9 +73,12 @@ export async function addText(text, at = pointerWorld()) {
   if (!t) return null;
   const x = Math.round(at.x - 120);
   const y = Math.round(at.y - 40);
+  const hex = hexColor(t);
   const it = isUrl(t)
     ? await insert({ type: 'link', x, y, w: 240, color: 'blue', data: { url: t, title: '' } })
-    : await insert({ type: 'note', x, y, w: 240, data: { title: '', body: t } });
+    : hex
+      ? await insert({ type: 'swatch', x, y, w: 140, data: { hex, text: hex } })
+      : await insert({ type: 'note', x, y, w: 240, data: { title: '', body: t } });
   if (!it) return null;
   render();
   select(it.id);

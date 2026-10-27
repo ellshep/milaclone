@@ -2,7 +2,7 @@
 
 import { state, elMap } from './state.js';
 import { api } from './api.js';
-import { toast } from './util.js';
+import { toast, hexColor } from './util.js';
 import { render, renderCrumbs, refreshItem } from './cards.js';
 import { closePalette, closeCtx } from './menus.js';
 import { updateSelectionChrome } from './boardchrome.js';
@@ -66,8 +66,8 @@ export function enterEdit(el) {
 export function exitEdit() {
   if (!state.editingId) return;
   const el = elMap.get(state.editingId);
+  const it = state.view.items.find(i => i.id === state.editingId);
   if (el) {
-    const it = state.view.items.find(i => i.id === state.editingId);
     el.querySelectorAll('[data-rich]').forEach(f => stopRich(f, it));
     el.classList.remove('editing');
     el.querySelectorAll('[data-edit]').forEach(f => {
@@ -77,6 +77,24 @@ export function exitEdit() {
     });
   }
   state.editingId = null;
+  // A new note that holds nothing but a hex code becomes a colour swatch (only a
+  // new one: an existing note reading '#decade' or '#c0ffee' stays a note).
+  const hex = it && it._fresh && it.type === 'note' && hexColor(it.data.text);
+  if (it) delete it._fresh;
+  if (hex) {
+    // One PATCH carries any queued body edit too, so a later flush can't undo the hex.
+    const p = pending.get(it.id);
+    pending.delete(it.id);
+    clearTimeout(saveTimers.get(it.id));
+    it.type = 'swatch';
+    Object.assign(it.data, { hex, text: hex });
+    refreshItem(it);
+    api.patch(it.id, { type: 'swatch', data: { ...p?.patch, hex, text: hex } }).then(saved => {
+      if (saved) return;
+      it.type = 'note'; // the server still has a note
+      refreshItem(it);
+    });
+  }
 }
 
 export function renameSelected() {

@@ -19,6 +19,10 @@ import {
   docToDom,
   isTyping,
   isEmptyDoc,
+  hexColor,
+  wordCount,
+  wordLabel,
+  tableText,
 } from '../../public/js/util.js';
 import { dom } from '../../public/js/state.js';
 
@@ -28,6 +32,30 @@ afterEach(() => {
 });
 
 describe('util', () => {
+  it('hexColor accepts #rgb / #rrggbb only and normalises them', () => {
+    expect(hexColor('#FF8800')).toBe('#ff8800');
+    expect(hexColor(' #f80 ')).toBe('#ff8800');
+    for (const bad of ['ff8800', '#ff88', '#ggg', '#ff8800 hi', '', null]) expect(hexColor(bad)).toBe(null);
+  });
+
+  it('wordCount counts whitespace-separated words', () => {
+    expect(wordCount('')).toBe(0);
+    expect(wordCount(undefined)).toBe(0);
+    expect(wordCount('  one two\nthree  ')).toBe(3);
+    expect(wordLabel('one')).toBe('1 word');
+    expect(wordLabel('')).toBe('0 words');
+  });
+
+  it('tableText joins cells with | and rows with newlines', () => {
+    expect(
+      tableText([
+        [' a ', 'b'],
+        ['', 'd'],
+      ])
+    ).toBe('a | b\n | d');
+    expect(tableText(undefined)).toBe('');
+  });
+
   it('colorVar maps known colours and falls back to slate', () => {
     expect(colorVar('blue')).toBe('var(--c-blue)');
     expect(colorVar('nope')).toBe('var(--c-slate)');

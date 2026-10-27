@@ -104,6 +104,14 @@
           <i data-lucide="message-circle"></i>
           Comment
         </button>
+        <button class="tool" data-tool="table" title="Table">
+          <i data-lucide="table"></i>
+          Table
+        </button>
+        <button class="tool" data-tool="document" title="Document">
+          <i data-lucide="file-text"></i>
+          Document
+        </button>
         <div class="rail-sep"></div>
         <button class="tool" data-tool="image" title="Image">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -332,6 +340,15 @@
       <footer class="trash-foot">
         <button type="button" class="trash-empty" id="trashEmpty">Empty trash</button>
       </footer>
+    </dialog>
+
+    <dialog id="docDialog" aria-label="Document">
+      <header class="doc-bar">
+        <input class="doc-title" placeholder="Untitled document" aria-label="Document title" />
+        <span class="doc-count"></span>
+        <button type="button" class="top-phone doc-close" aria-label="Close"><i data-lucide="x"></i></button>
+      </header>
+      <div class="doc-body rich"></div>
     </dialog>
 
     <dialog id="shortcutsDialog" aria-labelledby="shortcutsTitle">

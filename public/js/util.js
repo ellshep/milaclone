@@ -214,3 +214,20 @@ export function parseClipMarker(text) {
   const m = new RegExp(`^${CLIP}([\\w-]+(?:,[\\w-]+)*):(copy|cut)$`).exec(String(text || '').trim());
   return m ? { ids: m[1].split(','), cut: m[2] === 'cut' } : null;
 }
+
+// '#ff8800' / '#F80' → '#ff8800'; anything else → null.
+export function hexColor(s) {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(s || '').trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? [...m[1]].map(c => c + c).join('') : m[1];
+  return '#' + h.toLowerCase();
+}
+
+export const wordCount = s => (String(s || '').match(/\S+/g) || []).length;
+export const wordLabel = s => {
+  const n = wordCount(s);
+  return `${n} word${n === 1 ? '' : 's'}`;
+};
+
+// A table's cells as plain text, one row per line, for search and export.
+export const tableText = rows => (rows || []).map(r => r.map(c => String(c || '').trim()).join(' | ')).join('\n');

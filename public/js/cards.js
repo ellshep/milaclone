@@ -13,6 +13,10 @@ import {
   fileIcon,
   docToDom,
   isEmptyDoc,
+  hexColor,
+  tableText,
+  wordLabel,
+  toast,
 } from './util.js';
 import { select, enterEdit, exitEdit, saveData, deleteItem, trackTasks } from './editing.js';
 import { openPalette, openCtx } from './menus.js';
@@ -22,6 +26,7 @@ import { openCanvas } from './main.js';
 import { api } from './api.js';
 import { openLightbox } from './lightbox.js';
 import { updateMobileChrome } from './mobile.js';
+import { openDocument } from './document.js';
 
 // Rendering of the canvas and every card type. This module owns the DOM for
 // items; other modules ask it to (re)render when data changes.
@@ -141,6 +146,9 @@ export function renderItem(it) {
   else if (it.type === 'comment') buildComment(el, it);
   else if (it.type === 'board') buildBoard(el, it);
   else if (it.type === 'column') buildColumn(el, it);
+  else if (it.type === 'swatch') buildSwatch(el, it);
+  else if (it.type === 'table') buildTable(el, it);
+  else if (it.type === 'document') buildDocument(el, it);
 
   // Boards use the rail / mobile footer for color·icon·rename·delete.
   // Other cards keep the floating properties badge.
@@ -465,6 +473,142 @@ function bindBoardOpen(el, it) {
     lastTap = now;
     lastX = e.clientX;
     lastY = e.clientY;
+  });
+}
+
+// A colour chip plus its hex; clicking the chip copies the hex.
+function buildSwatch(el, it) {
+  el.classList.add('swatch-card');
+  let color = hexColor(it.data.hex) || '#888888'; // never raw CSS from the API (e.g. url())
+  const chip = document.createElement('div');
+  chip.className = 'sw-chip';
+  chip.style.background = color;
+  chip.title = 'Copy ' + color;
+  chip.setAttribute('data-nodrag', ''); // a click copies; the card drags by its label
+  chip.addEventListener('click', () => {
+    (navigator.clipboard ? navigator.clipboard.writeText(color) : Promise.reject()).then(
+      () => toast('Copied ' + color),
+      () => toast('Could not copy')
+    );
+  });
+  const hex = makeField('input', 'sw-hex', color, '#000000');
+  hex.addEventListener('change', () => {
+    const h = hexColor(hex.value);
+    hex.value = h || color; // an invalid code reverts
+    if (!h) return;
+    color = h;
+    saveData(it, { hex: h, text: h });
+    chip.style.background = h;
+    chip.title = 'Copy ' + h;
+  });
+  el.appendChild(chip);
+  el.appendChild(hex);
+}
+
+// Plain-text cells. Tab walks the cells (they're ordinary inputs); the bar adds
+// or removes a row/column at the last focused cell.
+function buildTable(el, it) {
+  el.classList.add('table');
+  // Rows from the API may be ragged: pad every row to the widest.
+  const src = Array.isArray(it.data.rows) && it.data.rows.length ? it.data.rows : [['']];
+  const width = Math.max(1, ...src.map(r => (Array.isArray(r) ? r.length : 0)));
+  const rows = src.map(r => Array.from({ length: width }, (_, i) => String((Array.isArray(r) && r[i]) ?? '')));
+  const save = () => saveData(it, { rows, text: tableText(rows) });
+  let at = [0, 0];
+  const grid = document.createElement('table');
+  grid.className = 'tgrid';
+  const draw = focus => {
+    grid.replaceChildren();
+    rows.forEach((r, ri) => {
+      const tr = grid.insertRow();
+      r.forEach((c, ci) => {
+        const f = makeField('input', 'tcell', c, '');
+        if (el.classList.contains('editing')) {
+          f.readOnly = false;
+          f.tabIndex = 0;
+        }
+        f.addEventListener('focus', () => (at = [ri, ci]));
+        f.addEventListener('input', () => {
+          r[ci] = f.value;
+          save();
+        });
+        tr.insertCell().appendChild(f);
+      });
+    });
+    if (focus) grid.rows[focus[0]]?.cells[focus[1]]?.firstChild.focus();
+  };
+  draw();
+  el.appendChild(grid);
+  const bar = document.createElement('div');
+  bar.className = 'tbar';
+  bar.setAttribute('data-nodrag', '');
+  const op = (label, title, fn) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.title = title;
+    b.onclick = e => {
+      e.stopPropagation();
+      fn();
+      save();
+      enterEdit(el);
+      draw(at);
+    };
+    bar.appendChild(b);
+  };
+  op('+ Row', 'Add a row below', () => {
+    rows.splice(
+      at[0] + 1,
+      0,
+      rows[0].map(() => '')
+    );
+    at = [at[0] + 1, at[1]];
+  });
+  op('+ Column', 'Add a column to the right', () => {
+    rows.forEach(r => r.splice(at[1] + 1, 0, ''));
+    at = [at[0], at[1] + 1];
+  });
+  op('− Row', 'Remove this row', () => {
+    if (rows.length > 1) rows.splice(at[0], 1);
+    at = [Math.min(at[0], rows.length - 1), at[1]];
+  });
+  op('− Column', 'Remove this column', () => {
+    if (rows[0].length > 1) rows.forEach(r => r.splice(at[1], 1));
+    at = [at[0], Math.min(at[1], rows[0].length - 1)];
+  });
+  el.appendChild(bar);
+}
+
+// A long-form card: the canvas shows title, snippet and word count; double-click
+// (or Open) edits it full screen in document.js.
+function buildDocument(el, it) {
+  el.classList.add('document');
+  const head = document.createElement('div');
+  head.className = 'doc-head';
+  head.appendChild(lucideEl('file-text'));
+  const title = makeField('input', 'dtitle', it.data.title, 'Untitled document');
+  title.addEventListener('input', () => saveData(it, { title: title.value }));
+  head.appendChild(title);
+  el.appendChild(head);
+  const snip = document.createElement('div');
+  snip.className = 'dsnip';
+  snip.textContent = String(it.data.text || '').slice(0, 280);
+  el.appendChild(snip);
+  const foot = document.createElement('div');
+  foot.className = 'dfoot';
+  foot.textContent = wordLabel(it.data.text);
+  const open = document.createElement('button');
+  open.className = 'dopen';
+  open.setAttribute('data-nodrag', '');
+  open.textContent = 'Open';
+  open.onclick = e => {
+    e.stopPropagation();
+    openDocument(it);
+  };
+  foot.appendChild(open);
+  el.appendChild(foot);
+  el.addEventListener('dblclick', e => {
+    if (el.classList.contains('editing') && e.target.closest('[data-edit]')) return;
+    openDocument(it);
   });
 }
 

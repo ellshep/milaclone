@@ -179,3 +179,18 @@ test('F5.3 the backup is a valid SQLite file that opens and contains the items',
     []
   ); // the temp snapshot is removed after sending
 });
+
+test('P6a swatch, table and document cards export as text and are searchable', async () => {
+  const board = await post({ canvasId: await root(), type: 'board', data: { title: 'Elements' } });
+  const c = board.data.childCanvasId;
+  await post({ canvasId: c, type: 'swatch', x: 0, y: 0, data: { hex: '#ff8800', text: '#ff8800' } });
+  await post({ canvasId: c, type: 'table', x: 300, y: 0, data: { rows: [['a', 'b']], text: 'a | b' } });
+  await post({ canvasId: c, type: 'document', x: 0, y: 300, data: { title: 'Essay', text: 'quokka words here' } });
+  await post({ canvasId: c, type: 'document', x: 300, y: 300, data: {} });
+  const md = await (await fetch(base + `/api/canvas/${c}/export.md`)).text();
+  assert.match(md, /^## #ff8800$/m);
+  assert.match(md, /^## a \| b$/m);
+  assert.match(md, /^## Essay\nquokka words here$/m);
+  assert.match(md, /^## Document$/m);
+  assert.equal((await search('quokka'))[0].title, 'quokka words here');
+});

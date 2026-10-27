@@ -255,6 +255,8 @@ router.patch('/api/item/:id', (req, res) => {
     if (b[k] != null) it[k] = Math.round(b[k]);
   }
   if (b.color !== undefined) it.color = b.color;
+  // The one type change: a note whose text is a hex colour becomes a swatch.
+  if (b.type === 'swatch' && it.type === 'note') it.type = 'swatch';
   if (b.parentItemId !== undefined) it.parentItemId = b.parentItemId;
   if (b.canvasId && stmt.getCanvas.get(b.canvasId)) it.canvasId = b.canvasId;
   // Checked only when the parent or canvas changes, so an old row with an odd
@@ -303,6 +305,7 @@ router.patch('/api/item/:id', (req, res) => {
       id: it.id,
       canvasId: it.canvasId,
       parentItemId: it.parentItemId ?? null,
+      type: it.type,
       x: it.x,
       y: it.y,
       w: it.w,
@@ -336,6 +339,7 @@ router.patch('/api/items', (req, res) => {
         id: it.id,
         canvasId: it.canvasId,
         parentItemId: it.parentItemId ?? null,
+        type: it.type,
         x: it.x,
         y: it.y,
         w: it.w,
