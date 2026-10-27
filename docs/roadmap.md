@@ -168,13 +168,13 @@ Set up in the `chore/quality-gates` PR, at the user's request, so auto-merged ph
 
 ## P7 · Organisation
 
-- [ ] **F7.1 Nested tasks** (S).
+- [x] **F7.1 Nested tasks** (S).
   - Each task gets an indent level, changed with tab and shift+tab. It works with `mergeTasks`.
   - Acceptance: the merge keeps the indent level when both sides have edited the list.
-- [ ] **F7.2 Drag to reorder tasks** (S).
+- [x] **F7.2 Drag to reorder tasks** (S).
   - Within a to-do card.
   - Acceptance (e2e): the new order persists.
-- [ ] **F7.3 Due dates and tags on canvas cards** (S).
+- [x] **F7.3 Due dates and tags on canvas cards** (S).
   - Show the Quick notes `due` and `tags` fields on to-do cards.
   - Acceptance (e2e): a due date set in Quick notes shows on the canvas card.
 - [ ] **F7.4 Collapsible columns with counts** (S).

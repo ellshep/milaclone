@@ -231,3 +231,54 @@ export const wordLabel = s => {
 
 // A table's cells as plain text, one row per line, for search and export.
 export const tableText = rows => (rows || []).map(r => r.map(c => String(c || '').trim()).join(' | ')).join('\n');
+
+// ---- Due dates (Quick notes sets them; the canvas to-do card shows them) ----
+const DAY = 86400000;
+const parseISO = s => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+};
+export function daysUntil(iso) {
+  const d = parseISO(iso);
+  if (!d) return null;
+  const now = new Date();
+  return Math.round((d - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / DAY);
+}
+function relDays(n) {
+  if (n === 0) return 'due today';
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  const abs = Math.abs(n);
+  if (abs < 7) return rtf.format(n, 'day');
+  if (abs < 30) return rtf.format(Math.round(n / 7), 'week');
+  return rtf.format(Math.round(n / 30), 'month');
+}
+export function dueInfo(iso) {
+  const n = daysUntil(iso);
+  if (n === null) return null;
+  const short = parseISO(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const near = n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : n === -1 ? 'Yesterday' : null;
+  return {
+    label: near || short,
+    full: near || 'Due ' + short,
+    sub: relDays(n),
+    color: n <= 0 ? 'var(--qn-due)' : 'var(--qn-muted)',
+    n,
+  };
+}
+
+// Keep a task list's nesting valid after an indent change, reorder or delete:
+// the first task is top-level and none sits more than one level under the one
+// above. Mutates in place; returns the tasks whose indent changed.
+export function clampIndents(tasks, max = 4) {
+  const changed = [];
+  let prev = -1;
+  for (const t of tasks) {
+    const want = Math.max(0, Math.min(max, prev + 1, t.indent || 0));
+    if (want !== (t.indent || 0)) {
+      t.indent = want;
+      changed.push(t);
+    }
+    prev = want;
+  }
+  return changed;
+}

@@ -23,6 +23,9 @@ import {
   wordCount,
   wordLabel,
   tableText,
+  clampIndents,
+  dueInfo,
+  daysUntil,
 } from '../../public/js/util.js';
 import { dom } from '../../public/js/state.js';
 
@@ -32,6 +35,31 @@ afterEach(() => {
 });
 
 describe('util', () => {
+  it('clampIndents keeps nesting at most one level under the task above', () => {
+    const t = [{ indent: 1 }, { indent: 0 }, { indent: 3 }, { indent: 2 }, {}];
+    const changed = clampIndents(t);
+    expect(t.map(x => x.indent || 0)).toEqual([0, 0, 1, 2, 0]);
+    expect(changed).toHaveLength(2);
+    expect(clampIndents([{ indent: 9 }, { indent: 9 }], 1).length).toBe(2);
+  });
+
+  it('dueInfo / daysUntil read local YYYY-MM-DD dates', () => {
+    const d = new Date();
+    const iso = n => {
+      const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+      return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+    };
+    expect(daysUntil(iso(0))).toBe(0);
+    expect(daysUntil(iso(-3))).toBe(-3);
+    expect(daysUntil('nope')).toBe(null);
+    expect(dueInfo(null)).toBe(null);
+    expect(dueInfo(iso(0))).toMatchObject({ label: 'Today', n: 0 });
+    expect(dueInfo(iso(1)).label).toBe('Tomorrow');
+    expect(dueInfo(iso(-1)).label).toBe('Yesterday');
+    expect(dueInfo(iso(10)).full).toMatch(/^Due /);
+    expect(dueInfo(iso(-40)).sub).toMatch(/month/);
+  });
+
   it('hexColor accepts #rgb / #rrggbb only and normalises them', () => {
     expect(hexColor('#FF8800')).toBe('#ff8800');
     expect(hexColor(' #f80 ')).toBe('#ff8800');

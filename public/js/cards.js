@@ -17,6 +17,8 @@ import {
   tableText,
   wordLabel,
   toast,
+  dueInfo,
+  clampIndents,
 } from './util.js';
 import { select, enterEdit, exitEdit, saveData, deleteItem, trackTasks } from './editing.js';
 import { openPalette, openCtx } from './menus.js';
@@ -241,6 +243,8 @@ function buildComment(el, it) {
   el.appendChild(richField('cbody', it, 'Add a comment…'));
 }
 
+const MAX_INDENT = 4;
+
 function buildTodo(el, it) {
   el.classList.add('todo');
   trackTasks(it);
@@ -251,11 +255,25 @@ function buildTodo(el, it) {
   list.className = 'tasks';
   el.appendChild(list);
   const tasks = it.data.tasks || [];
+  // Rows are keyed by id (reorder): give any missing or duplicated one a fresh id.
+  const seen = new Set();
+  for (const t of tasks) {
+    if (!t.id || seen.has(t.id)) t.id = rid();
+    seen.add(t.id);
+  }
   const renderTasks = () => {
     list.innerHTML = '';
     tasks.forEach(task => {
       const row = document.createElement('div');
       row.className = 'task' + (task.done ? ' done' : '');
+      row.dataset.tid = task.id;
+      row.style.setProperty('--indent', task.indent || 0);
+      const grip = document.createElement('span'); // lucide swaps the <i>, so the listener sits on a wrapper
+      grip.className = 'grip';
+      grip.title = 'Drag to reorder';
+      grip.appendChild(lucideEl('grip-vertical'));
+      grip.setAttribute('data-nodrag', '');
+      grip.addEventListener('pointerdown', e => reorderTask(e, row));
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.checked = !!task.done;
@@ -281,9 +299,23 @@ function buildTodo(el, it) {
           enterEdit(el);
           list.querySelectorAll('.txt')[tasks.indexOf(ni)].focus();
         }
+        if (e.key === 'Tab') {
+          // Nest under the task above (one level deeper at most), or back out.
+          e.preventDefault();
+          const before = tasks.map(t => t.indent || 0);
+          task.indent = Math.max(0, (task.indent || 0) + (e.shiftKey ? -1 : 1));
+          clampIndents(tasks, MAX_INDENT); // also pulls up the tasks under an outdented one
+          if (tasks.every((t, i) => (t.indent || 0) === before[i])) return;
+          for (const r of list.children) {
+            const t = tasks.find(x => x.id === r.dataset.tid);
+            if (t) r.style.setProperty('--indent', t.indent || 0);
+          }
+          saveData(it, { tasks });
+        }
         if (e.key === 'Backspace' && tx.value === '' && tasks.length > 1) {
           e.preventDefault();
           tasks.splice(tasks.indexOf(task), 1);
+          clampIndents(tasks, MAX_INDENT);
           saveData(it, { tasks });
           renderTasks();
         }
@@ -295,15 +327,76 @@ function buildTodo(el, it) {
       del.onclick = e => {
         e.stopPropagation();
         tasks.splice(tasks.indexOf(task), 1);
+        clampIndents(tasks, MAX_INDENT);
         saveData(it, { tasks });
         renderTasks();
       };
+      // Quick notes' due date and tags, read-only here.
+      const body = document.createElement('div');
+      body.className = 'tbody';
+      body.appendChild(tx);
+      const due = dueInfo(task.due);
+      if (due || (task.tags && task.tags.length)) {
+        const meta = document.createElement('div');
+        meta.className = 'tmeta';
+        if (due) {
+          const d = document.createElement('span');
+          d.className = 'tdue';
+          d.textContent = due.label;
+          d.title = due.full + ' (' + due.sub + ')';
+          d.classList.toggle('overdue', due.n <= 0 && !task.done);
+          meta.appendChild(d);
+        }
+        for (const tag of task.tags || []) {
+          const t = document.createElement('span');
+          t.className = 'ttag';
+          t.textContent = '#' + tag;
+          meta.appendChild(t);
+        }
+        body.appendChild(meta);
+      }
+      row.appendChild(grip);
       row.appendChild(cb);
-      row.appendChild(tx);
+      row.appendChild(body);
       row.appendChild(del);
       list.appendChild(row);
       requestAnimationFrame(() => autoGrow(tx));
     });
+    refreshIcons(list);
+  };
+  // Drag a task by its grip; the list's DOM order becomes the new order on release.
+  // Listens on document: moving the row in the DOM would drop a pointer capture.
+  const reorderTask = (e, row) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    row.classList.add('dragging');
+    const move = ev => {
+      const next = [...list.children].find(r => {
+        if (r === row) return false;
+        const b = r.getBoundingClientRect();
+        return ev.clientY < b.top + b.height / 2;
+      });
+      if (next !== row.nextSibling) list.insertBefore(row, next || null);
+    };
+    const up = ev => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      document.removeEventListener('pointercancel', up);
+      row.classList.remove('dragging');
+      // A rebuilt card (merged save from another device) owns the list now, and
+      // an interrupted gesture puts the rows back: neither saves.
+      if (!list.isConnected) return;
+      const order = [...list.children].map(r => r.dataset.tid);
+      if (ev.type === 'pointercancel' || order.every((id, i) => tasks[i].id === id)) return renderTasks();
+      tasks.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+      clampIndents(tasks, MAX_INDENT);
+      saveData(it, { tasks });
+      renderTasks();
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    document.addEventListener('pointercancel', up);
   };
   renderTasks();
   const add = document.createElement('button');
