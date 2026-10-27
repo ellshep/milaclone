@@ -23,7 +23,6 @@ const PNG = Buffer.from(
 );
 
 const app = express();
-app.use(express.json());
 app.get('/fixture.png', (req, res) => res.type('png').send(PNG));
 app.get('/fixture.txt', (req, res) => res.type('text').send('not an image'));
 app.use(routes);

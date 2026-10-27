@@ -71,6 +71,9 @@ const ALLOWED_UPLOAD = mime =>
   mime === 'application/json';
 
 const router = express.Router();
+// No client sends compressed bodies, so refuse them (415) rather than inflate:
+// the gzip path is where body-parser < 1.20.9 can be stalled (GHSA-27r3-jxmh-p828).
+router.use(express.json({ limit: '5mb', inflate: false }));
 
 // Uploads are served from the app's own origin, so anything a browser could run
 // (HTML, SVG, XML, …) is forced to download instead of rendering. Only file types

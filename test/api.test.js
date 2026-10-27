@@ -15,7 +15,6 @@ process.env.DATA_DIR = TMP;
 
 const express = require('express');
 const app = express();
-app.use(express.json());
 const routes = require('../routes');
 app.use(routes);
 // mirror server.js: the generic static handler sits behind the routes
@@ -793,4 +792,14 @@ test('F7.5 shortcuts need a live target, are titled in Trash, and follow a copie
   await send('DELETE', '/api/item/' + sc.id);
   const entry = (await get('/api/trash')).body.items.find(t => t.id === sc.id);
   assert.equal(entry.title, 'Shortcut to Inner');
+});
+
+test('a compressed JSON body is refused, not inflated', async () => {
+  const body = require('zlib').gzipSync(JSON.stringify({ canvasId: await root(), type: 'note' }));
+  const r = await fetch(base + '/api/item', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' },
+    body,
+  });
+  assert.equal(r.status, 415);
 });
