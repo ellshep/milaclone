@@ -148,14 +148,14 @@ Set up in the `chore/quality-gates` PR, at the user's request, so auto-merged ph
 
 ## P6 · New elements
 
-- [ ] **F6.1 Lines** (L, D7).
+- [x] **F6.1 Lines** (L, D7).
   - An SVG layer. Each end of a line attaches to a card or sits at a free point.
   - Lines support arrowheads, a dashed style, colour and a label. They are straight only.
   - Acceptance (e2e): a line between two cards follows a card when it moves, and survives a reload.
 - [x] **F6.2 Colour swatch** (S).
   - A card showing a hex colour, which copies it when clicked. Typing a hex code into a new card creates a swatch.
   - Acceptance: typing `#ff8800` creates a swatch.
-- [ ] **F6.3 Sketch** (M).
+- [x] **F6.3 Sketch** (M).
   - A freehand pen in 4 sizes with the palette colours, plus an eraser. Strokes are stored as SVG paths.
   - Acceptance (e2e): a drawn stroke persists after a reload.
 - [x] **F6.4 Document** (M).

@@ -18,7 +18,10 @@ import { reloadView } from './main.js';
 // known to have landed (it can't on plain-http LAN, where navigator.clipboard is
 // missing) cmd+V pastes these cards rather than whatever text the clipboard holds.
 export function copySelected(cut, viaEvent = false) {
-  const ids = selectedItems().map(i => i.id);
+  // ponytail: a line copies with its cards (db.js), not alone — a lone copy would sit on the original
+  const ids = selectedItems()
+    .filter(i => i.type !== 'line')
+    .map(i => i.id);
   if (!ids.length) return;
   const clip = { ids, cut: !!cut, unsynced: !viaEvent };
   state.clipboard = clip;
@@ -68,7 +71,7 @@ export async function pasteClipboard(wx, wy) {
 }
 
 export async function duplicateSelected() {
-  const items = selectedItems();
+  const items = selectedItems().filter(i => i.type !== 'line');
   if (!items.length) return;
   // A card inside a column is duplicated onto the canvas next to its column.
   const first = items[0];

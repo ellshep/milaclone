@@ -25,6 +25,7 @@ import { initTrash } from './trash.js';
 import { initCapture } from './capture.js';
 import { initLightbox } from './lightbox.js';
 import { initDocument } from './document.js';
+import { initLines } from './lines.js';
 import { initSearch, openSearch } from './search.js';
 import { initExport } from './export.js';
 
@@ -218,6 +219,7 @@ initTrash();
 initCapture();
 initLightbox();
 initDocument();
+initLines();
 initSearch();
 initExport();
 

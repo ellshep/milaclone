@@ -35,6 +35,8 @@ export function defaultsFor(type) {
           text: '',
         },
       };
+    case 'sketch':
+      return { w: 320, data: { strokes: [] } };
     case 'document':
       return { w: 220, data: { title: '' } };
     default:

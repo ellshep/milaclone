@@ -7,6 +7,7 @@ import { screenToWorld, applyCam } from './viewport.js';
 import { createAt, defaultsFor } from './create.js';
 import { deselect, selectIds } from './editing.js';
 import { elMap } from './state.js';
+import { startLine } from './lines.js';
 
 // Toolbar arming, canvas panning + placing new cards, and file/image uploads.
 
@@ -15,13 +16,26 @@ export function arm(tool, btn) {
   state.armed = tool;
   dom.stage.classList.add('armed');
   btn.classList.add('armed');
-  toast('Tap the canvas to place your ' + tool);
+  toast(tool === 'line' ? 'Drag from a card or point to another' : 'Tap the canvas to place your ' + tool);
 }
 
 export function disarm() {
   state.armed = null;
   dom.stage.classList.remove('armed');
   document.querySelectorAll('.tool.armed, .mtool.armed').forEach(b => b.classList.remove('armed'));
+}
+
+// A line is boxed by its stroke, not its bounding box (a long diagonal's box is
+// mostly empty canvas): screen points sampled along it, or null for a card.
+function linePoints(el) {
+  const ln = el instanceof SVGElement && el.querySelector('.line-stroke');
+  if (!ln) return null;
+  const m = ln.getScreenCTM();
+  const [a, b] = [
+    ['x1', 'y1'],
+    ['x2', 'y2'],
+  ].map(([x, y]) => new DOMPoint(+ln.getAttribute(x), +ln.getAttribute(y)).matrixTransform(m));
+  return Array.from({ length: 17 }, (_, i) => ({ x: a.x + ((b.x - a.x) * i) / 16, y: a.y + ((b.y - a.y) * i) / 16 }));
 }
 
 // Selection box: every free card it touches is selected (shift adds to the
@@ -37,7 +51,7 @@ function startMarquee(e) {
   const sr = dom.stage.getBoundingClientRect();
   const cards = state.view.items
     .filter(i => !i.parentItemId && elMap.get(i.id))
-    .map(i => ({ id: i.id, r: elMap.get(i.id).getBoundingClientRect() }));
+    .map(i => ({ id: i.id, r: elMap.get(i.id).getBoundingClientRect(), pts: linePoints(elMap.get(i.id)) }));
   const sx = e.clientX,
     sy = e.clientY;
   let moved = false;
@@ -56,7 +70,13 @@ function startMarquee(e) {
       width: r - l + 'px',
       height: b - t + 'px',
     });
-    const hit = cards.filter(c => c.r.left < r && c.r.right > l && c.r.top < b && c.r.bottom > t).map(c => c.id);
+    const hit = cards
+      .filter(c =>
+        c.pts
+          ? c.pts.some(p => p.x > l && p.x < r && p.y > t && p.y < b)
+          : c.r.left < r && c.r.right > l && c.r.top < b && c.r.bottom > t
+      )
+      .map(c => c.id);
     const key = hit.join(',');
     if (key !== lastHit) {
       lastHit = key;
@@ -94,6 +114,7 @@ export function initTools() {
       const w = screenToWorld(e.clientX, e.clientY);
       const t = state.armed;
       disarm();
+      if (t === 'line') return e.button === 0 && startLine(e);
       if (t === 'image') {
         state.pendingImageWorld = w;
         dom.fileInput.click();
