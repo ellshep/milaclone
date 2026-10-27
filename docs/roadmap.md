@@ -142,7 +142,7 @@ Set up in the `chore/quality-gates` PR, at the user's request, so auto-merged ph
 - [x] **F5.3 Backup download** (S).
   - Downloads a `db.backup()` snapshot from the Export menu. This replaces the current toast stub at `viewport.js:78`.
   - Acceptance: the response is a valid SQLite file that opens and contains the items.
-- [ ] **F5.4 Dark mode** (M, D8).
+- [x] **F5.4 Dark mode** (M, D8).
   - Replace the hardcoded colours with variables, then override the variables under `prefers-color-scheme: dark`.
   - Acceptance (e2e with `colorScheme: 'dark'`): the body background is dark and the card text contrast is at least 4.5:1.
 

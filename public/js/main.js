@@ -36,8 +36,10 @@ import { initExport } from './export.js';
 // A later call wins: fast Back presses can overlap, and a stale fetch finishing
 // last must not push its board back over the newer one.
 let navSeq = 0;
+let navTarget = null; // the board being opened, which may not be state.view yet
 export async function openCanvas(id, { replace = false } = {}) {
   const seq = ++navSeq;
+  navTarget = id;
   const view = await api.canvas(id);
   if (seq !== navSeq) return;
   state.view = view;
@@ -118,7 +120,7 @@ document.addEventListener('keydown', e => {
   // Back / forward through visited boards, and up to the parent board.
   if (mod && (e.key === '[' || e.key === ']')) {
     e.preventDefault();
-    // history.state.i counts this tab's board visits, so Back never leaves the app.
+    // Back never leaves the app: history.state.i counts this tab's board visits.
     if (e.key === ']') history.forward();
     else if (history.state?.i > 0) history.back();
     return;
@@ -199,7 +201,9 @@ window.addEventListener('blur', endSpacePan);
 
 window.addEventListener('hashchange', () => {
   const id = location.hash.slice(1);
-  if (id && (!state.view.canvas || id !== state.view.canvas.id)) openCanvas(id);
+  // Compare with the pending target, not state.view: a fast second Back can land on
+  // the board still shown while the first Back's fetch is in flight.
+  if (id && id !== navTarget) openCanvas(id);
 });
 
 initViewport();
