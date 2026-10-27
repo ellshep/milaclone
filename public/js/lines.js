@@ -26,7 +26,13 @@ const svg = (tag, attrs) => {
 function rectOf(id) {
   const el = elMap.get(id);
   if (!el || !el.isConnected || el instanceof SVGElement) return null;
-  const r = el.getBoundingClientRect();
+  let r = el.getBoundingClientRect();
+  // A card in a collapsed column has no box (display: none): end at the column.
+  if (!r.width && !r.height) {
+    const col = el.parentElement?.closest('.item');
+    if (!col) return null;
+    r = col.getBoundingClientRect();
+  }
   const p = screenToWorld(r.left, r.top);
   return { x: p.x, y: p.y, w: r.width / state.cam.scale, h: r.height / state.cam.scale };
 }

@@ -120,6 +120,10 @@
           <i data-lucide="file-text"></i>
           Document
         </button>
+        <button class="tool" data-tool="template" title="New from template">
+          <i data-lucide="copy-plus"></i>
+          Template
+        </button>
         <div class="rail-sep"></div>
         <button class="tool" data-tool="image" title="Image">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -357,6 +361,14 @@
         <button type="button" class="top-phone doc-close" aria-label="Close"><i data-lucide="x"></i></button>
       </header>
       <div class="doc-body rich"></div>
+    </dialog>
+
+    <dialog id="templateDialog" aria-labelledby="templateTitle">
+      <form method="dialog" class="trash-head">
+        <h2 id="templateTitle">New from template</h2>
+        <button class="top-phone" aria-label="Close"><i data-lucide="x"></i></button>
+      </form>
+      <ul id="templateList"></ul>
     </dialog>
 
     <dialog id="shortcutsDialog" aria-labelledby="shortcutsTitle">

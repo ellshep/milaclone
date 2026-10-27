@@ -155,6 +155,7 @@ export function renderItem(it) {
   else if (it.type === 'table') buildTable(el, it);
   else if (it.type === 'document') buildDocument(el, it);
   else if (it.type === 'sketch') buildSketch(el, it);
+  else if (it.type === 'shortcut') buildShortcut(el, it);
 
   // Boards use the rail / mobile footer for color·icon·rename·delete.
   // Other cards keep the floating properties badge.
@@ -178,7 +179,7 @@ export function renderItem(it) {
       e.stopPropagation();
       deleteItem(it.id);
     };
-    tools.appendChild(colorBtn);
+    if (it.type !== 'shortcut') tools.appendChild(colorBtn); // a shortcut wears its board's colour
     tools.appendChild(delBtn);
     if (isLocked(it)) {
       const lockBadge = document.createElement('span');
@@ -542,15 +543,41 @@ function buildBoard(el, it) {
   bindBoardOpen(el, it);
 }
 
+// An alias of another board: opens it, and reads as broken once it's trashed.
+function buildShortcut(el, it) {
+  el.classList.add('board', 'shortcut');
+  const t = it._target;
+  el.classList.toggle('broken', !t);
+  const tile = document.createElement('div');
+  tile.className = 'tile';
+  tile.style.background = t ? colorVar(t.color || 'slate') : 'var(--hover-strong)';
+  tile.appendChild(lucideEl(t ? t.icon : 'unlink'));
+  const badge = document.createElement('span');
+  badge.className = 'sc-badge';
+  badge.appendChild(lucideEl('corner-up-right'));
+  tile.appendChild(badge);
+  el.appendChild(tile);
+  const title = document.createElement('div');
+  title.className = 'btitle';
+  title.textContent = t ? t.title : 'Missing board';
+  el.appendChild(title);
+  const meta = document.createElement('div');
+  meta.className = 'bmeta';
+  meta.textContent = t ? 'Shortcut' : 'Board in trash';
+  el.appendChild(meta);
+  bindBoardOpen(el, it, t ? it.data.targetCanvasId : null);
+}
+
 // Desktop mouse gets a real dblclick; mobile Safari/WebKit does not synthesize
 // one from a double-tap, so we also detect a second quick, unmoved pointerup.
-function bindBoardOpen(el, it) {
+function bindBoardOpen(el, it, target = it.data.childCanvasId) {
   let lastTap = -Infinity,
     lastX = 0,
     lastY = 0;
   const open = () => {
     exitEdit();
-    openCanvas(it.data.childCanvasId);
+    if (target) openCanvas(target);
+    else toast('The board this shortcut opens is in the trash');
   };
   el.addEventListener('dblclick', e => {
     if (el.classList.contains('editing') && e.target.closest('[data-edit]')) return;
@@ -834,12 +861,32 @@ function buildColumn(el, it) {
   title.addEventListener('input', () => saveData(it, { title: title.value }));
   head.appendChild(chip);
   head.appendChild(title);
+  // Collapse to just the header (saved on the column); the count shows either way.
+  const kids = childrenOf(it.id);
+  const count = document.createElement('span');
+  count.className = 'col-count';
+  count.textContent = kids.length;
+  count.title = kids.length + (kids.length === 1 ? ' card' : ' cards');
+  head.appendChild(count);
+  const fold = document.createElement('button');
+  fold.type = 'button';
+  fold.className = 'col-fold';
+  fold.setAttribute('data-nodrag', '');
+  fold.setAttribute('aria-expanded', String(!it.data.collapsed));
+  fold.title = it.data.collapsed ? 'Expand column' : 'Collapse column';
+  fold.appendChild(lucideEl('chevron-down'));
+  fold.onclick = e => {
+    e.stopPropagation();
+    saveData(it, { collapsed: !it.data.collapsed });
+    refreshItem(it);
+  };
+  head.appendChild(fold);
+  el.classList.toggle('collapsed', !!it.data.collapsed);
   el.appendChild(head);
   const body = document.createElement('div');
   body.className = 'col-body';
   body.dataset.colbody = it.id;
   el.appendChild(body);
-  const kids = childrenOf(it.id);
   if (!kids.length) {
     const e = document.createElement('div');
     e.className = 'col-empty';

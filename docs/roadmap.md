@@ -177,13 +177,13 @@ Set up in the `chore/quality-gates` PR, at the user's request, so auto-merged ph
 - [x] **F7.3 Due dates and tags on canvas cards** (S).
   - Show the Quick notes `due` and `tags` fields on to-do cards.
   - Acceptance (e2e): a due date set in Quick notes shows on the canvas card.
-- [ ] **F7.4 Collapsible columns with counts** (S).
+- [x] **F7.4 Collapsible columns with counts** (S).
   - The collapse state is saved on the column.
   - Acceptance: a collapsed column stays collapsed after a reload and shows its card count.
-- [ ] **F7.5 Board shortcut** (S).
+- [x] **F7.5 Board shortcut** (S).
   - An alias card that opens another board. It shows as broken if that board is trashed.
   - Acceptance: the alias opens its target board, and shows as broken once the target is trashed.
-- [ ] **F7.6 Templates** (S).
+- [x] **F7.6 Templates** (S).
   - Boards kept inside a "Templates" board. "New from template" copies one with `/copy`.
   - Acceptance: the copy is deep, and editing it leaves the template unchanged.
 - [ ] **F7.7 Labels and filtering** (M).

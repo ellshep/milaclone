@@ -109,7 +109,7 @@ function maybeEdit(el, ev) {
 function columnBodyUnder(clientX, clientY, excludeId) {
   const bodies = dom.world.querySelectorAll('.col-body');
   for (const b of bodies) {
-    if (b.dataset.colbody === excludeId) continue;
+    if (b.dataset.colbody === excludeId || b.closest('.collapsed')) continue; // hidden: a 0×0 rect at the origin
     const r = b.getBoundingClientRect();
     if (clientX >= r.left - 6 && clientX <= r.right + 6 && clientY >= r.top - 6 && clientY <= r.bottom + 30) return b;
   }
