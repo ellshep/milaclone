@@ -50,7 +50,7 @@ export function resetZoom() {
 // Frames every free card on the board (never magnifying past 100%).
 export function zoomToFit() {
   const boxes = state.view.items
-    .filter(i => !i.parentItemId && elMap.get(i.id))
+    .filter(i => !i.parentItemId && i.type !== 'line' && elMap.get(i.id))
     .map(i => {
       const el = elMap.get(i.id);
       return [i.x, i.y, i.x + el.offsetWidth, i.y + el.offsetHeight];

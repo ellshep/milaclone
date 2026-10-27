@@ -671,3 +671,38 @@ test('F1.5 uploaded audio and video are served inline (still nosniff)', async ()
   assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
   fs.rmSync(uploadPath(up.src), { force: true });
 });
+
+test('lines travel with their cards: trashed, restored, purged, and copied only whole', async () => {
+  const board = (await send('POST', '/api/item', { canvasId: await root(), type: 'board' })).body;
+  const c = board.data.childCanvasId;
+  const card = async () => (await send('POST', '/api/item', { canvasId: c, type: 'note' })).body;
+  const [a, b] = [await card(), await card()];
+  const line = (
+    await send('POST', '/api/item', { canvasId: c, type: 'line', data: { from: { id: a.id }, to: { id: b.id } } })
+  ).body;
+  const lines = async cid => (await get('/api/canvas/' + cid)).body.items.filter(i => i.type === 'line');
+
+  await send('DELETE', '/api/item/' + a.id);
+  assert.deepEqual(await lines(c), []); // trashed with its card…
+  assert.equal((await get('/api/trash')).body.items.filter(t => t.id === line.id).length, 0); // …not listed on its own
+  await send('POST', `/api/item/${a.id}/restore`);
+  assert.deepEqual(
+    (await lines(c)).map(l => l.id),
+    [line.id]
+  );
+
+  // Copying one end drops the line; copying the whole board remaps both ends.
+  await send('POST', `/api/item/${a.id}/copy`, { canvasId: c, x: 0, y: 0 });
+  assert.equal((await lines(c)).length, 1);
+  const copy = (await send('POST', `/api/item/${board.id}/copy`, { canvasId: await root(), x: 0, y: 0 })).body;
+  const cc = copy.data.childCanvasId;
+  const [copied] = await lines(cc);
+  const cards = (await get('/api/canvas/' + cc)).body.items.filter(i => i.type === 'note').map(i => i.id);
+  assert.ok(cards.includes(copied.data.from.id) && cards.includes(copied.data.to.id));
+  assert.ok(![a.id, b.id].includes(copied.data.from.id));
+
+  await send('DELETE', '/api/item/' + b.id);
+  await send('DELETE', '/api/trash');
+  const left = (await get('/api/canvas/' + c)).body.items.map(i => i.id);
+  assert.ok(!left.includes(line.id));
+});

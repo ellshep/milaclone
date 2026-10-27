@@ -40,7 +40,7 @@ export function onItemPointerDown(e, it, el) {
   // Free, unlocked companions move by the same delta; cards in columns stay put.
   const others = inGroup
     ? selectedItems()
-        .filter(o => o.id !== it.id && !o.parentItemId && !isLocked(o) && elMap.get(o.id))
+        .filter(o => o.id !== it.id && o.type !== 'line' && !o.parentItemId && !isLocked(o) && elMap.get(o.id))
         .map(o => ({ it: o, el: elMap.get(o.id), x: o.x, y: o.y }))
     : [];
   state.drag = { it, el, start, startWorld, fromColumn, moved: false, dropCol: null, others };
@@ -177,7 +177,8 @@ function insertOrder(colId, clientY, selfId) {
 const nudged = new Map();
 let nudgeTimer = 0;
 export function nudgeSelection(dx, dy) {
-  const items = selectedItems().filter(i => !i.parentItemId && !isLocked(i));
+  // ponytail: lines are drawn from their ends, not x/y, so free-ended ones stay put
+  const items = selectedItems().filter(i => i.type !== 'line' && !i.parentItemId && !isLocked(i));
   for (const it of items) {
     it.x = snap(it.x + dx);
     it.y = snap(it.y + dy);

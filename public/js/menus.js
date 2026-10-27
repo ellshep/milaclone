@@ -1,11 +1,12 @@
 'use strict';
 
-import { state, dom, COLORS, BOARD_ICONS } from './state.js';
+import { state, dom, elMap, COLORS, BOARD_ICONS } from './state.js';
 import { api } from './api.js';
 import { colorVar, lucideEl, refreshIcons, isLocked, zRange } from './util.js';
 import { refreshItem } from './cards.js';
 import { select, renameSelected, deleteSelection, selectedItems } from './editing.js';
 import { copySelected, pasteClipboard, duplicateSelected, toggleLock } from './clipboard.js';
+import { setLine, editLabel } from './lines.js';
 
 // The floating color/icon palette and the right-click context menu.
 
@@ -89,32 +90,54 @@ export function openCtx(e, it) {
   const locked = isLocked(it);
   const mac = /Mac|iPhone|iPad/.test(navigator.platform);
   const mod = mac ? '⌘' : 'Ctrl+';
-  const rows = [
-    { label: 'Cut', hint: mod + 'X', fn: () => copySelected(true) },
-    { label: 'Copy', hint: mod + 'C', fn: () => copySelected(false) },
-    { label: 'Paste', hint: mod + 'V', fn: () => pasteClipboard(), disabled: !state.clipboard },
-    { label: 'Duplicate', hint: mod + 'D', fn: () => duplicateSelected() },
+  const trashRow = {
+    label: many ? `Move ${state.selection.size} to Trash` : 'Move to Trash',
+    hint: 'Delete',
+    danger: true,
+    fn: () => deleteSelection(),
+  };
+  const arrow = it.data.arrow || 'end';
+  const lineRows = [
+    ...[
+      ['end', 'Arrow at End'],
+      ['both', 'Arrows at Both Ends'],
+      ['none', 'No Arrows'],
+    ].map(([a, label]) => ({ label, hint: arrow === a ? '✓' : '', fn: () => setLine(it, { arrow: a }) })),
+    { label: it.data.dashed ? 'Solid Line' : 'Dashed Line', fn: () => setLine(it, { dashed: !it.data.dashed }) },
+    { label: it.data.label ? 'Edit Label' : 'Add Label', fn: () => editLabel(it) },
+    { label: 'Colour…', fn: () => openPalette(it, elMap.get(it.id), 'color') },
     { sep: true },
-    ...(it.parentItemId
-      ? []
-      : [
-          { label: 'Bring to Front', fn: () => restack(it, 'front') },
-          { label: 'Send to Back', fn: () => restack(it, 'back') },
-          { sep: true },
-        ]),
-    ...(many ? [] : [{ label: 'Rename', hint: 'Return', fn: () => renameSelected() }]),
-    { label: locked ? 'Unlock Position' : 'Lock Position', fn: () => toggleLock() },
-    ...(it.type === 'image'
-      ? [{ label: it.data.transparent ? 'Show Background' : 'Transparent Background', fn: () => toggleTransparent(it) }]
-      : []),
-    { sep: true },
-    {
-      label: many ? `Move ${state.selection.size} to Trash` : 'Move to Trash',
-      hint: 'Delete',
-      danger: true,
-      fn: () => deleteSelection(),
-    },
+    trashRow,
   ];
+  const rows =
+    it.type === 'line'
+      ? lineRows
+      : [
+          { label: 'Cut', hint: mod + 'X', fn: () => copySelected(true) },
+          { label: 'Copy', hint: mod + 'C', fn: () => copySelected(false) },
+          { label: 'Paste', hint: mod + 'V', fn: () => pasteClipboard(), disabled: !state.clipboard },
+          { label: 'Duplicate', hint: mod + 'D', fn: () => duplicateSelected() },
+          { sep: true },
+          ...(it.parentItemId
+            ? []
+            : [
+                { label: 'Bring to Front', fn: () => restack(it, 'front') },
+                { label: 'Send to Back', fn: () => restack(it, 'back') },
+                { sep: true },
+              ]),
+          ...(many ? [] : [{ label: 'Rename', hint: 'Return', fn: () => renameSelected() }]),
+          { label: locked ? 'Unlock Position' : 'Lock Position', fn: () => toggleLock() },
+          ...(it.type === 'image'
+            ? [
+                {
+                  label: it.data.transparent ? 'Show Background' : 'Transparent Background',
+                  fn: () => toggleTransparent(it),
+                },
+              ]
+            : []),
+          { sep: true },
+          trashRow,
+        ];
   dom.ctxmenu.innerHTML = '';
   rows.forEach(r => {
     if (r.sep) {

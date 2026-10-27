@@ -700,6 +700,125 @@ textarea {
   min-height: 60vh;
 }
 
+/* ---------- lines (lines.js) ---------- */
+#lines {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+#lines .line-hit {
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+#lines .line-stroke,
+#lines .line-ghost {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+#lines .line-ghost {
+  stroke: var(--accent);
+  stroke-dasharray: 5 5;
+}
+#lines .line-head {
+  fill: currentColor;
+  pointer-events: none;
+}
+#lines .line.selected .line-hit {
+  stroke: var(--select-soft);
+}
+#lines .line-label {
+  fill: var(--ink);
+  font: 600 12px var(--sans);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--canvas-bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.line-label-edit {
+  position: absolute;
+  z-index: 100000;
+  width: 160px;
+  transform: translate(-50%, -50%);
+  padding: 4px 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--ink);
+  font: 12px var(--sans);
+  outline: none;
+}
+
+/* ---------- sketch ---------- */
+.sketch {
+  padding: 6px;
+}
+.sketch .sk-pad {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 400 / 280;
+  border-radius: 6px;
+  touch-action: none;
+}
+.sketch.editing .sk-pad {
+  cursor: crosshair;
+  box-shadow: inset 0 0 0 1px var(--card-border);
+}
+.sketch .sk-pad path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sketch .skbar {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+.sketch.editing .skbar {
+  display: flex;
+}
+.sketch .skbar button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 50%;
+  background: var(--card-bg);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.sketch .skbar button.on {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.sketch .sk-size span {
+  border-radius: 50%;
+  background: var(--ink);
+}
+.sketch .sk-color {
+  width: 16px;
+  height: 16px;
+}
+.sketch .sk-erase svg {
+  width: 13px;
+  height: 13px;
+}
+
 /* ---------- todo ---------- */
 .todo {
   padding: 14px 16px;

@@ -63,6 +63,10 @@ const stmt = {
     `SELECT * FROM items WHERE canvasId = ? AND ${LIVE} ORDER BY COALESCE(z, 0), createdAt, id`
   ),
   itemsByParent: db.prepare(`SELECT * FROM items WHERE parentItemId = ? AND ${LIVE}`),
+  // Live lines with an end attached to any of the ids (a JSON array).
+  linesTo: db.prepare(`SELECT * FROM items WHERE type = 'line' AND ${LIVE}
+                       AND (json_extract(data, '$.from.id') IN (SELECT value FROM json_each(@ids))
+                         OR json_extract(data, '$.to.id') IN (SELECT value FROM json_each(@ids)))`),
   todoItems: db.prepare(`SELECT * FROM items WHERE type = 'todo' AND ${LIVE} ORDER BY createdAt, id`),
   itemsByCanvas: db.prepare(`SELECT * FROM items WHERE canvasId = ? AND ${LIVE}`),
   maxZ: db.prepare(`SELECT MAX(z) AS m FROM items`),
@@ -167,8 +171,20 @@ function collectSubtree(itemId) {
     for (const r of stmt.itemsByCanvas.all(cid)) if (!r.parentItemId) addItem(r);
   };
   addItem(stmt.getItem.get(itemId));
+  // Lines attached to any of these cards belong to the subtree too, so they're
+  // trashed, restored and purged with their cards instead of lingering unseen.
+  const ids = JSON.stringify(items.map(r => r.id));
+  for (const r of stmt.linesTo.all({ ids })) addItem(r);
   return { items, canvases };
 }
+
+// A copied or moved line keeps only ends inside the subtree: one still attached
+// to a card left behind would point across boards (and never draw).
+const strandedLine = (r, inside) => {
+  if (r.type !== 'line') return false;
+  const d = r.data ? JSON.parse(r.data) : {};
+  return [d.from, d.to].some(e => e && e.id && !inside.has(e.id));
+};
 
 // Move an item and its subtree to the trash. Rows are tagged with the item's id
 // so `restoreItem` brings back exactly this deletion. Run inside a transaction.
@@ -219,9 +235,11 @@ function copyItemDeep(itemId, canvasId, x, y) {
   }
   let z = Math.max(0, stmt.maxZ.get().m || 0);
   items.forEach((r, i) => {
+    const isRoot = i === 0;
+    if (!isRoot && strandedLine(r, map)) return;
     const data = r.data ? JSON.parse(r.data) : {};
     if (data.childCanvasId) data.childCanvasId = map.get(data.childCanvasId);
-    const isRoot = i === 0;
+    for (const end of [data.from, data.to]) if (end && map.has(end.id)) end.id = map.get(end.id);
     stmt.insertItem.run({
       ...r,
       id: map.get(r.id),
@@ -243,8 +261,10 @@ function moveItemDeep(itemId, canvasId, x, y) {
   const { items, canvases } = collectSubtree(itemId);
   if (canvases.some(c => c.id === canvasId)) return false;
   const nested = new Set(canvases.map(c => c.id));
+  const inside = new Set(items.map(r => r.id));
   for (const r of items) {
     if (nested.has(r.canvasId)) continue; // lives on a nested canvas: unchanged
+    if (r.id !== itemId && strandedLine(r, inside)) continue; // stays with its other card
     const it = rowToItem(r);
     if (r.id === itemId) Object.assign(it, { x, y, parentItemId: null, z: Math.max(0, stmt.maxZ.get().m || 0) + 1 });
     it.canvasId = canvasId;

@@ -1,6 +1,6 @@
 'use strict';
 
-import { state, dom, elMap } from './state.js';
+import { state, dom, elMap, COLORS } from './state.js';
 import {
   colorVar,
   lucideEl,
@@ -27,6 +27,7 @@ import { api } from './api.js';
 import { openLightbox } from './lightbox.js';
 import { updateMobileChrome } from './mobile.js';
 import { openDocument } from './document.js';
+import { drawLines } from './lines.js';
 
 // Rendering of the canvas and every card type. This module owns the DOM for
 // items; other modules ask it to (re)render when data changes.
@@ -44,10 +45,12 @@ export function render() {
   elMap.clear();
   const free = state.view.items.filter(it => !it.parentItemId);
   for (const it of free) {
+    if (it.type === 'line') continue; // drawn by lines.js
     const el = renderItem(it);
     dom.world.appendChild(el);
     elMap.set(it.id, el);
   }
+  drawLines();
   dom.hint.style.display = state.view.items.length ? 'none' : 'block';
   refreshIcons(dom.world);
 }
@@ -149,6 +152,7 @@ export function renderItem(it) {
   else if (it.type === 'swatch') buildSwatch(el, it);
   else if (it.type === 'table') buildTable(el, it);
   else if (it.type === 'document') buildDocument(el, it);
+  else if (it.type === 'sketch') buildSketch(el, it);
 
   // Boards use the rail / mobile footer for color·icon·rename·delete.
   // Other cards keep the floating properties badge.
@@ -612,6 +616,120 @@ function buildDocument(el, it) {
   });
 }
 
+// Freehand pen (4 sizes, the palette colours) and an eraser. Strokes are SVG
+// path data in a fixed SKETCH_W × SKETCH_H viewBox, so the drawing scales with
+// the card. Draw while the card is being edited; otherwise it's a plain card.
+const SKETCH_W = 400,
+  SKETCH_H = 280,
+  PEN_SIZES = [2, 4, 8, 16];
+const pen = { size: 4, color: null, erase: false }; // shared, so the next sketch keeps your pen
+const strokeColor = c => (c ? colorVar(c) : 'var(--ink)');
+
+function buildSketch(el, it) {
+  el.classList.add('sketch');
+  const strokes = Array.isArray(it.data.strokes) ? it.data.strokes : [];
+  const NS = 'http://www.w3.org/2000/svg';
+  const pad = document.createElementNS(NS, 'svg');
+  pad.setAttribute('class', 'sk-pad');
+  pad.setAttribute('viewBox', `0 0 ${SKETCH_W} ${SKETCH_H}`);
+  pad.setAttribute('data-edit', ''); // a click on it enters edit mode, like a field
+  const path = (s, i) => {
+    const p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', s.d);
+    p.setAttribute('stroke-width', s.size);
+    p.style.stroke = strokeColor(s.color);
+    p.dataset.i = i;
+    return p;
+  };
+  const draw = () => pad.replaceChildren(...strokes.map(path));
+  draw();
+  const at = e => {
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(pad.getScreenCTM().inverse());
+    return [Math.round(p.x), Math.round(p.y)];
+  };
+  let last = null;
+  const eraseAt = e => {
+    const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest('.sk-pad path');
+    if (!hit || !pad.contains(hit)) return false;
+    strokes.splice(+hit.dataset.i, 1);
+    draw();
+    return true;
+  };
+  pad.addEventListener('pointerdown', e => {
+    if (!el.classList.contains('editing') || e.button !== 0) return; // select / drag as usual
+    e.stopPropagation();
+    e.preventDefault();
+    pad.setPointerCapture(e.pointerId);
+    let changed = false;
+    let live = null;
+    if (pen.erase) changed = eraseAt(e);
+    else {
+      last = at(e);
+      live = { d: `M${last.join(' ')} L${last.join(' ')}`, size: pen.size, color: pen.color };
+      strokes.push(live);
+      pad.appendChild(path(live, strokes.length - 1));
+    }
+    const move = ev => {
+      if (live) {
+        // Skip sub-3-unit moves: strokes stay small (every save sends them all).
+        const p = at(ev);
+        if (Math.hypot(p[0] - last[0], p[1] - last[1]) < 3) return;
+        last = p;
+        live.d += ` L${p.join(' ')}`;
+        pad.lastChild.setAttribute('d', live.d);
+      } else changed = eraseAt(ev) || changed;
+    };
+    const up = () => {
+      pad.removeEventListener('pointermove', move);
+      pad.removeEventListener('pointerup', up);
+      pad.removeEventListener('pointercancel', up);
+      if (live || changed) saveData(it, { strokes });
+    };
+    pad.addEventListener('pointermove', move);
+    pad.addEventListener('pointerup', up);
+    pad.addEventListener('pointercancel', up);
+  });
+  el.appendChild(pad);
+
+  const bar = document.createElement('div');
+  bar.className = 'skbar';
+  bar.setAttribute('data-nodrag', '');
+  const paint = () =>
+    bar.querySelectorAll('button').forEach(b => {
+      const on = b.dataset.erase
+        ? pen.erase
+        : !pen.erase && (b.dataset.size ? +b.dataset.size === pen.size : (b.dataset.color || null) === pen.color);
+      b.classList.toggle('on', on);
+    });
+  const btn = (cls, title, set, data) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = cls;
+    b.title = title;
+    Object.assign(b.dataset, data);
+    b.onclick = e => {
+      e.stopPropagation();
+      Object.assign(pen, set);
+      paint();
+    };
+    bar.appendChild(b);
+    return b;
+  };
+  for (const s of PEN_SIZES) {
+    const b = btn('sk-size', `Pen size ${s}`, { size: s, erase: false }, { size: s });
+    const dot = document.createElement('span');
+    dot.style.width = dot.style.height = Math.min(14, s + 2) + 'px';
+    b.appendChild(dot);
+  }
+  for (const c of [null, ...COLORS]) {
+    const b = btn('sk-color', c || 'Ink', { color: c, erase: false }, c ? { color: c } : {});
+    b.style.background = strokeColor(c);
+  }
+  btn('sk-erase', 'Eraser', { erase: true }, { erase: '1' }).appendChild(lucideEl('eraser'));
+  paint();
+  el.appendChild(bar);
+}
+
 function buildColumn(el, it) {
   el.classList.add('column');
   const head = document.createElement('div');
@@ -643,6 +761,7 @@ function buildColumn(el, it) {
 }
 
 export function refreshItem(it) {
+  if (it.type === 'line') return drawLines();
   const old = elMap.get(it.id);
   if (!old) return;
   leaveRichEdit(old);
@@ -650,6 +769,11 @@ export function refreshItem(it) {
   old.replaceWith(fresh);
   elMap.set(it.id, fresh);
   refreshIcons(fresh);
+  if (state.editingId === it.id) {
+    // Still mid-edit (a recolour, say): the fresh card must be editable too.
+    state.editingId = null;
+    enterEdit(fresh);
+  }
   if (it.type === 'column') {
     for (const k of childrenOf(it.id)) {
       const ke = fresh.querySelector(`[data-id="${k.id}"]`);

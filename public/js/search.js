@@ -68,8 +68,8 @@ async function go(r) {
   const at = (it.parentItemId && state.view.items.find(i => i.id === it.parentItemId)) || it;
   const card = elMap.get(at.id);
   const s = dom.stage.getBoundingClientRect();
-  state.cam.x = s.width / 2 - (at.x + (card ? card.offsetWidth : 240) / 2) * state.cam.scale;
-  state.cam.y = s.height / 2 - (at.y + (card ? card.offsetHeight : 120) / 2) * state.cam.scale;
+  state.cam.x = s.width / 2 - (at.x + (card?.offsetWidth || 0) / 2) * state.cam.scale;
+  state.cam.y = s.height / 2 - (at.y + (card?.offsetHeight || 0) / 2) * state.cam.scale;
   applyCam();
   selectIds([it.id]);
 }
