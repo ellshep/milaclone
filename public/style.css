@@ -842,7 +842,53 @@ textarea {
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  padding: 3px 0;
+  padding: 3px 0 3px calc(var(--indent, 0) * 20px);
+  position: relative;
+}
+.task .grip {
+  position: absolute;
+  left: calc(var(--indent, 0) * 20px - 16px);
+  top: 4px;
+  display: grid;
+  color: var(--ink-faint);
+  opacity: 0;
+  cursor: grab;
+  touch-action: none;
+}
+.task .grip svg {
+  width: 14px;
+  height: 14px;
+}
+.task:hover .grip,
+.task.dragging .grip {
+  opacity: 1;
+}
+@media (hover: none) {
+  .task .grip {
+    opacity: 0.55; /* no hover to reveal it on touch screens */
+  }
+}
+.task.dragging {
+  background: var(--hover);
+  border-radius: 6px;
+}
+.task .tbody {
+  flex: 1;
+  min-width: 0;
+}
+.task .tmeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 1px;
+  font-size: 11.5px;
+}
+.task .tdue,
+.task .ttag {
+  color: var(--ink-soft);
+}
+.task .tdue.overdue {
+  color: var(--danger);
 }
 .task input[type='checkbox'] {
   appearance: none;

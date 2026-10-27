@@ -2,7 +2,7 @@
 
 import { state } from './state.js';
 import { api } from './api.js';
-import { autoGrow, colorVar, lucideEl, refreshIcons, toast, rid } from './util.js';
+import { autoGrow, colorVar, lucideEl, refreshIcons, toast, rid, daysUntil, dueInfo } from './util.js';
 import { screenToWorld } from './viewport.js';
 import { createAt, defaultsFor } from './create.js';
 import { openCanvas } from './main.js';
@@ -96,6 +96,7 @@ function saveSettings() {
 // "type here" placeholders) are never surfaced as tasks.
 function normTask(t) {
   return {
+    ...t, // keep fields Quick notes doesn't use (the canvas's `indent`)
     id: t.id || rid(),
     text: typeof t.text === 'string' ? t.text : '',
     done: !!t.done,
@@ -213,37 +214,6 @@ function findTask(ref) {
 // ---------------------------------------------------------------------------
 // Dates
 // ---------------------------------------------------------------------------
-const DAY = 86400000;
-const parseISO = s => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
-  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
-};
-function daysUntil(iso) {
-  const d = parseISO(iso);
-  if (!d) return null;
-  const now = new Date();
-  return Math.round((d - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / DAY);
-}
-function relDays(n) {
-  if (n === 0) return 'due today';
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-  const abs = Math.abs(n);
-  if (abs < 7) return rtf.format(n, 'day');
-  if (abs < 30) return rtf.format(Math.round(n / 7), 'week');
-  return rtf.format(Math.round(n / 30), 'month');
-}
-function dueInfo(iso) {
-  const n = daysUntil(iso);
-  if (n === null) return null;
-  const short = parseISO(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-  const near = n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : n === -1 ? 'Yesterday' : null;
-  return {
-    label: near || short,
-    full: near || 'Due ' + short,
-    sub: relDays(n),
-    color: n <= 0 ? 'var(--qn-due)' : 'var(--qn-muted)',
-  };
-}
 function agoLabel(ms) {
   const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
   const mins = Math.round((Date.now() - ms) / 60000);

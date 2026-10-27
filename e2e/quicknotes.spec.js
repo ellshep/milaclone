@@ -91,17 +91,18 @@ test('checking a task persists and moves it into Completed', async ({ page }) =>
 
 test('starring a task feeds the Starred smart view', async ({ page }) => {
   const title = uniq('Starry');
-  await seedList(page, title, [{ id: 'a', text: 'Call the plumber', done: false }]);
+  const task = uniq('Call the plumber'); // the Starred view lists every run's starred tasks
+  await seedList(page, title, [{ id: 'a', text: task, done: false }]);
   await openQuickNotes(page);
   await listRow(page, title).click();
-  await taskRow(page, 'Call the plumber').locator('.qn-star').click();
-  await expect(taskRow(page, 'Call the plumber').locator('.qn-star')).toHaveClass(/on/);
+  await taskRow(page, task).locator('.qn-star').click();
+  await expect(taskRow(page, task).locator('.qn-star')).toHaveClass(/on/);
 
   await page.click('#qnListBack');
   await page.locator('.qn-tile[data-smart="starred"]').click();
   await expect(page.locator('#qnListTitle')).toHaveText('Starred');
   // smart views name the source list on a sub-line and hide the add button
-  await expect(taskRow(page, 'Call the plumber').locator('.qn-task-sub')).toHaveText(title);
+  await expect(taskRow(page, task).locator('.qn-task-sub')).toHaveText(title);
   await expect(page.locator('#qnAddBar')).toBeHidden();
 });
 

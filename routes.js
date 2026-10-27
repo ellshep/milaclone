@@ -123,7 +123,9 @@ function mergeTasks(base, server, mine) {
       continue;
     } // added here
     const merged = Object.assign({}, s);
-    for (const k of new Set([...Object.keys(t), ...Object.keys(b)])) {
+    // Only keys this client sent count: one it doesn't know (e.g. `indent` from
+    // the canvas, edited in an older Quick notes) isn't a deletion.
+    for (const k of Object.keys(t)) {
       if (JSON.stringify(t[k]) !== JSON.stringify(b[k])) merged[k] = t[k];
     }
     out.push(merged);

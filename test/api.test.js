@@ -429,6 +429,33 @@ test('tasks: concurrent edits from two devices merge instead of overwriting', as
   );
 });
 
+test('F7.1 tasks: the merge keeps indent levels when both sides edited the list', async () => {
+  const canvasId = await root();
+  const base = [
+    { id: 'p', text: 'Trip', done: false, indent: 0 },
+    { id: 'c', text: 'Book train', done: false, indent: 1 },
+  ];
+  const list = (await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: base } })).body;
+  // canvas: outdents "Book train" and indents a new subtask
+  await send('PATCH', '/api/item/' + list.id, {
+    baseTasks: base,
+    data: { tasks: [base[0], { ...base[1], indent: 0 }, { id: 'n', text: 'Pack', done: false, indent: 1 }] },
+  });
+  // Quick notes, still on the old list and unaware of `indent`: renames the trip
+  const r = await send('PATCH', '/api/item/' + list.id, {
+    baseTasks: base,
+    data: { tasks: base.map(({ indent, ...t }) => (t.id === 'p' ? { ...t, text: 'Lisbon trip' } : t)) }, // oxlint-disable-line no-unused-vars
+  });
+  assert.deepEqual(
+    r.body.data.tasks.map(t => [t.id, t.text, t.indent]),
+    [
+      ['p', 'Lisbon trip', 0],
+      ['c', 'Book train', 0],
+      ['n', 'Pack', 1],
+    ]
+  );
+});
+
 test('uploads: active content downloads instead of rendering on our origin', async () => {
   const upload = async (body, type, name) => {
     const fd = new FormData();
