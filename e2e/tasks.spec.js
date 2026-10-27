@@ -87,8 +87,9 @@ test('F7.2: dragging a task by its grip reorders the list, and the order persist
   expect((await saved(page, id)).map(x => x.id)).toEqual(['c', 'a', 'b']);
 
   await page.reload();
-  const texts = await page.locator('.task .txt').evaluateAll(f => f.map(x => x.value));
-  expect(texts).toEqual(['Third', 'First', 'Second']);
+  await expect
+    .poll(() => page.locator('.task .txt').evaluateAll(f => f.map(x => x.value)))
+    .toEqual(['Third', 'First', 'Second']);
   // the card itself didn't move
   await expect(page.locator('.item.type-todo')).toHaveCSS('left', '300px');
 });

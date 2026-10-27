@@ -42,8 +42,12 @@ let navTarget = null; // the board being opened, which may not be state.view yet
 export async function openCanvas(id, { replace = false } = {}) {
   const seq = ++navSeq;
   navTarget = id;
+  const hashAtStart = location.hash;
   const view = await api.canvas(id);
   if (seq !== navSeq) return;
+  // The URL moved to another board meanwhile (its hashchange event is still
+  // queued): that navigation wins, so don't overwrite its hash with ours.
+  if (location.hash !== hashAtStart && location.hash.slice(1) !== id) return;
   state.view = view;
   if (state.view.error) {
     if (id !== state.rootCanvasId) return openCanvas(state.rootCanvasId, { replace: true });
