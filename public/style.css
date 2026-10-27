@@ -9,6 +9,17 @@
   --card-border: #e7e7ea;
   --card-shadow: 0 1px 2px rgba(28, 30, 38, 0.06), 0 4px 14px rgba(28, 30, 38, 0.06);
   --card-shadow-hover: 0 2px 6px rgba(28, 30, 38, 0.1), 0 10px 28px rgba(28, 30, 38, 0.12);
+  --hover: #f1f1f3;
+  --hover-strong: #e6e6ea;
+  --danger: #c0392b;
+  --grid-dot: rgba(0, 0, 0, 0.055);
+  --control-border: #cfd2d8;
+  --ink-body: #3c3f45;
+  --select-soft: #e9f0ff;
+  --column-bg: #fbfbfc;
+  --comment-bg: #fff9f0;
+  --comment-border: #f0e2cc;
+  --danger-soft: #fdf1f0;
   --accent: #2f6df0;
   --select: #2f6df0;
   --radius: 12px;
@@ -28,6 +39,49 @@
   --c-purple: #7c4dff;
   --c-blue: #4aa3ff;
   --c-indigo: #3a5bd9;
+  color-scheme: light dark;
+}
+
+/* Dark mode follows the system (decision D8): only the tokens change. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas-bg: #17181b;
+    --rail-bg: #212226;
+    --rail-border: #33353b;
+    --ink: #e8e9ec;
+    --ink-soft: #a3a6ad;
+    --ink-faint: #70737b;
+    --card-bg: #26282d;
+    --card-border: #393b42;
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.25);
+    --card-shadow-hover: 0 2px 6px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.45);
+    --hover: #2e3036;
+    --hover-strong: #3a3d44;
+    --danger: #f0786b;
+    --grid-dot: rgba(255, 255, 255, 0.07);
+    --control-border: #5a5d65;
+    --ink-body: #d3d5da;
+    --select-soft: #1f2d4a;
+    --column-bg: #1f2024;
+    --comment-bg: #2d2a22;
+    --comment-border: #4a4231;
+    --danger-soft: #3a2422;
+  }
+  /* :root raises specificity over the base #quicknotes block further down */
+  :root #quicknotes {
+    --qn-screen: #17181b;
+    --qn-surface: #212226;
+    --qn-ink: #e5e7eb;
+    --qn-head: #f3f4f6;
+    --qn-soft: #b0b8c4;
+    --qn-muted: #8d96a3;
+    --qn-faint: #737c89;
+    --qn-accent: #8a97ab;
+    --qn-hair: #2c2f35;
+    --qn-bar-hair: #33363c;
+    --qn-sheet: #1c1d21;
+    --qn-grab: #4a4f57;
+  }
 }
 
 * {
@@ -67,7 +121,7 @@ textarea {
   align-items: center;
   gap: 14px;
   padding: 0 18px;
-  background: #fff;
+  background: var(--rail-bg);
   border-bottom: 1px solid var(--rail-border);
 }
 .dots {
@@ -114,7 +168,7 @@ textarea {
   text-overflow: ellipsis;
 }
 #crumbs .crumb:hover {
-  background: #f1f1f3;
+  background: var(--hover);
 }
 #crumbs .crumb.current {
   color: var(--ink);
@@ -152,7 +206,7 @@ textarea {
   border-radius: 8px;
 }
 .top-right .ghost:hover {
-  background: #f1f1f3;
+  background: var(--hover);
 }
 .top-phone {
   position: relative;
@@ -168,7 +222,7 @@ textarea {
 }
 .top-phone:hover,
 .top-phone[aria-expanded='true'] {
-  background: #f1f1f3;
+  background: var(--hover);
   color: var(--ink);
 }
 .top-phone :is(svg, i) {
@@ -191,7 +245,7 @@ textarea {
   line-height: 16px;
   text-align: center;
   pointer-events: none;
-  box-shadow: 0 0 0 2px #fff;
+  box-shadow: 0 0 0 2px var(--rail-bg);
 }
 .top-phone-badge[hidden] {
   display: none;
@@ -200,7 +254,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 2px;
-  background: #f3f3f5;
+  background: var(--hover);
   border-radius: 9px;
   padding: 2px;
 }
@@ -214,7 +268,7 @@ textarea {
   color: var(--ink);
 }
 .zoomwrap button:hover {
-  background: #e6e6ea;
+  background: var(--hover-strong);
 }
 .zoomwrap .lvl {
   font-size: 12px;
@@ -268,11 +322,11 @@ textarea {
   height: 22px;
 }
 .tool:hover {
-  background: #f3f3f5;
+  background: var(--hover);
   color: var(--ink);
 }
 .tool.armed {
-  background: #e9f0ff;
+  background: var(--select-soft);
   color: var(--accent);
 }
 .tool.armed svg {
@@ -326,7 +380,7 @@ textarea {
   right: 0;
   bottom: 0;
   overflow: hidden;
-  background: radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.055) 1px, transparent 0);
+  background: radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 0);
   background-size: 22px 22px;
   background-color: var(--canvas-bg);
   cursor: grab;
@@ -463,7 +517,7 @@ textarea {
   outline: none;
   width: 100%;
   background: none;
-  color: #3c3f45;
+  color: var(--ink-body);
   resize: none;
   min-height: 20px;
 }
@@ -505,7 +559,7 @@ textarea {
   appearance: none;
   width: 17px;
   height: 17px;
-  border: 1.6px solid #cfd2d8;
+  border: 1.6px solid var(--control-border);
   border-radius: 5px;
   margin-top: 1px;
   flex: 0 0 auto;
@@ -534,7 +588,7 @@ textarea {
   width: 100%;
   font-size: 13.5px;
   line-height: 1.4;
-  color: #3c3f45;
+  color: var(--ink-body);
   resize: none;
 }
 .task.done .txt {
@@ -699,7 +753,7 @@ textarea {
 
 /* ---------- column ---------- */
 .column {
-  background: #fbfbfc;
+  background: var(--column-bg);
   border: 1px solid var(--card-border);
   padding: 12px 12px 14px;
 }
@@ -742,7 +796,7 @@ textarea {
   font-size: 12.5px;
   text-align: center;
   padding: 14px 4px;
-  border: 1.5px dashed #e1e2e6;
+  border: 1.5px dashed var(--card-border);
   border-radius: 9px;
 }
 /* children laid out inside a column become static (flow) cards */
@@ -750,7 +804,7 @@ textarea {
   position: static !important;
   width: 100% !important;
   box-shadow: none;
-  border-color: #ececef;
+  border-color: var(--card-border);
 }
 .item.in-column:hover {
   box-shadow: var(--card-shadow);
@@ -797,8 +851,8 @@ textarea {
 /* ---------- comment ---------- */
 .comment {
   padding: 14px 14px 14px 42px;
-  background: #fff9f0;
-  border-color: #f0e2cc;
+  background: var(--comment-bg);
+  border-color: var(--comment-border);
   position: relative;
 }
 .comment .cmark {
@@ -822,7 +876,7 @@ textarea {
   outline: none;
   width: 100%;
   background: none;
-  color: #3c3f45;
+  color: var(--ink-body);
   resize: none;
   min-height: 20px;
 }
@@ -975,7 +1029,7 @@ textarea {
 #palette {
   position: fixed;
   z-index: 60;
-  background: #fff;
+  background: var(--rail-bg);
   border: 1px solid var(--rail-border);
   border-radius: 12px;
   box-shadow: var(--card-shadow-hover);
@@ -1009,7 +1063,7 @@ textarea {
   transform: scale(1.08);
 }
 #palette .sw.sel {
-  border-color: #2b2d31;
+  border-color: var(--ink);
 }
 #palette .pal-sep {
   grid-column: 1 / -1;
@@ -1028,18 +1082,18 @@ textarea {
   height: 36px;
   border: 1px solid transparent;
   border-radius: 8px;
-  background: #f6f6f8;
+  background: var(--hover);
   color: var(--ink);
   display: grid;
   place-items: center;
   padding: 0;
 }
 #palette .icon-pick:hover {
-  background: #ececf0;
+  background: var(--hover-strong);
 }
 #palette .icon-pick.sel {
   border-color: var(--accent);
-  background: #e9f0ff;
+  background: var(--select-soft);
   color: var(--accent);
 }
 #palette .icon-pick svg {
@@ -1053,7 +1107,7 @@ textarea {
   z-index: 70;
   min-width: 210px;
   display: none;
-  background: #fff;
+  background: var(--rail-bg);
   border: 1px solid var(--rail-border);
   border-radius: 10px;
   box-shadow: var(--card-shadow-hover);
@@ -1078,14 +1132,14 @@ textarea {
   text-align: left;
 }
 #ctxmenu .ctx-item:hover:not(:disabled) {
-  background: #f3f3f5;
+  background: var(--hover);
 }
 #ctxmenu .ctx-item:disabled {
   opacity: 0.4;
   cursor: default;
 }
 #ctxmenu .ctx-item.danger {
-  color: #c0392b;
+  color: var(--danger);
 }
 #ctxmenu .ctx-item kbd {
   font-family: var(--sans);
@@ -1205,7 +1259,7 @@ textarea {
     align-items: center;
     gap: 8px;
     padding: calc(8px + env(safe-area-inset-top)) 10px 8px;
-    background: #fff;
+    background: var(--rail-bg);
     border-bottom: 1px solid var(--rail-border);
     touch-action: none;
   }
@@ -1226,7 +1280,7 @@ textarea {
     height: 26px;
   }
   .mh-round {
-    background: #f1f1f3;
+    background: var(--hover);
     border-radius: 50%;
   }
   .mh-round svg {
@@ -1245,7 +1299,7 @@ textarea {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: #37414f;
+    color: var(--ink);
   }
 
   /* footer: glued to the screen bottom — never part of the canvas zoom. */
@@ -1257,7 +1311,7 @@ textarea {
     width: 100%;
     z-index: 100;
     display: block;
-    background: #fff;
+    background: var(--rail-bg);
     border-top: 1px solid var(--rail-border);
     padding-bottom: env(safe-area-inset-bottom);
     touch-action: none;
@@ -1309,7 +1363,7 @@ textarea {
     border-radius: 12px;
   }
   .mf-tab.active {
-    background: #f1f1f3;
+    background: var(--hover);
     color: var(--ink);
   }
 
@@ -1348,8 +1402,8 @@ textarea {
     padding: 11px;
     display: block;
     box-sizing: border-box;
-    background: #fff;
-    border: 1px solid #d9dade;
+    background: var(--rail-bg);
+    border: 1px solid var(--card-border);
     border-radius: 10px;
     box-shadow: 0 1px 2px rgba(28, 30, 38, 0.05);
     color: var(--ink);
@@ -1410,8 +1464,8 @@ textarea {
     border-radius: 10px;
     display: grid;
     place-items: center;
-    background: #f1f1f3;
-    border: 1px solid #e4e5e9;
+    background: var(--hover);
+    border: 1px solid var(--card-border);
     box-sizing: border-box;
   }
   .mf-bact-swatch {
@@ -1442,7 +1496,7 @@ textarea {
     display: flex;
     flex-direction: column;
     min-width: 180px;
-    background: #fff;
+    background: var(--rail-bg);
     border: 1px solid var(--rail-border);
     border-radius: 14px;
     box-shadow: var(--card-shadow-hover);
@@ -1458,11 +1512,11 @@ textarea {
     border-radius: 9px;
   }
   #mBoardSheet button.danger {
-    color: #c0392b;
+    color: var(--danger);
   }
   #mBoardSheet button:hover,
   #mBoardSheet button:active {
-    background: #f1f1f3;
+    background: var(--hover);
   }
 
   /* Quick notes takes over the whole viewport, canvas chrome included */
@@ -1479,7 +1533,7 @@ textarea {
     display: flex;
     flex-direction: column;
     min-width: 180px;
-    background: #fff;
+    background: var(--rail-bg);
     border: 1px solid var(--rail-border);
     border-radius: 14px;
     box-shadow: var(--card-shadow-hover);
@@ -1496,7 +1550,7 @@ textarea {
   }
   #msheet button:hover,
   #msheet button:active {
-    background: #f1f1f3;
+    background: var(--hover);
   }
 }
 
@@ -2464,10 +2518,10 @@ textarea {
   flex: 0 0 auto;
 }
 .qn-sheet-row.danger {
-  color: #c0392b;
+  color: var(--danger);
 }
 .qn-sheet-row.danger :is(svg, i) {
-  color: #c0392b;
+  color: var(--danger);
 }
 .qn-sheet-row .qn-sheet-label {
   flex: 1;
@@ -2520,7 +2574,7 @@ body.qn-open .toast {
     /* clip parked stack screens (translateX/Y) + sheet — they leak if visible */
     border-radius: 12px;
     overflow: hidden;
-    border: 1px solid #dde0e5;
+    border: 1px solid var(--qn-bar-hair);
     box-shadow:
       0 8px 28px rgba(28, 30, 38, 0.14),
       0 2px 8px rgba(28, 30, 38, 0.08);
@@ -2531,14 +2585,14 @@ body.qn-open .toast {
     flex: 0 0 auto;
     position: relative;
     z-index: 4;
-    background: #f3f4f6;
-    color: #3a414d;
+    background: var(--qn-sheet);
+    color: var(--qn-head);
     border-radius: 12px 12px 0 0;
     font-size: 15px;
     font-weight: 700;
     letter-spacing: 0.01em;
     padding: 14px 16px 12px;
-    border-bottom: 1px solid #e4e6ea;
+    border-bottom: 1px solid var(--qn-bar-hair);
   }
   body.qn-desk .qn-deskhead[hidden] {
     display: none;
@@ -2561,14 +2615,14 @@ body.qn-open .toast {
   }
   body.qn-desk .qn-scroll {
     scrollbar-width: thin;
-    scrollbar-color: #c5cad3 transparent;
+    scrollbar-color: var(--qn-grab) transparent;
   }
   body.qn-desk .qn-scroll::-webkit-scrollbar {
     display: block;
     width: 7px;
   }
   body.qn-desk .qn-scroll::-webkit-scrollbar-thumb {
-    background: #c5cad3;
+    background: var(--qn-grab);
     border-radius: 999px;
     border: 2px solid transparent;
     background-clip: padding-box;
@@ -2599,6 +2653,7 @@ body.qn-open .toast {
 #trashDialog,
 #shortcutsDialog,
 #searchDialog {
+  background: var(--rail-bg);
   width: min(440px, calc(100vw - 32px));
   max-height: min(560px, calc(100vh - 64px));
   padding: 0;
@@ -2648,7 +2703,7 @@ body.qn-open .toast {
   border-radius: 8px;
 }
 #trashList li:hover {
-  background: #f6f6f8;
+  background: var(--hover);
 }
 .trash-icon {
   flex: none;
@@ -2696,10 +2751,10 @@ body.qn-open .toast {
   cursor: not-allowed;
 }
 .trash-empty {
-  color: #c0392b;
+  color: var(--danger);
 }
 .trash-empty:hover:not(:disabled) {
-  background: #fdf1f0;
+  background: var(--danger-soft);
 }
 .trash-empty:disabled {
   opacity: 0.5;
@@ -2750,7 +2805,7 @@ body.qn-open .toast {
 
 /* Palette "None" swatch: a struck-through blank. */
 #palette .sw-none {
-  background: linear-gradient(to top right, transparent 46%, #c4c6cc 46% 54%, transparent 54%), #fff;
+  background: linear-gradient(to top right, transparent 46%, #c4c6cc 46% 54%, transparent 54%), var(--rail-bg);
   border-color: var(--rail-border);
 }
 
@@ -2824,7 +2879,7 @@ body.qn-open .toast {
   text-decoration: line-through;
 }
 .rich blockquote {
-  background: #f6f6f8;
+  background: var(--hover);
   border-radius: 6px;
   padding: 6px 10px;
   color: var(--ink-soft);
@@ -2833,12 +2888,12 @@ body.qn-open .toast {
 .rich code {
   font-family: ui-monospace, monospace;
   font-size: 0.9em;
-  background: #f1f1f3;
+  background: var(--hover);
   border-radius: 4px;
   padding: 1px 4px;
 }
 .rich pre {
-  background: #f1f1f3;
+  background: var(--hover);
   border-radius: 6px;
   padding: 8px 10px;
   overflow-x: auto;
@@ -2849,6 +2904,7 @@ body.qn-open .toast {
 }
 .rich mark {
   background: #fde68a;
+  color: #2b2d31; /* dark ink on the yellow fill, in both themes */
   border-radius: 2px;
 }
 .rich a {
@@ -2913,7 +2969,7 @@ body.qn-open .toast {
 }
 .sr-item:hover,
 .sr-item:focus-visible {
-  background: #f1f1f3;
+  background: var(--hover);
 }
 .sr-item :is(svg, i) {
   flex: none;
@@ -2951,7 +3007,7 @@ body.qn-open .toast {
   flex-direction: column;
   min-width: 220px;
   padding: 6px;
-  background: #fff;
+  background: var(--rail-bg);
   border: 1px solid var(--rail-border);
   border-radius: 10px;
   box-shadow: var(--card-shadow-hover);
@@ -2966,7 +3022,7 @@ body.qn-open .toast {
   text-decoration: none;
 }
 #exportMenu a:hover {
-  background: #f1f1f3;
+  background: var(--hover);
 }
 .top-right button.ghost {
   border: none;
