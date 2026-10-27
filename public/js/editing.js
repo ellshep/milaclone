@@ -8,6 +8,7 @@ import { closePalette, closeCtx } from './menus.js';
 import { updateSelectionChrome } from './boardchrome.js';
 import { reloadView } from './main.js';
 import { startRich, stopRich } from './rich.js';
+import { applyFilter } from './labels.js';
 
 // Selection, inline-edit mode, debounced saves, and deletion.
 
@@ -22,6 +23,7 @@ export function selectIds(ids, primary = ids[ids.length - 1] ?? null) {
   state.selection = new Set(ids);
   state.selectedId = primary;
   paintSelection();
+  applyFilter(); // a selected card stays in view (e.g. one just made while filtering)
   closePalette();
   closeCtx();
   updateSelectionChrome();

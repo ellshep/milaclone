@@ -186,7 +186,7 @@ Set up in the `chore/quality-gates` PR, at the user's request, so auto-merged ph
 - [x] **F7.6 Templates** (S).
   - Boards kept inside a "Templates" board. "New from template" copies one with `/copy`.
   - Acceptance: the copy is deep, and editing it leaves the template unchanged.
-- [ ] **F7.7 Labels and filtering** (M).
+- [x] **F7.7 Labels and filtering** (M).
   - Coloured labels on any card, and a filter that dims or hides cards without the chosen labels.
   - Acceptance: labels persist. In the e2e test, filtering by a label hides the cards without it.
 

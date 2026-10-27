@@ -93,7 +93,7 @@ test('F3.11: cmd+U goes up, cmd+[ / cmd+] walk history; the header title renames
   const id = await freshCanvas(page);
   await place(page, 'board');
   await page.keyboard.press('Escape');
-  await page.locator('.item.type-board').dblclick();
+  await page.locator('.item.type-board .tile').dblclick(); // the tile, not the title: a click there renames
   await expect.poll(() => page.evaluate(() => location.hash)).not.toBe('#' + id);
   const child = await page.evaluate(() => location.hash);
 

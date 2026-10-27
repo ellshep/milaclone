@@ -7,6 +7,7 @@ import { refreshItem, render } from './cards.js';
 import { select, renameSelected, deleteSelection, selectedItems } from './editing.js';
 import { copySelected, pasteClipboard, duplicateSelected, toggleLock } from './clipboard.js';
 import { setLine, editLabel } from './lines.js';
+import { openLabels } from './labels.js';
 
 // The floating color/icon palette and the right-click context menu.
 
@@ -129,6 +130,7 @@ export function openCtx(e, it) {
             ? []
             : [{ label: 'Rename', hint: 'Return', fn: () => renameSelected() }]),
           { label: locked ? 'Unlock Position' : 'Lock Position', fn: () => toggleLock() },
+          { label: 'Labels…', fn: () => openLabels() },
           ...(it.type === 'board' && !many ? [{ label: 'Create Shortcut', fn: () => createShortcut(it) }] : []),
           ...(it.type === 'image'
             ? [
@@ -161,7 +163,10 @@ export function openCtx(e, it) {
       k.textContent = r.hint;
       b.appendChild(k);
     }
-    b.onclick = () => r.fn();
+    b.onclick = () => {
+      closeCtx(); // every row, not just the ones whose action re-renders
+      r.fn();
+    };
     dom.ctxmenu.appendChild(b);
   });
   dom.ctxmenu.classList.add('open');
@@ -185,7 +190,6 @@ function restack(it, where) {
   for (const g of ordered) g.z = ++z;
   api.patchMany(ordered.map(g => ({ id: g.id, z: g.z })));
   for (const g of ordered) refreshItem(g);
-  closeCtx();
 }
 
 function toggleTransparent(it) {
@@ -193,7 +197,6 @@ function toggleTransparent(it) {
   it.data = Object.assign({}, it.data, { transparent });
   api.patch(it.id, { data: { transparent } });
   refreshItem(it);
-  closeCtx();
 }
 
 export function closeCtx() {

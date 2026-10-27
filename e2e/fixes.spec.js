@@ -46,7 +46,7 @@ test('cmd+Z brings back a deleted board with everything inside it', async ({ pag
 
   await page.keyboard.press('ControlOrMeta+z');
   await expect(page.locator('.item.type-board')).toHaveCount(1);
-  await page.locator('.item.type-board').dblclick();
+  await page.locator('.item.type-board .tile').dblclick(); // the tile, not the title: a click there renames
   await expect(page.locator('.item.type-note .nbody')).toHaveText('precious');
 });
 
@@ -94,7 +94,7 @@ test('an edit still in the debounce window is saved when the page is left', asyn
 test('browser Back returns from a nested board to its parent', async ({ page }) => {
   const canvasId = await freshCanvas(page);
   await place(page, 'board');
-  await page.locator('.item.type-board').dblclick();
+  await page.locator('.item.type-board .tile').dblclick(); // the tile, not the title: a click there renames
   await expect(page.locator('#crumbs .crumb')).toHaveCount(3);
 
   await page.goBack();
