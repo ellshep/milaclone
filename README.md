@@ -74,6 +74,12 @@ node scripts/import-milanote.js --base http://localhost:4321 --into "From Milano
 Every card remembers its Milanote id, so re-running skips what's already there,
 and anything that couldn't be imported is listed at the end.
 
+To keep positions, columns, drawings and colours, read Milanote's own board
+data instead: capture it from a signed-in browser, then run
+`--reader milanote boards.json --media media.json`. The media file holds the
+images, which only download while you're signed in. `docs/next-updates.md`
+(U1.2) has the details.
+
 ## Development
 
 ```bash
