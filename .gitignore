@@ -23,3 +23,6 @@ public/vendor/
 .lavish/
 .impeccable/
 .private/
+
+# Database snapshots taken by scripts/deploy.sh
+backups/
