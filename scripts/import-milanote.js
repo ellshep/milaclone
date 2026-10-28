@@ -4,7 +4,7 @@
 /**
  * Milanote → milaclone importer engine (U1.3).
  *
- *   node scripts/import-milanote.js [--base URL] [--into "From Milanote"] [--reader md|json] [--dry-run] source …
+ *   node scripts/import-milanote.js [--base URL] [--into "From Milanote"] [--reader md|json|milanote] [--media media.json] [--dry-run] source …
  *
  * A reader turns its sources into a card tree; the engine writes that tree
  * through the HTTP API only (POST /api/item, POST /api/upload, PATCH /api/item/:id).
@@ -16,7 +16,8 @@
  *            items?: card[],                    // board: what's on it; column: the cards in it
  *            file?: { path | url, name?, mime? } // image/file: uploaded before the card is made
  *            from?, to?: { ref } | { x, y }      // line ends; ref = a sourceId on the same board
- *            target? }                          // shortcut: sourceId of the board it points at
+ *            target?,                           // shortcut: sourceId of the board it points at
+ *            missing? }                         // why it can't be imported: reported, not created
  * Board cards take their title and icon from data (colour from color), as
  * POST /api/item does.
  */
@@ -24,6 +25,7 @@
 const fs = require('fs');
 const path = require('path');
 const { parseMd, gridPos } = require('./import-milanote-md.js');
+const milanoteReader = require('./read-milanote-data.js');
 
 // Everything milaclone renders, i.e. the right-hand column of the mapping in
 // docs/next-updates.md. A card of any other type is reported, never dropped silently.
@@ -124,7 +126,7 @@ const jsonReader = {
   },
 };
 
-const READERS = { md: mdReader, json: jsonReader };
+const READERS = { md: mdReader, json: jsonReader, milanote: milanoteReader };
 
 // ---- HTTP ------------------------------------------------------------------
 
@@ -239,6 +241,7 @@ async function importCanvas(run, canvasId, cards, depth) {
 }
 
 async function placeTree(run, canvas, card, parentItemId, depth) {
+  if (card.missing) return miss(run, card, card.missing);
   if (!TYPES.has(card.type)) return miss(run, card, 'no milaclone card type');
   if (card.type === 'line') return canvas.lines.push(card);
   if (card.type === 'shortcut') return run.shortcuts.push({ canvas, card, parentItemId, depth });
@@ -275,7 +278,7 @@ async function placeCard(run, canvas, card, parentItemId, depth, extra = {}) {
       const up = await upload(run.base, card.file, type === 'image');
       Object.assign(data, { src: up.src, name: up.name, mime: up.mime });
     } catch (err) {
-      if (!card.file.url) {
+      if (!card.file.url || card.file.url.startsWith('data:')) {
         miss(run, card, 'upload failed: ' + err.message);
         return null;
       }
@@ -332,12 +335,13 @@ function summary({ created, skipped, missed }, dryRun) {
 // ---- CLI -------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const args = { base: 'http://127.0.0.1:4321', into: null, reader: 'md', dryRun: false, files: [] };
+  const args = { base: 'http://127.0.0.1:4321', into: null, reader: 'md', media: null, dryRun: false, files: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--base') args.base = String(argv[++i] || '').replace(/\/$/, '');
     else if (a === '--into') args.into = argv[++i];
     else if (a === '--reader') args.reader = argv[++i];
+    else if (a === '--media') args.media = argv[++i];
     else if (a === '--dry-run') args.dryRun = true;
     else if (a === '--help' || a === '-h') return { help: true };
     else if (a.startsWith('-')) throw new Error('unknown flag: ' + a);
@@ -347,12 +351,16 @@ function parseArgs(argv) {
   return args;
 }
 
-const USAGE = `Usage: node scripts/import-milanote.js [--base URL] [--into "Board title"] [--reader md|json] [--dry-run] source …
+const USAGE = `Usage: node scripts/import-milanote.js [--base URL] [--into "Board title"] [--reader md|json|milanote] [--media media.json] [--dry-run] source …
 
 Imports Milanote boards into a running milaclone through its API. Each card
 keeps its Milanote id in data.sourceId, so re-running skips what's already
 there. --into puts everything under that board on Home (made if missing).
---dry-run prints the plan and counts and writes nothing.`;
+--dry-run prints the plan and counts and writes nothing.
+
+Readers: md (Milanote's Markdown export, the default), json (a saved card
+tree) and milanote (a capture of Milanote's own board data; --media maps its
+image URLs to data: URIs captured in the browser).`;
 
 async function main(argv, log = console.log) {
   const args = parseArgs(argv);
@@ -361,7 +369,8 @@ async function main(argv, log = console.log) {
     return args.help ? 0 : 1;
   }
   for (const f of args.files) if (!fs.existsSync(f)) throw new Error('file not found: ' + f);
-  const cards = await READERS[args.reader].read(args.files);
+  if (args.media && !fs.existsSync(args.media)) throw new Error('file not found: ' + args.media);
+  const cards = await READERS[args.reader].read(args.files, { media: args.media || {} });
   const result = await importCards(cards, { base: args.base, into: args.into, dryRun: args.dryRun, log });
   log(summary(result, args.dryRun));
   return 0;

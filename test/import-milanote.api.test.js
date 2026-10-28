@@ -236,10 +236,12 @@ test('parseArgs reads flags and files', () => {
     base: 'http://h:1',
     into: 'From Milanote',
     reader: 'md',
+    media: null,
     dryRun: true,
     files: ['a.md'],
   });
   assert.deepEqual(parseArgs(['-h']), { help: true });
   assert.throws(() => parseArgs(['--nope']), /unknown flag/);
   assert.throws(() => parseArgs(['--reader', 'html']), /unknown reader/);
+  assert.equal(parseArgs(['--reader', 'milanote', '--media', 'm.json', 'c.json']).media, 'm.json');
 });
