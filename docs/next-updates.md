@@ -104,8 +104,22 @@ There's no account export and no public API.
     milaclone. That gives a checklist of what's missing, partly imported and
     done.
   - Move the earlier imports to Trash (Q2).
-  - Acceptance: the inventory is saved as `docs/milanote-inventory.md`, and
-    the backup file exists.
+  - Acceptance: the inventory is saved, and the backup file exists. The
+    inventory lives in the gitignored `.private/milanote-inventory.md`, not
+    `docs/`, because the repo is public and board titles are personal.
+  - Milanote side done 2026-10-28 (Claude in Chrome, read-only, from
+    `/api/boards?ids=`): 32 boards, 143 cards. By type: BOARD 31, CARD 36,
+    IMAGE 30, LINK 18, COLUMN 10, COLOR_SWATCH 9, TASK_LIST 5, TABLE 2,
+    ANNOTATION 2 and COMMENT_THREAD 1. There are no lines, aliases, files or
+    documents.
+  - What it means for the route-B reader:
+    - A to-do list's tasks are separate TASK elements whose parent is the list.
+    - ANNOTATION isn't in the mapping below yet.
+    - 34 cards sit in Unsorted, which has an order but no x/y, so the reader
+      has to place them.
+    - Images are behind the Milanote login.
+  - Still open: the backup, the milaclone side of the checklist, and moving
+    earlier imports to Trash.
 - [ ] **U1.2 Route B test, about an hour.**
   - With Milanote open and logged in, use Chrome DevTools to capture the data
     the web app loads for one board, which needs to have sub-boards, columns,
