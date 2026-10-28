@@ -62,12 +62,17 @@ You can set three environment variables: `PORT` (default 4321), `HOST`
 
 ## Import from Milanote
 
-`scripts/import-milanote-md.js` reads Milanote's Markdown export and recreates
-its boards, notes, to-dos and links in a running instance:
+`scripts/import-milanote.js` reads Milanote's Markdown export and recreates
+its boards, notes, to-dos, links and images in a running instance, under a
+staging board on Home:
 
 ```bash
-node scripts/import-milanote-md.js --base http://localhost:4321 my-board.md
+node scripts/import-milanote.js --base http://localhost:4321 --into "From Milanote" --dry-run my-board.md
 ```
+
+`--dry-run` prints the plan and counts and writes nothing; drop it to import.
+Every card remembers its Milanote id, so re-running skips what's already there,
+and anything that couldn't be imported is listed at the end.
 
 ## Development
 

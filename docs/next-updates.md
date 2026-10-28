@@ -131,6 +131,9 @@ There's no account export and no public API.
     2. Nesting.
     3. A second run creates nothing.
     4. `--dry-run` makes no writes.
+  - The engine has landed (`scripts/import-milanote.js`, with the route-A
+    Markdown reader and `test/import-milanote.api.test.js`). The box stays open
+    until the route-B reader, which waits on U1.2, plugs into it.
 - [ ] **U1.4 Staged import.**
   - Run against the home server into a "From Milanote" board on Home.
   - Review it on desktop and phone.
