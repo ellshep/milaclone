@@ -60,7 +60,7 @@ failed write toasts "Could not save — check your connection" (`api.js`
       `context.setOffline(true)` plus a reload still renders the last-opened
       board.
     - API test: the `/sw.js` header is set.
-- [ ] **U2.3 Standalone polish.**
+- [x] **U2.3 Standalone polish.**
   - `overscroll-behavior: none` on the page, so there's no pull-to-refresh or
     rubber-band.
   - `-webkit-touch-callout: none` on cards and the stage. Text fields keep
@@ -70,8 +70,8 @@ failed write toasts "Could not save — check your connection" (`api.js`
     2. Check the icon and name.
     3. Check the notch and home bar.
     4. Turn on Airplane mode and confirm it still opens.
-  - The Playwright part has landed (`e2e/mobile-board.spec.js`). The box stays
-    open until the iPhone checks are done.
+  - The Playwright part is in `e2e/mobile-board.spec.js`. The owner ran all four
+    iPhone checks on the home server on 2026-10-28, and they passed.
 
 Out of scope: offline editing, Web Share Target (iOS doesn't support it) and
 push notifications.
