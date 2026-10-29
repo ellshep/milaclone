@@ -23,12 +23,14 @@ async function freshCanvas(page) {
 }
 
 // arm a toolbar tool, then click the canvas to drop the new card there.
-// Waits for the create round-trip so the card (and any auto-edit) has settled.
+// Waits for the create round-trip and the new card, so any auto-edit has settled.
 async function place(page, tool, x = 600, y = 400) {
   await page.click(`.tool[data-tool="${tool}"]`);
   const created = page.waitForResponse(r => r.url().endsWith('/api/item') && r.request().method() === 'POST');
   await page.mouse.click(x, y);
-  await created;
+  const it = await (await created).json();
+  // the response lands before createAt renders the card and enters edit mode
+  await expect(page.locator(`[data-id="${it.id}"]`)).toHaveCount(1);
 }
 
 // note/todo/link/column cards drop into edit mode; click empty canvas to leave it

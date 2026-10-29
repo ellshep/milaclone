@@ -117,7 +117,19 @@ The server runs from a git checkout, so deploying is: move the checkout to the
 commit you want, then rebuild the image. Code is baked into the image at build
 time, so `docker compose restart` alone will **not** pick up changes.
 
-Deploy the latest `main`:
+Deploy the latest `main` with the script:
+
+```bash
+scripts/deploy.sh          # does nothing when already up to date
+scripts/deploy.sh --force  # rebuild and restart anyway
+```
+
+It refuses to run off `main` or with uncommitted changes, fast-forwards to
+`origin/main`, saves a database snapshot to `backups/` (newest 10 kept;
+uploads aren't included), rebuilds, and waits for the app to answer on
+`127.0.0.1:8182` — printing the app's logs if it doesn't.
+
+Or by hand:
 
 ```bash
 cd ~/milaclone                  # wherever the checkout lives
