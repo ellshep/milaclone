@@ -24,5 +24,6 @@ public/vendor/
 .impeccable/
 .private/
 
-# Database snapshots taken by scripts/deploy.sh
+# Database snapshots and the deployed commit, written by scripts/deploy.sh
 backups/
+.deployed
