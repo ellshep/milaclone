@@ -8,14 +8,14 @@ acceptance test lands.
 
 ## Decisions
 
-| #   | Question                        | Decision                                                                                                                                       |
-| --- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Q1  | How to get data out of Milanote | Test route B, reading Milanote's own board data, on one board. Fall back to route A, the improved Markdown + ZIP import, if B doesn't hold up. |
-| Q2  | Boards already imported         | Move them to Trash, then re-import. They stay restorable until Trash is emptied.                                                               |
-| Q3  | How the import runs             | A one-off script, run together. No import UI in the app.                                                                                       |
-| Q4  | Offline on iPhone               | Network-first service worker. The app and the last-loaded boards open offline. No offline editing (roadmap D4 stands).                         |
-| Q5  | App icon                        | A serif "M" (Fraunces) in the accent blue `#2f6df0` on white.                                                                                  |
-| Q6  | Order                           | U2 first, then U1.                                                                                                                             |
+| #   | Question                        | Decision                                                                                                                       |
+| --- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Q1  | How to get data out of Milanote | Route A, Milanote's official Markdown + ZIP export. Route B (Milanote's own board data) was tested and then dropped, see U1.2. |
+| Q2  | Boards already imported         | Move them to Trash, then re-import. They stay restorable until Trash is emptied.                                               |
+| Q3  | How the import runs             | A one-off script, run together. No import UI in the app.                                                                       |
+| Q4  | Offline on iPhone               | Network-first service worker. The app and the last-loaded boards open offline. No offline editing (roadmap D4 stands).         |
+| Q5  | App icon                        | A serif "M" (Fraunces) in the accent blue `#2f6df0` on white.                                                                  |
+| Q6  | Order                           | U2 first, then U1.                                                                                                             |
 
 ## U2 · Mila as an iPhone app (PWA)
 
@@ -112,7 +112,7 @@ There's no account export and no public API.
     IMAGE 30, LINK 18, COLUMN 10, COLOR_SWATCH 9, TASK_LIST 5, TABLE 2,
     ANNOTATION 2 and COMMENT_THREAD 1. There are no lines, aliases, files or
     documents.
-  - What it means for the route-B reader (now built, see U1.2):
+  - What it meant for the route-B reader (since removed, see U1.2):
     - A to-do list's tasks are separate TASK elements whose parent is the list.
     - ANNOTATION is a freehand drawing, so it maps to sketch.
     - Only 1 card sits in Unsorted. The first count of 34 also took in cards
@@ -131,55 +131,10 @@ There's no account export and no public API.
     reader changes.
   - Acceptance: one sample board's JSON plus a written field mapping in this
     doc.
-  - Passed 2026-10-28. Claude in Chrome captured every board, not just one,
-    into a single file: `{ homeId, responses: { <boardId>: <response> } }`.
-    Each response is what `app.milanote.com/api/boards?ids=<id>` returns.
-    The capture stays in the gitignored `.private/` because the repo is
-    public. `test/fixtures/milanote/board-data.json` is a made-up board with
-    the same shape, and it stands in as the sample. The account has no lines,
-    so the line mapping is still unseen (see below).
-  - Field mapping, as `scripts/read-milanote-data.js` applies it:
-    - **Tree:** each element's `location.parentId` is its board, column, list
-      or card. `section` says how it sits:
-      - `CANVAS`: free on the board at `position.{x, y}`.
-      - `INBOX`: in a list (a column, the board's Unsorted panel or a task
-        list), ordered by `position.score`. Its `index` is stale.
-      - `ATTACHED`: pinned to a card (comment threads).
-      - `TRASH`: deleted, so it is left out.
-    - **Units:** positions and `content.width` are grid units of 10 px. Where
-      no width is stored, the reader uses a default per type (cards 30 grid
-      units, boards 12).
-    - **Layout:** Milanote packs cards tighter than milaclone draws them. A
-      settle pass moves a card down only as far as it needs to stop it
-      overlapping the card above it, using estimated heights. Unsorted cards
-      have no position and stack to the right of the board.
-    - **Text:** `content.textContent` is ProseMirror JSON. The reader keeps the
-      nodes and marks milaclone's editor knows and drops Milanote-only attrs
-      (`key`, `textAlign`). An unknown node keeps its words as a paragraph.
-    - **CARD → note:** `background.color` becomes the card colour.
-    - **TASK_LIST → todo:** the title is the `taskListTitle` node, or
-      `content.title` when `showTitle` is set. Tasks come from the `taskItem`
-      nodes: `taskId`, `checked`, and nesting as `indent`. The separate TASK
-      elements are the same tasks. A TASK missing from its list is reported.
-    - **LINK → link:** `content.link.url` and `content.link.title`. A link with
-      no URL is reported.
-    - **IMAGE → image:** the file is at `content.image.original`, and the
-      caption is shown when `showCaption` is set. An image with no `original`
-      is an empty slot, and it's reported.
-    - **COLUMN → column:** `content.title`. There's no collapsed state in the
-      data.
-    - **BOARD → board:** `content.title`, and `content.color` (hex or a name
-      such as `BLUE`) maps by hue to milaclone's palette. Milanote's icons are
-      its own SVGs, so they aren't kept.
-    - **COLOR_SWATCH → swatch:** `content.color.value`.
-    - **TABLE → table:** each cell's `value`.
-    - **ANNOTATION → sketch:** each of `content.drawing.paths` becomes a
-      stroke, with its `points` scaled into the 400×280 sketch box.
-    - **COMMENT_THREAD → comment:** a comment card beside its card. The text
-      comes from the response's `comments` that share its `threadId`, oldest
-      first.
-    - **Unseen in this account:** LINE, ALIAS, FILE and DOCUMENT. Any other
-      type is reported as not imported, never dropped.
+  - Passed 2026-10-28, and a route-B reader (`--reader milanote`) was built
+    on it. Removed 2026-10-29: reading Milanote's internal web-app data may
+    break its terms of service, so the importer reads only Milanote's
+    official export (route A). The capture in `.private/` is no longer used.
 - [x] **U1.3 Importer script.**
   - `scripts/import-milanote.js` writes only through the existing API:
     `POST /api/item`, `/api/upload`, `PATCH`. No server changes.
@@ -197,13 +152,7 @@ There's no account export and no public API.
     4. `--dry-run` makes no writes.
   - The engine has landed (`scripts/import-milanote.js`, with the route-A
     Markdown reader and `test/import-milanote.api.test.js`).
-  - The route-B reader has landed too (`--reader milanote`,
-    `scripts/read-milanote-data.js`). `test/import-milanote-data.api.test.js`
-    runs the four checks against the route-B fixture.
-  - Milanote's images need the login, so a second browser capture saves them
-    as `data:` URIs keyed by URL. `--media` passes that file in. Without it,
-    each Milanote-hosted image is reported, not turned into a dead link, so
-    a later run with `--media` still adds it.
+  - A route-B reader also landed and was then removed (see U1.2).
 - [ ] **U1.4 Staged import.**
   - Run against the home server into a "From Milanote" board on Home.
   - Review it on desktop and phone.
@@ -214,31 +163,11 @@ There's no account export and no public API.
   - Anything unmapped is listed by name, never dropped silently.
   - Acceptance: every count matches, or each difference is explained.
 
-Card type mapping (route B). The field mapping is under U1.2.
-
-| Milanote                       | milaclone                                   |
-| ------------------------------ | ------------------------------------------- |
-| card (`CARD`)                  | note                                        |
-| task list (`TASK_LIST`)        | todo (nesting kept as indent)               |
-| link (`LINK`)                  | link (embeds stay)                          |
-| image (`IMAGE`)                | image (with caption)                        |
-| file                           | file (unseen; reported until mapped)        |
-| column (`COLUMN`)              | column (Milanote stores no collapsed state) |
-| line                           | line (unseen; reported until mapped)        |
-| board (`BOARD`)                | board (colour kept, icon not)               |
-| board alias                    | shortcut (unseen; reported until mapped)    |
-| colour swatch (`COLOR_SWATCH`) | swatch                                      |
-| table (`TABLE`)                | table                                       |
-| document                       | document (unseen; reported until mapped)    |
-| drawing (`ANNOTATION`)         | sketch                                      |
-| comment (`COMMENT_THREAD`)     | comment                                     |
-
 ## Risks
 
-| Risk                                      | Mitigation                                                                |
-| ----------------------------------------- | ------------------------------------------------------------------------- |
-| Duplicates or bad data on the live server | Backup first, `--dry-run`, the staging board, skip-by-`sourceId`          |
-| Milanote asset URLs expiring mid-run      | Download as each board imports; route A's ZIP as a fallback               |
-| A stale service-worker cache after deploy | Network-first, plus `no-cache` on `sw.js`                                 |
-| Container memory during a large import    | Upload one file at a time                                                 |
-| Milanote's web data shape is undocumented | It's a one-off run, tested on one board first, with route A as a fallback |
+| Risk                                      | Mitigation                                                       |
+| ----------------------------------------- | ---------------------------------------------------------------- |
+| Duplicates or bad data on the live server | Backup first, `--dry-run`, the staging board, skip-by-`sourceId` |
+| Milanote asset URLs expiring mid-run      | Download as each board imports; route A's ZIP as a fallback      |
+| A stale service-worker cache after deploy | Network-first, plus `no-cache` on `sw.js`                        |
+| Container memory during a large import    | Upload one file at a time                                        |
