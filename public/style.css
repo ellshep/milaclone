@@ -2948,6 +2948,63 @@ textarea {
 .qn-sheet-row.on .qn-sheet-state {
   color: var(--qn-accent);
 }
+/* tag picker: a toggle per tag, selected ones filled and tinted */
+.qn-sheet-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 4px 10px;
+}
+.qn-sheet-title {
+  font-family: var(--qn-serif);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--qn-head);
+}
+.qn-sheet-sub {
+  font-size: 14px;
+  color: var(--qn-muted);
+}
+.qn-sheet-row.qn-tagrow {
+  gap: 14px;
+  padding: 14px 12px;
+  margin: 2px 0;
+  border-bottom: none;
+  border-radius: 14px;
+  font-weight: 400;
+  color: var(--qn-soft);
+}
+.qn-sheet-row.qn-tagrow.on {
+  background: var(--qn-surface);
+  font-weight: 600;
+  color: var(--qn-head);
+}
+.qn-tagmark {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--qn-faint);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.qn-sheet-row .qn-tagmark :is(svg, i) {
+  width: 14px;
+  height: 14px;
+  color: #fff;
+  stroke-width: 3.5;
+  opacity: 0;
+}
+.qn-tagrow.on .qn-tagmark {
+  background: var(--qn-accent);
+  border-color: var(--qn-accent);
+}
+.qn-sheet-row.qn-tagrow.on .qn-tagmark :is(svg, i) {
+  opacity: 1;
+}
 .qn-sheet-field {
   display: flex;
   align-items: center;
