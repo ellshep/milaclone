@@ -1632,10 +1632,20 @@ textarea {
     touch-action: none;
   }
   .qn-scroll,
-  .qn-chips,
   textarea,
   input {
     touch-action: pan-y;
+  }
+  .qn-chips {
+    touch-action: pan-x pan-y; /* the search screen's chip row scrolls sideways */
+  }
+  /* The lock above is for the canvas. In the iOS home-screen app the pan-y
+     opt-backs didn't get through it, so Quick notes couldn't scroll there
+     (Safari and Chrome tabs were fine). While Quick notes is open it covers
+     the canvas, which ignores input, so the lock has nothing to protect. */
+  html.qn-open,
+  html.qn-open body {
+    touch-action: auto;
   }
   .mf-tools {
     touch-action: pan-x;
@@ -2053,6 +2063,7 @@ textarea {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   display: flex;
