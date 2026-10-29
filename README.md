@@ -50,7 +50,9 @@ data, not a copy: tick a task on your phone and it's ticked on the board.
 - **Task details.** Each task can have a star, a due date, tags and a note
   (with bullets, numbering, bold, italic and underline).
 - **Tags and search.** Search matches task text and notes. Tap a tag chip to
-  see every task with that tag, across all your lists.
+  see every task with that tag, across all your lists. Turn on _Tag filters_
+  in the overview's **···** menu to narrow the lists to those with a tagged
+  task.
 - **Back to the board.** A list's **···** menu has _Show on board_, which opens
   the board the card lives on. It also has _Rename list_ and _Delete list_.
   Delete can be undone.
@@ -154,12 +156,6 @@ node scripts/import-milanote.js --base http://localhost:4321 --into "From Milano
 `--dry-run` prints the plan and counts and writes nothing; drop it to import.
 Every card remembers its Milanote id, so re-running skips what's already there,
 and anything that couldn't be imported is listed at the end.
-
-To keep positions, columns, drawings and colours, read Milanote's own board
-data instead: capture it from a signed-in browser, then run
-`--reader milanote boards.json --media media.json`. The media file holds the
-images, which only download while you're signed in. `docs/next-updates.md`
-(U1.2) has the details.
 
 ## Development
 

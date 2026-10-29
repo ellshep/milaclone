@@ -4,7 +4,7 @@
 /**
  * Milanote → milaclone importer engine (U1.3).
  *
- *   node scripts/import-milanote.js [--base URL] [--into "From Milanote"] [--reader md|json|milanote] [--media media.json] [--dry-run] source …
+ *   node scripts/import-milanote.js [--base URL] [--into "From Milanote"] [--reader md|json] [--dry-run] source …
  *
  * A reader turns its sources into a card tree; the engine writes that tree
  * through the HTTP API only (POST /api/item, POST /api/upload, PATCH /api/item/:id).
@@ -25,10 +25,9 @@
 const fs = require('fs');
 const path = require('path');
 const { parseMd, gridPos } = require('./import-milanote-md.js');
-const milanoteReader = require('./read-milanote-data.js');
 
-// Everything milaclone renders, i.e. the right-hand column of the mapping in
-// docs/next-updates.md. A card of any other type is reported, never dropped silently.
+// Every card type milaclone renders. A card of any other type is reported,
+// never dropped silently.
 const TYPES = new Set([
   'note',
   'todo',
@@ -126,7 +125,7 @@ const jsonReader = {
   },
 };
 
-const READERS = { md: mdReader, json: jsonReader, milanote: milanoteReader };
+const READERS = { md: mdReader, json: jsonReader };
 
 // ---- HTTP ------------------------------------------------------------------
 
@@ -335,13 +334,12 @@ function summary({ created, skipped, missed }, dryRun) {
 // ---- CLI -------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const args = { base: 'http://127.0.0.1:4321', into: null, reader: 'md', media: null, dryRun: false, files: [] };
+  const args = { base: 'http://127.0.0.1:4321', into: null, reader: 'md', dryRun: false, files: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--base') args.base = String(argv[++i] || '').replace(/\/$/, '');
     else if (a === '--into') args.into = argv[++i];
     else if (a === '--reader') args.reader = argv[++i];
-    else if (a === '--media') args.media = argv[++i];
     else if (a === '--dry-run') args.dryRun = true;
     else if (a === '--help' || a === '-h') return { help: true };
     else if (a.startsWith('-')) throw new Error('unknown flag: ' + a);
@@ -351,16 +349,15 @@ function parseArgs(argv) {
   return args;
 }
 
-const USAGE = `Usage: node scripts/import-milanote.js [--base URL] [--into "Board title"] [--reader md|json|milanote] [--media media.json] [--dry-run] source …
+const USAGE = `Usage: node scripts/import-milanote.js [--base URL] [--into "Board title"] [--reader md|json] [--dry-run] source …
 
 Imports Milanote boards into a running milaclone through its API. Each card
 keeps its Milanote id in data.sourceId, so re-running skips what's already
 there. --into puts everything under that board on Home (made if missing).
 --dry-run prints the plan and counts and writes nothing.
 
-Readers: md (Milanote's Markdown export, the default), json (a saved card
-tree) and milanote (a capture of Milanote's own board data; --media maps its
-image URLs to data: URIs captured in the browser).`;
+Readers: md (Milanote's Markdown export, the default) and json (a saved card
+tree).`;
 
 async function main(argv, log = console.log) {
   const args = parseArgs(argv);
@@ -369,8 +366,7 @@ async function main(argv, log = console.log) {
     return args.help ? 0 : 1;
   }
   for (const f of args.files) if (!fs.existsSync(f)) throw new Error('file not found: ' + f);
-  if (args.media && !fs.existsSync(args.media)) throw new Error('file not found: ' + args.media);
-  const cards = await READERS[args.reader].read(args.files, { media: args.media || {} });
+  const cards = await READERS[args.reader].read(args.files);
   const result = await importCards(cards, { base: args.base, into: args.into, dryRun: args.dryRun, log });
   log(summary(result, args.dryRun));
   return 0;
