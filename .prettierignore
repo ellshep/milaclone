@@ -9,3 +9,4 @@ test-results/
 public/uploads/
 public/vendor/
 package-lock.json
+backups/
