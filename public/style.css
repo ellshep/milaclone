@@ -3008,7 +3008,7 @@ textarea {
 .qn-sheet-field {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   padding: 14px 4px;
 }
 .qn-sheet-field input {
@@ -3021,6 +3021,19 @@ textarea {
   font-size: 16px;
   color: var(--qn-ink);
   padding: 12px 14px;
+}
+
+.qn-sheet-add {
+  flex: 0 0 auto;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: var(--qn-head);
+  color: var(--qn-screen);
+  font-size: 16px;
+  font-weight: 600;
+}
+.qn-sheet-add:disabled {
+  opacity: 0.4;
 }
 
 /* toast matches the Quick notes palette while the workspace is open */

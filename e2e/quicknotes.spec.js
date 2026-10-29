@@ -185,6 +185,17 @@ test('the tag sheet marks the tags already on the task and toggles them', async 
   await expect(row('taste')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.qn-sheet-sub')).toContainText('2 on this task');
   await expect(page.locator('.qn-taglist .qn-tag')).toHaveText(['#money', '#taste']);
+
+  // the Add button submits a new tag, same as Enter, and is off while the field is empty
+  const add = page.locator('.qn-sheet-add');
+  await expect(add).toBeDisabled();
+  await page.fill('.qn-sheet-field input', '#Errands');
+  await expect(add).toBeEnabled();
+  await add.click();
+  await expect(row('errands')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.qn-sheet-field input')).toHaveValue('');
+  await expect(page.locator('.qn-sheet-field input')).toBeFocused();
+  await expect(page.locator('.qn-taglist .qn-tag')).toHaveText(['#money', '#taste', '#errands']);
 });
 
 test('the note bullet button rewrites the note lines', async ({ page }) => {
