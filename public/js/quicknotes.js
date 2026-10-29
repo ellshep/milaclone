@@ -284,6 +284,7 @@ export function openQuickNotes(opts) {
   const head = el('qnDeskHead');
   if (head) head.hidden = !qn.desk;
   document.body.classList.add('qn-open');
+  document.documentElement.classList.add('qn-open'); // lifts the page-wide touch lock, see style.css
   document.body.classList.toggle('qn-desk', qn.desk);
   if (qn.desk) placeDeskPanel();
   syncPhoneBtn();
@@ -303,6 +304,7 @@ export function closeQuickNotes() {
   const head = el('qnDeskHead');
   if (head) head.hidden = true;
   document.body.classList.remove('qn-open', 'qn-desk');
+  document.documentElement.classList.remove('qn-open');
   el('quicknotes').style.left = '';
   el('quicknotes').style.top = '';
   syncPhoneBtn();
