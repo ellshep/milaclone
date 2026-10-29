@@ -179,7 +179,7 @@ Create `/etc/systemd/system/milaclone.service` (adjust the paths and user):
 
 ```ini
 [Unit]
-Description=Canvas Board
+Description=milaclone
 After=network.target
 
 [Service]
