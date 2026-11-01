@@ -8,7 +8,6 @@ services:
     restart: unless-stopped
     # Bind to loopback only: NOT on the LAN, NOT directly on the tailnet.
     # Tailscale Serve (see README) bridges it onto the tailnet over HTTPS.
-    # 8181 is already taken by reflections, so this one sits on 8182.
     ports:
       - '127.0.0.1:8182:4321'
     volumes:

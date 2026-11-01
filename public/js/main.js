@@ -242,4 +242,22 @@ initExport();
   state.rootCanvasId = r.rootCanvasId;
   const startId = location.hash.slice(1) || state.rootCanvasId;
   await openCanvas(startId, { replace: true });
+  registerServiceWorker();
 })();
+
+// U2.2 offline shell. Needs HTTPS or localhost; elsewhere register() rejects and the
+// app simply runs online-only. After install, hand the worker this page's loads to cache.
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker
+    .register('/sw.js')
+    .then(() => navigator.serviceWorker.ready)
+    .then(reg => {
+      const warm = performance
+        .getEntriesByType('resource')
+        .filter(e => !['audio', 'video', 'beacon'].includes(e.initiatorType))
+        .map(e => e.name);
+      reg.active?.postMessage({ warm: [location.origin + '/', ...warm] });
+    })
+    .catch(() => {});
+}

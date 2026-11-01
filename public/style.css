@@ -91,6 +91,17 @@ html,
 body {
   height: 100%;
   margin: 0;
+  overscroll-behavior: none; /* no pull-to-refresh or rubber-band, in the browser or the home-screen app */
+}
+/* A long press on a card is the app's, not iOS's link/image callout; fields keep theirs. */
+#stage,
+.item {
+  -webkit-touch-callout: none;
+}
+.item input,
+.item textarea,
+.item [contenteditable='true'] {
+  -webkit-touch-callout: default;
 }
 body {
   font-family: var(--sans);
@@ -535,7 +546,7 @@ textarea {
   padding: 8px;
 }
 .swatch-card .sw-chip {
-  height: 84px;
+  aspect-ratio: 1;
   border-radius: 6px;
   box-shadow: inset 0 0 0 1px var(--card-border);
   cursor: copy;

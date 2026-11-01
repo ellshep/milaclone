@@ -506,7 +506,8 @@ function buildFile(el, it) {
     media.className = 'fmedia';
     media.controls = true;
     media.preload = 'metadata';
-    media.src = it.data.src;
+    // #t= makes Safari paint the first frame as a thumbnail; preload alone shows black there.
+    media.src = kind === 'video' ? it.data.src + '#t=0.1' : it.data.src;
     media.setAttribute('data-nodrag', '');
     el.classList.add('has-media');
     el.appendChild(media);

@@ -16,7 +16,8 @@ module.exports = defineConfig({
   // written to playwright-report/ (the CI job uploads it as an artifact).
   // open: 'never' keeps it from auto-launching a browser during local runs.
   reporter: [['list'], ['html', { open: 'never' }]],
-  use: { baseURL: `http://127.0.0.1:${PORT}`, trace: 'on-first-retry' },
+  // The offline service worker would cache API reads under other tests; pwa.spec.js opts back in.
+  use: { baseURL: `http://127.0.0.1:${PORT}`, trace: 'on-first-retry', serviceWorkers: 'block' },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: '**/mobile-board.spec.js' },
     // Mobile Safari path: touch double-tap must open boards without dblclick.

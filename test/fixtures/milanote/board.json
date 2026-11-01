@@ -1,0 +1,104 @@
+[
+  {
+    "sourceId": "b-trip",
+    "type": "board",
+    "x": 60,
+    "y": 60,
+    "color": "teal",
+    "data": { "title": "Trip", "icon": "compass" },
+    "items": [
+      {
+        "sourceId": "n-plan",
+        "type": "note",
+        "x": 100,
+        "y": 120,
+        "w": 260,
+        "data": { "title": "Plan", "body": "Pack light" }
+      },
+      {
+        "sourceId": "c-pack",
+        "type": "column",
+        "x": 420,
+        "y": 80,
+        "w": 280,
+        "data": { "title": "Packing", "collapsed": true },
+        "items": [
+          {
+            "sourceId": "t-bag",
+            "type": "todo",
+            "x": 0,
+            "y": 10,
+            "data": { "title": "Bag", "tasks": [{ "id": "k1", "text": "Passport", "done": true }] }
+          },
+          {
+            "sourceId": "i-map",
+            "type": "image",
+            "x": 0,
+            "y": 20,
+            "w": 280,
+            "data": { "caption": "Map" },
+            "file": { "path": "pixel.png" }
+          }
+        ]
+      },
+      { "sourceId": "s-blue", "type": "swatch", "x": 760, "y": 80, "data": { "hex": "#2f6df0", "text": "#2f6df0" } },
+      {
+        "sourceId": "f-list",
+        "type": "file",
+        "x": 760,
+        "y": 260,
+        "file": { "path": "packing.txt", "mime": "text/plain" }
+      },
+      {
+        "sourceId": "f-exe",
+        "type": "file",
+        "x": 760,
+        "y": 540,
+        "file": { "path": "pixel.png", "name": "setup.exe", "mime": "application/x-msdownload" }
+      },
+      { "sourceId": "f-gone", "type": "file", "x": 760, "y": 400, "file": { "path": "missing.pdf" } },
+      {
+        "sourceId": "tb-cost",
+        "type": "table",
+        "x": 100,
+        "y": 700,
+        "data": {
+          "rows": [
+            ["Item", "Cost"],
+            ["Train", "40"]
+          ],
+          "text": "Item Cost\nTrain 40"
+        }
+      },
+      {
+        "sourceId": "l-plan",
+        "type": "line",
+        "from": { "ref": "n-plan" },
+        "to": { "ref": "c-pack" },
+        "data": { "arrow": "end" }
+      },
+      { "sourceId": "l-free", "type": "line", "from": { "ref": "s-blue" }, "to": { "x": 900, "y": 40 } },
+      { "sourceId": "l-lost", "type": "line", "from": { "ref": "not-here" }, "to": { "ref": "n-plan" } },
+      {
+        "sourceId": "b-days",
+        "type": "board",
+        "x": 100,
+        "y": 400,
+        "data": { "title": "Days" },
+        "items": [
+          {
+            "sourceId": "b-day1",
+            "type": "board",
+            "x": 60,
+            "y": 60,
+            "data": { "title": "Day 1" },
+            "items": [{ "sourceId": "n-museum", "type": "comment", "x": 80, "y": 90, "data": { "body": "Museum" } }]
+          }
+        ]
+      },
+      { "sourceId": "sc-day1", "type": "shortcut", "x": 400, "y": 400, "target": "b-day1" },
+      { "sourceId": "sc-gone", "type": "shortcut", "x": 400, "y": 560, "target": "b-elsewhere" },
+      { "sourceId": "u-voice", "type": "voice-memo", "x": 0, "y": 0 }
+    ]
+  }
+]

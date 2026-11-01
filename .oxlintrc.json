@@ -19,6 +19,10 @@
       "globals": { "lucide": "readonly" }
     },
     {
+      "files": ["public/sw.js"],
+      "env": { "serviceworker": true, "node": false }
+    },
+    {
       "files": ["e2e/**", "test/**"],
       "env": { "browser": true }
     }

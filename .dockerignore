@@ -13,3 +13,4 @@ playwright-report
 *.log
 *.tar.gz
 public/vendor
+backups

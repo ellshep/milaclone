@@ -203,6 +203,24 @@ test('search reports when nothing matches', async ({ page }) => {
   await expect(page.locator('.qn-title')).toBeVisible();
 });
 
+test('an overview tag chip keeps the lists whose tasks carry that tag', async ({ page }) => {
+  const tag = uniq('tag').toLowerCase();
+  const tagged = uniq('Tagged');
+  const plain = uniq('Plain');
+  await seedList(page, tagged, [{ id: 'a', text: 'Call the bank', done: false, tags: [tag] }]);
+  await seedList(page, plain, [{ id: 'a', text: 'Buy stamps', done: false }]);
+  await openQuickNotes(page);
+
+  await page.click('#qnHomeMenu');
+  await page.locator('#qnSheetBody').getByText('Tag filters').click();
+  await page.click('#qnDim');
+  await page.locator('#qnHomeChips .qn-chip', { hasText: '#' + tag }).click();
+
+  await expect(listRow(page, tagged)).toBeVisible();
+  await expect(listRow(page, plain)).toHaveCount(0);
+  await expect(page.locator('#qnLists .qn-empty')).toHaveCount(0);
+});
+
 test('the add sheet creates a todo list and drops you into it', async ({ page }) => {
   await page.goto('/');
   await openQuickNotes(page);

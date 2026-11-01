@@ -184,6 +184,7 @@ const saveMeta = list => save(list, { title: list.title, tags: list.tags });
 const listById = id => qn.lists.find(l => l.id === id) || null;
 const tasksOf = list => list.tasks.filter(t => t.text.trim());
 const openCount = list => tasksOf(list).filter(t => !t.done).length;
+const listHasTag = (list, tag) => list.tags.includes(tag) || tasksOf(list).some(t => t.tags.includes(tag));
 
 // Smart views are computed filters over every list, so their rows carry the
 // list they came from for the sub-line and for writes.
@@ -400,7 +401,8 @@ function renderHome() {
 
   const rows = el('qnLists');
   rows.innerHTML = '';
-  const shown = qn.lists.filter(l => !qn.homeTag || l.tags.includes(qn.homeTag));
+  // the chips offer task tags too, so a list matches when it or any of its tasks carries the tag
+  const shown = qn.lists.filter(l => !qn.homeTag || listHasTag(l, qn.homeTag));
   if (!shown.length) {
     rows.appendChild(
       h('div', 'qn-empty', qn.lists.length ? 'No lists carry that tag.' : 'No todo lists yet. Tap + to make one.')

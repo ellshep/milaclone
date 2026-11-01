@@ -8,14 +8,14 @@ acceptance test lands.
 
 ## Decisions
 
-| #   | Question                        | Decision                                                                                                                                       |
-| --- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Q1  | How to get data out of Milanote | Test route B, reading Milanote's own board data, on one board. Fall back to route A, the improved Markdown + ZIP import, if B doesn't hold up. |
-| Q2  | Boards already imported         | Move them to Trash, then re-import. They stay restorable until Trash is emptied.                                                               |
-| Q3  | How the import runs             | A one-off script, run together. No import UI in the app.                                                                                       |
-| Q4  | Offline on iPhone               | Network-first service worker. The app and the last-loaded boards open offline. No offline editing (roadmap D4 stands).                         |
-| Q5  | App icon                        | A serif "M" (Fraunces) in the accent blue `#2f6df0` on white.                                                                                  |
-| Q6  | Order                           | U2 first, then U1.                                                                                                                             |
+| #   | Question                        | Decision                                                                                                                       |
+| --- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Q1  | How to get data out of Milanote | Route A, Milanote's official Markdown + ZIP export. Route B (Milanote's own board data) was tested and then dropped, see U1.2. |
+| Q2  | Boards already imported         | Move them to Trash, then re-import. They stay restorable until Trash is emptied.                                               |
+| Q3  | How the import runs             | A one-off script, run together. No import UI in the app.                                                                       |
+| Q4  | Offline on iPhone               | Network-first service worker. The app and the last-loaded boards open offline. No offline editing (roadmap D4 stands).         |
+| Q5  | App icon                        | A serif "M" (Fraunces) in the accent blue `#2f6df0` on white.                                                                  |
+| Q6  | Order                           | U2 first, then U1.                                                                                                             |
 
 ## U2 · Mila as an iPhone app (PWA)
 
@@ -29,7 +29,7 @@ pads `env(safe-area-inset-*)`. There is an in-app back button (`#mBack`). A
 failed write toasts "Could not save — check your connection" (`api.js`
 `write`).
 
-- [ ] **U2.1 Manifest and icons.**
+- [x] **U2.1 Manifest and icons.**
   - `public/manifest.webmanifest`:
     - `name`/`short_name` "Mila", `display: standalone`, `start_url: "/"`.
     - `background_color` and `theme_color` from the `:root` tokens.
@@ -45,7 +45,7 @@ failed write toasts "Could not save — check your connection" (`api.js`
   - `Dockerfile` needs no change, because it copies all of `public/`.
   - Acceptance: Playwright fetches the manifest. The test checks the fields
     and that every listed icon returns 200 with an image content type.
-- [ ] **U2.2 Network-first service worker.**
+- [x] **U2.2 Network-first service worker.**
   - `public/sw.js`:
     - Same-origin `GET`s go to the network first, which updates the cache.
     - When the network fails, they fall back to the cached copy.
@@ -60,7 +60,7 @@ failed write toasts "Could not save — check your connection" (`api.js`
       `context.setOffline(true)` plus a reload still renders the last-opened
       board.
     - API test: the `/sw.js` header is set.
-- [ ] **U2.3 Standalone polish.**
+- [x] **U2.3 Standalone polish.**
   - `overscroll-behavior: none` on the page, so there's no pull-to-refresh or
     rubber-band.
   - `-webkit-touch-callout: none` on cards and the stage. Text fields keep
@@ -70,6 +70,8 @@ failed write toasts "Could not save — check your connection" (`api.js`
     2. Check the icon and name.
     3. Check the notch and home bar.
     4. Turn on Airplane mode and confirm it still opens.
+  - The Playwright part is in `e2e/mobile-board.spec.js`. The owner ran all four
+    iPhone checks on the home server on 2026-10-28, and they passed.
 
 Out of scope: offline editing, Web Share Target (iOS doesn't support it) and
 push notifications.
@@ -102,9 +104,24 @@ There's no account export and no public API.
     milaclone. That gives a checklist of what's missing, partly imported and
     done.
   - Move the earlier imports to Trash (Q2).
-  - Acceptance: the inventory is saved as `docs/milanote-inventory.md`, and
-    the backup file exists.
-- [ ] **U1.2 Route B test, about an hour.**
+  - Acceptance: the inventory is saved, and the backup file exists. The
+    inventory lives in the gitignored `.private/milanote-inventory.md`, not
+    `docs/`, because the repo is public and board titles are personal.
+  - Milanote side done 2026-10-28 (Claude in Chrome, read-only, from
+    `/api/boards?ids=`): 32 boards, 143 cards. By type: BOARD 31, CARD 36,
+    IMAGE 30, LINK 18, COLUMN 10, COLOR_SWATCH 9, TASK_LIST 5, TABLE 2,
+    ANNOTATION 2 and COMMENT_THREAD 1. There are no lines, aliases, files or
+    documents.
+  - What it meant for the route-B reader (since removed, see U1.2):
+    - A to-do list's tasks are separate TASK elements whose parent is the list.
+    - ANNOTATION is a freehand drawing, so it maps to sketch.
+    - Only 1 card sits in Unsorted. The first count of 34 also took in cards
+      inside columns, which use the same `INBOX` section.
+    - Images are behind the Milanote login. Only 12 of the 30 have a file; the
+      other 18 are empty image slots from a template.
+  - Still open: the backup, the milaclone side of the checklist, and moving
+    earlier imports to Trash.
+- [x] **U1.2 Route B test, about an hour.**
   - With Milanote open and logged in, use Chrome DevTools to capture the data
     the web app loads for one board, which needs to have sub-boards, columns,
     images and a line.
@@ -114,7 +131,11 @@ There's no account export and no public API.
     reader changes.
   - Acceptance: one sample board's JSON plus a written field mapping in this
     doc.
-- [ ] **U1.3 Importer script.**
+  - Passed 2026-10-28, and a route-B reader (`--reader milanote`) was built
+    on it. Removed 2026-10-29: reading Milanote's internal web-app data may
+    break its terms of service, so the importer reads only Milanote's
+    official export (route A). The capture in `.private/` is no longer used.
+- [x] **U1.3 Importer script.**
   - `scripts/import-milanote.js` writes only through the existing API:
     `POST /api/item`, `/api/upload`, `PATCH`. No server changes.
   - Each created item carries `data.sourceId` (the Milanote id), and a re-run
@@ -129,6 +150,9 @@ There's no account export and no public API.
     2. Nesting.
     3. A second run creates nothing.
     4. `--dry-run` makes no writes.
+  - The engine has landed (`scripts/import-milanote.js`, with the route-A
+    Markdown reader and `test/import-milanote.api.test.js`).
+  - A route-B reader also landed and was then removed (see U1.2).
 - [ ] **U1.4 Staged import.**
   - Run against the home server into a "From Milanote" board on Home.
   - Review it on desktop and phone.
@@ -139,31 +163,11 @@ There's no account export and no public API.
   - Anything unmapped is listed by name, never dropped silently.
   - Acceptance: every count matches, or each difference is explained.
 
-Card type mapping (route B):
-
-| Milanote      | milaclone                     |
-| ------------- | ----------------------------- |
-| card          | note                          |
-| task list     | todo                          |
-| link          | link (embeds stay)            |
-| image         | image (with caption)          |
-| file          | file                          |
-| column        | column (collapsed state kept) |
-| line          | line (attached ends kept)     |
-| board         | board (colour and icon kept)  |
-| board alias   | shortcut                      |
-| colour swatch | swatch                        |
-| table         | table                         |
-| document      | document                      |
-| sketch        | sketch                        |
-| comment       | comment                       |
-
 ## Risks
 
-| Risk                                      | Mitigation                                                                |
-| ----------------------------------------- | ------------------------------------------------------------------------- |
-| Duplicates or bad data on the live server | Backup first, `--dry-run`, the staging board, skip-by-`sourceId`          |
-| Milanote asset URLs expiring mid-run      | Download as each board imports; route A's ZIP as a fallback               |
-| A stale service-worker cache after deploy | Network-first, plus `no-cache` on `sw.js`                                 |
-| Container memory during a large import    | Upload one file at a time                                                 |
-| Milanote's web data shape is undocumented | It's a one-off run, tested on one board first, with route A as a fallback |
+| Risk                                      | Mitigation                                                       |
+| ----------------------------------------- | ---------------------------------------------------------------- |
+| Duplicates or bad data on the live server | Backup first, `--dry-run`, the staging board, skip-by-`sourceId` |
+| Milanote asset URLs expiring mid-run      | Download as each board imports; route A's ZIP as a fallback      |
+| A stale service-worker cache after deploy | Network-first, plus `no-cache` on `sw.js`                        |
+| Container memory during a large import    | Upload one file at a time                                        |
