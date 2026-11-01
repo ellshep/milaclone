@@ -19,7 +19,8 @@ coverage/
 public/vendor/
 
 # Local tooling and private notes
-.claude/
+.claude/*
+!.claude/skills/
 .lavish/
 .impeccable/
 .private/
