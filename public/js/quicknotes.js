@@ -850,35 +850,59 @@ function showListSheet() {
   });
 }
 
-// Tag picker: every tag already in use, plus a field for a new one.
+// Tag picker: every tag already in use, plus a field for a new one. The rows
+// are toggles, so the ones on this task read as selected (filled check, tinted
+// row), not just a different icon.
 function showTagSheet(list, task) {
   showSheet(body => {
     const known = allTags();
+    if (known.length) {
+      const head = h('div', 'qn-sheet-head');
+      head.appendChild(h('span', 'qn-sheet-title', 'Tags'));
+      const n = task.tags.length;
+      head.appendChild(h('span', 'qn-sheet-sub', (n ? n + ' on this task · ' : '') + 'tap to add or remove'));
+      body.appendChild(head);
+    }
     for (const tag of known) {
       const on = task.tags.includes(tag);
-      sheetRow(body, {
-        icon: on ? 'check' : 'tag',
+      const row = sheetRow(body, {
         label: '#' + tag,
-        cls: on ? 'on' : '',
+        cls: 'qn-tagrow' + (on ? ' on' : ''),
         onClick: () => {
           toggleTag(list, task, tag);
           drawSheet();
         },
       });
+      row.setAttribute('aria-pressed', on ? 'true' : 'false');
+      const mark = h('span', 'qn-tagmark');
+      mark.appendChild(lucideEl('check'));
+      row.prepend(mark);
     }
     const field = h('div', 'qn-sheet-field');
     const input = document.createElement('input');
     input.placeholder = known.length ? 'New tag' : 'First tag';
     input.setAttribute('aria-label', 'New tag');
-    input.onkeydown = e => {
-      if (e.key !== 'Enter') return;
+    // Enter or the Add button; focus moves to the redrawn field so the
+    // keyboard stays up for the next tag.
+    const submit = () => {
       const tag = input.value.trim().replace(/^#/, '').toLowerCase();
       if (!tag) return;
       if (!task.tags.includes(tag)) toggleTag(list, task, tag);
-      input.value = '';
       drawSheet();
+      const next = el('qnSheetBody').querySelector('.qn-sheet-field input');
+      if (next) next.focus();
     };
+    const add = h('button', 'qn-sheet-add', 'Add');
+    add.type = 'button';
+    add.disabled = true;
+    input.oninput = () => (add.disabled = !input.value.trim().replace(/^#/, ''));
+    input.onkeydown = e => {
+      if (e.key === 'Enter') submit();
+    };
+    add.onpointerdown = e => e.preventDefault(); // keep the field focused (and the keyboard up) on tap
+    add.onclick = submit;
     field.appendChild(input);
+    field.appendChild(add);
     body.appendChild(field);
     setTimeout(() => {
       if (!known.length) input.focus();

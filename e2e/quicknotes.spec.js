@@ -163,6 +163,41 @@ test('task detail edits the note, due date and tags', async ({ page }) => {
   await expect(page.locator('.qn-due-add')).toBeVisible();
 });
 
+test('the tag sheet marks the tags already on the task and toggles them', async ({ page }) => {
+  const title = uniq('Tagged');
+  await seedList(page, title, [
+    { id: 'a', text: 'Pay rent', done: false, tags: ['money'] },
+    { id: 'b', text: 'Try a recipe', done: false, tags: ['taste'] },
+  ]);
+  await openQuickNotes(page);
+  await listRow(page, title).click();
+  await taskRow(page, 'Pay rent').locator('.qn-task-text').click();
+  await page.click('.qn-addtag');
+
+  const row = tag => page.locator('.qn-tagrow', { hasText: '#' + tag });
+  await expect(page.locator('.qn-sheet-sub')).toContainText('1 on this task');
+  await expect(row('money')).toHaveClass(/\bon\b/);
+  await expect(row('money')).toHaveAttribute('aria-pressed', 'true');
+  await expect(row('taste')).not.toHaveClass(/\bon\b/);
+  await expect(row('taste')).toHaveAttribute('aria-pressed', 'false');
+
+  await row('taste').click();
+  await expect(row('taste')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.qn-sheet-sub')).toContainText('2 on this task');
+  await expect(page.locator('.qn-taglist .qn-tag')).toHaveText(['#money', '#taste']);
+
+  // the Add button submits a new tag, same as Enter, and is off while the field is empty
+  const add = page.locator('.qn-sheet-add');
+  await expect(add).toBeDisabled();
+  await page.fill('.qn-sheet-field input', '#Errands');
+  await expect(add).toBeEnabled();
+  await add.click();
+  await expect(row('errands')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.qn-sheet-field input')).toHaveValue('');
+  await expect(page.locator('.qn-sheet-field input')).toBeFocused();
+  await expect(page.locator('.qn-taglist .qn-tag')).toHaveText(['#money', '#taste', '#errands']);
+});
+
 test('the note bullet button rewrites the note lines', async ({ page }) => {
   const title = uniq('Notes');
   await seedList(page, title, [{ id: 'a', text: 'Plan trip', done: false }]);
