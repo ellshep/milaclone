@@ -120,12 +120,14 @@ time, so `docker compose restart` alone will **not** pick up changes.
 Deploy the latest `main` with the script:
 
 ```bash
-scripts/deploy.sh          # does nothing when already up to date
+scripts/deploy.sh          # does nothing when the running app is already origin/main
 scripts/deploy.sh --force  # rebuild and restart anyway
 ```
 
 It refuses to run off `main` or with uncommitted changes, fast-forwards to
-`origin/main`, saves a database snapshot to `backups/` (newest 10 kept;
+`origin/main`, and skips the rest only when the commit it last deployed (kept
+in the gitignored `.deployed`) is that commit and the app is answering. So
+running `git pull` yourself first doesn't stop it rebuilding. Otherwise it saves a database snapshot to `backups/` (newest 10 kept;
 uploads aren't included), rebuilds, and waits for the app to answer on
 `127.0.0.1:8182` — printing the app's logs if it doesn't.
 
