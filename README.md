@@ -76,7 +76,8 @@ The **···** menu on the overview can hide the smart views.
 
 ## Run it
 
-You need Node.js 18 or newer.
+You need Node.js 18 or newer. If you use [Claude Code](https://claude.com/claude-code),
+run `/setup` in this folder and it walks you through the steps below.
 
 ```bash
 npm install
@@ -143,20 +144,6 @@ details are in [docs/self-hosting.md](docs/self-hosting.md#access-over-tailscale
 You can set three environment variables: `PORT` (default 4321), `HOST`
 (default `0.0.0.0`) and `DATA_DIR` (default `./data`).
 
-## Import from Milanote
-
-`scripts/import-milanote.js` reads Milanote's Markdown export and recreates
-its boards, notes, to-dos, links and images in a running instance, under a
-staging board on Home:
-
-```bash
-node scripts/import-milanote.js --base http://localhost:4321 --into "From Milanote" --dry-run my-board.md
-```
-
-`--dry-run` prints the plan and counts and writes nothing; drop it to import.
-Every card remembers its Milanote id, so re-running skips what's already there,
-and anything that couldn't be imported is listed at the end.
-
 ## Development
 
 ```bash
@@ -175,5 +162,5 @@ server bundles at boot. [CLAUDE.md](CLAUDE.md) explains the architecture.
 [MIT](LICENSE)
 
 Milaclone is an independent project. It isn't affiliated with or endorsed by
-Milanote. Milanote is a trademark of its owner and is named here only to
-describe the importer.
+Milanote. Milanote is a trademark of its owner and is named here only for
+comparison.
