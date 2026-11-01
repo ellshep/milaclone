@@ -126,3 +126,22 @@ test('U2.3 no rubber-band or pull-to-refresh, and no iOS callout on cards (field
     ".item input, .item textarea, .item [contenteditable='true'] { -webkit-touch-callout: default; }"
   );
 });
+
+test('Quick notes lifts the page touch lock while open, so its lists can scroll', async ({ page }) => {
+  await freshCanvas(page);
+  const touch = sel => page.locator(sel).evaluate(el => getComputedStyle(el).touchAction);
+  expect(await touch('html')).toBe('none');
+  expect(await touch('body')).toBe('none');
+
+  await page.click('#mNotes');
+  await expect(page.locator('#quicknotes')).toBeVisible();
+  expect(await touch('html')).toBe('auto');
+  expect(await touch('body')).toBe('auto');
+  expect(await touch('.qn-home-scroll')).toBe('pan-y');
+  expect(await page.locator('.qn-home-scroll').evaluate(el => getComputedStyle(el).overflowY)).toBe('auto');
+
+  await page.click('#qnBoards');
+  await expect(page.locator('#quicknotes')).toBeHidden();
+  expect(await touch('html')).toBe('none');
+  expect(await touch('body')).toBe('none');
+});
