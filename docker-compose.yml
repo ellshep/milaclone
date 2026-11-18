@@ -17,6 +17,10 @@ services:
     environment:
       - PORT=4321
       - DATA_DIR=/data
+      # Bearer token for the task API (/api/tasks). Unset = the API answers 503.
+      - TASK_API_TOKEN=${TASK_API_TOKEN:-}
+      # Time zone used to turn an ISO datetime into a task's due date.
+      - TASK_TZ=${TASK_TZ:-America/Chicago}
     # Dev loop: `docker compose watch` syncs edits into the running container.
     # Plain `up -d` ignores this block, so the normal deploy is unaffected.
     develop:
@@ -47,6 +51,44 @@ services:
           cpus: '0.50'
           memory: 256M
 
+  # Voice note -> tasks pipeline (pipeline/, docs/voice-capture.md). Separate so
+  # Whisper's CPU spikes are capped on their own; it reaches the app over the
+  # compose network and creates tasks through the task API.
+  pipeline:
+    build: ./pipeline
+    image: milaclone-pipeline:local
+    container_name: milaclone-pipeline
+    restart: unless-stopped
+    # Loopback only, like the app; the Tailscale sidecar serves /ingest/.
+    ports:
+      - '127.0.0.1:8183:8000'
+    volumes:
+      # ingest.db (every transcript and extraction) + the uploaded audio.
+      - milaclone_ingest:/data
+      # Whisper model files, downloaded on first use.
+      - milaclone_models:/models
+    environment:
+      - INGEST_API_TOKEN=${INGEST_API_TOKEN:-}
+      - TASK_API_TOKEN=${TASK_API_TOKEN:-}
+      - APP_URL=http://app:4321
+      - TASK_TZ=${TASK_TZ:-America/Chicago}
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - WHISPER_THREADS=${WHISPER_THREADS:-2}
+      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-}
+      - EXTRACT_PROVIDER=${EXTRACT_PROVIDER:-anthropic}
+      - EXTRACT_MODEL=${EXTRACT_MODEL:-}
+      - EXTRACT_API_KEY=${EXTRACT_API_KEY:-}
+      - EXTRACT_BASE_URL=${EXTRACT_BASE_URL:-}
+    depends_on:
+      - app
+    # Transcription is one job at a time on WHISPER_THREADS threads; this cap
+    # keeps it off the CCTV / Home Assistant workload. Tune after benchmarking.
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 1G
+
   # Own tailnet node, so the app answers on https://mila.<tailnet>.ts.net
   # at "/" rather than a path prefix. Reaches the app over the compose network;
   # the loopback port binding above stays as-is for local access.
@@ -65,6 +107,7 @@ services:
       - ./tailscale/serve.json:/config/serve.json:ro
     depends_on:
       - app
+      - pipeline
     deploy:
       resources:
         limits:
@@ -75,3 +118,5 @@ volumes:
   milaclone_data:
   milaclone_uploads:
   milaclone_ts_state:
+  milaclone_ingest:
+  milaclone_models:

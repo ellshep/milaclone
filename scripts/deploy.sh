@@ -8,7 +8,9 @@
 # last successful deploy) matches HEAD and the app is answering, so a manual
 # `git pull` before running this can't make it skip a needed rebuild.
 # Before rebuilding it saves a database snapshot (/api/backup) to backups/,
-# keeping the newest 10. Uploads live in their own volume and aren't included.
+# keeping the newest 10, plus a snapshot of the voice pipeline's ingest.db when
+# that service is running. Uploads and audio live in their own volumes and
+# aren't included.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -68,6 +70,17 @@ if answering; then
     exit 1
   fi
   ls -1t "$BACKUP_DIR"/board-*.db | tail -n +$((KEEP + 1)) | xargs -r rm -f
+  # The voice pipeline's record of every transcript and extraction, if it runs.
+  if docker compose ps --status running --services 2>/dev/null | grep -qx pipeline; then
+    INGEST_BACKUP="$BACKUP_DIR/ingest-$(date +%Y%m%d-%H%M%S)-${PREV:-unknown}.db"
+    echo "==> Backing up the ingest database to $INGEST_BACKUP"
+    if docker compose exec -T pipeline python -c "import sqlite3; d = sqlite3.connect('/tmp/ingest-backup.db'); sqlite3.connect('/data/ingest.db').backup(d); d.close()" &&
+      docker compose cp pipeline:/tmp/ingest-backup.db "$INGEST_BACKUP" >/dev/null; then
+      ls -1t "$BACKUP_DIR"/ingest-*.db | tail -n +$((KEEP + 1)) | xargs -r rm -f
+    else
+      echo "warning: ingest database backup failed; deploying anyway" >&2
+    fi
+  fi
 else
   echo "==> App not running; skipping the database backup"
 fi
