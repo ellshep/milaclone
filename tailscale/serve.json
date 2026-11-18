@@ -9,6 +9,9 @@
       "Handlers": {
         "/": {
           "Proxy": "http://app:4321"
+        },
+        "/ingest/": {
+          "Proxy": "http://pipeline:8000/ingest/"
         }
       }
     }

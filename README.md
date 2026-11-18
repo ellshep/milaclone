@@ -151,13 +151,23 @@ curl -sS https://mila.your-tailnet.ts.net/api/tasks \
 
 Listing, marking done and every field are in [docs/task-api.md](docs/task-api.md).
 
+### By voice
+
+Record a note on the phone and the to-dos you mention land in the Inbox. A
+separate service transcribes the audio on your server (faster-whisper, CPU
+only), asks the LLM you configure to pick out the tasks, and adds them through
+the task API. Audio never leaves the server; only the transcript text goes to
+the LLM provider. Setup, the iPhone Shortcut and the review page are in
+[docs/voice-capture.md](docs/voice-capture.md).
+
 ## Your data
 
-| What    | Where                                                       |
-| ------- | ----------------------------------------------------------- |
-| Boards  | `data/board.db` (SQLite, or the `milaclone_data` volume)    |
-| Uploads | `public/uploads/` (or the `milaclone_uploads` volume)       |
-| Backup  | **Export → Download database backup**, or `GET /api/backup` |
+| What        | Where                                                                          |
+| ----------- | ------------------------------------------------------------------------------ |
+| Boards      | `data/board.db` (SQLite, or the `milaclone_data` volume)                       |
+| Uploads     | `public/uploads/` (or the `milaclone_uploads` volume)                          |
+| Backup      | **Export → Download database backup**, or `GET /api/backup`                    |
+| Voice notes | `milaclone_ingest` volume: `ingest.db` (transcripts and results) and the audio |
 
 You can set these environment variables: `PORT` (default 4321), `HOST`
 (default `0.0.0.0`), `DATA_DIR` (default `./data`), and for the task API
@@ -171,6 +181,7 @@ npm test             # API tests (80% coverage floor)
 npm run test:ui      # front-end unit tests (Vitest)
 npm run test:e2e     # Playwright (run `npx playwright install` once first)
 npm run lint && npm run format
+cd pipeline && pip install -r requirements-dev.txt && python -m pytest   # voice pipeline
 ```
 
 The backend is Express with `better-sqlite3`. The frontend is vanilla ES modules

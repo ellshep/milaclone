@@ -28,3 +28,8 @@ public/vendor/
 # Database snapshots and the deployed commit, written by scripts/deploy.sh
 backups/
 .deployed
+
+# Voice pipeline (Python)
+__pycache__/
+.pytest_cache/
+.venv/

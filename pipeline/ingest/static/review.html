@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Voice ingests</title>
+    <style>
+      :root {
+        --bg: #f4f5f7;
+        --card: #ffffff;
+        --ink: #1f2933;
+        --muted: #6b7785;
+        --border: #dde1e6;
+        --ok: #2f7d4f;
+        --warn: #a86b00;
+        --bad: #b3261e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #15181c;
+          --card: #1f242a;
+          --ink: #e6e9ed;
+          --muted: #9aa5b1;
+          --border: #313840;
+          --ok: #6cc28f;
+          --warn: #e0a83a;
+          --bad: #f2867d;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          15px/1.45 system-ui,
+          -apple-system,
+          sans-serif;
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 12px;
+      }
+      .bar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      button,
+      input {
+        font: inherit;
+        color: inherit;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 10px;
+      }
+      input {
+        flex: 1;
+        min-width: 0;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 13px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .status {
+        font-weight: 600;
+      }
+      .status.done {
+        color: var(--ok);
+      }
+      .status.extraction_failed,
+      .status.error {
+        color: var(--bad);
+      }
+      .status.queued,
+      .status.transcribing,
+      .status.extracting {
+        color: var(--warn);
+      }
+      .transcript {
+        white-space: pre-wrap;
+        margin: 8px 0;
+      }
+      ul {
+        margin: 4px 0;
+        padding-left: 20px;
+      }
+      .skipped {
+        color: var(--muted);
+      }
+      .err {
+        color: var(--bad);
+        font-size: 13px;
+      }
+      .empty {
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Voice ingests</h1>
+      <div class="bar" id="login" hidden>
+        <input id="token" type="password" placeholder="Ingest API token" autocomplete="off" />
+        <button id="save">Save</button>
+      </div>
+      <div class="bar" id="tools" hidden>
+        <button id="refresh">Refresh</button>
+        <button id="forget">Forget token</button>
+      </div>
+      <p class="err" id="error"></p>
+      <div id="list"></div>
+    </main>
+    <script>
+      const KEY = 'ingestToken';
+      const $ = id => document.getElementById(id);
+      const store = {
+        get() {
+          try {
+            return localStorage.getItem(KEY) || '';
+          } catch {
+            return '';
+          }
+        },
+        set(v) {
+          try {
+            v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY);
+          } catch {}
+        },
+      };
+      let token = store.get();
+
+      function el(tag, cls, text) {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text != null) e.textContent = text;
+        return e;
+      }
+
+      function show() {
+        $('login').hidden = !!token;
+        $('tools').hidden = !token;
+      }
+
+      function render(ingests) {
+        const list = $('list');
+        list.replaceChildren();
+        if (!ingests.length) list.appendChild(el('p', 'empty', 'Nothing captured yet.'));
+        for (const g of ingests) {
+          const card = el('div', 'card');
+          const meta = el('div', 'meta');
+          meta.appendChild(el('span', 'status ' + g.status, g.status.replace('_', ' ')));
+          meta.appendChild(el('span', null, new Date(g.createdAt).toLocaleString()));
+          meta.appendChild(el('span', null, g.kind + ' · ' + g.source));
+          if (g.filename) meta.appendChild(el('span', null, g.filename));
+          if (g.audioSeconds) meta.appendChild(el('span', null, Math.round(g.audioSeconds) + ' s audio'));
+          if (g.transcribeMs)
+            meta.appendChild(el('span', null, 'transcribed in ' + (g.transcribeMs / 1000).toFixed(1) + ' s'));
+          card.appendChild(meta);
+          if (g.summary) card.appendChild(el('p', null, g.summary));
+          if (g.transcript) card.appendChild(el('div', 'transcript', '“' + g.transcript + '”'));
+          if (g.created.length || g.skipped.length) {
+            const ul = el('ul');
+            for (const c of g.created) ul.appendChild(el('li', null, c.title));
+            for (const s of g.skipped) ul.appendChild(el('li', 'skipped', s.title + ' (already on the list)'));
+            card.appendChild(ul);
+          }
+          if (g.error) card.appendChild(el('p', 'err', g.error));
+          list.appendChild(card);
+        }
+      }
+
+      async function load() {
+        $('error').textContent = '';
+        show();
+        if (!token) return;
+        try {
+          const r = await fetch('/ingest/recent?limit=50', { headers: { Authorization: 'Bearer ' + token } });
+          if (r.status === 401) {
+            token = '';
+            store.set('');
+            show();
+            $('error').textContent = 'That token was not accepted.';
+            return;
+          }
+          const body = await r.json();
+          if (!r.ok) throw new Error(body.error || 'HTTP ' + r.status);
+          render(body.ingests);
+        } catch (e) {
+          $('error').textContent = 'Could not load: ' + e.message;
+        }
+      }
+
+      $('save').onclick = () => {
+        token = $('token').value.trim();
+        store.set(token);
+        $('token').value = '';
+        load();
+      };
+      $('forget').onclick = () => {
+        token = '';
+        store.set('');
+        $('list').replaceChildren();
+        show();
+      };
+      $('refresh').onclick = load;
+      load();
+    </script>
+  </body>
+</html>
