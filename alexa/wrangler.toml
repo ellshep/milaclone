@@ -1,0 +1,23 @@
+# Cloudflare Worker for the milaclone Alexa skill. See docs/alexa.md.
+name = "milaclone-alexa"
+main = "src/worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+# Your skill's id from the Alexa developer console (amzn1.ask.skill.…).
+SKILL_ID = ""
+# The Cloudflare Tunnel hostname for the pipeline, with the one allowed path.
+INGEST_URL = "https://alexa-ingest.example.com/ingest/text"
+
+# Secrets, set with `npx wrangler secret put <NAME>`:
+#   INGEST_API_TOKEN, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET
+
+# At most 20 requests a minute per caller address, checked before anything else.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "4321"
+
+  [ratelimits.simple]
+  limit = 20
+  period = 60

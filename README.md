@@ -160,6 +160,11 @@ the task API. Audio never leaves the server; only the transcript text goes to
 the LLM provider. Setup, the iPhone Shortcut and the review page are in
 [docs/voice-capture.md](docs/voice-capture.md).
 
+With an Echo you can also say "Alexa, tell my tasks to add buy printer ink". A
+small Cloudflare Worker checks the request is from your own Alexa skill and
+passes the text on through a Cloudflare Tunnel that serves that one path. See
+[docs/alexa.md](docs/alexa.md).
+
 ## Your data
 
 | What        | Where                                                                          |
