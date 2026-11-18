@@ -33,3 +33,8 @@ backups/
 __pycache__/
 .pytest_cache/
 .venv/
+
+# Auto-deploy (scripts/autodeploy.sh): lock, last failed commit, local settings
+.autodeploy.lock
+.autodeploy-failed
+.env.autodeploy

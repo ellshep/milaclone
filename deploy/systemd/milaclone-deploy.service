@@ -1,0 +1,19 @@
+# Runs scripts/autodeploy.sh: deploys origin/main when it has moved.
+# Started hourly by milaclone-deploy.timer, or by hand:
+#   sudo systemctl start milaclone-deploy
+# Copy to /etc/systemd/system/ and replace YOUR_USERNAME and the path.
+[Unit]
+Description=Deploy milaclone from origin/main
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# The checkout's owner; must be in the docker group.
+User=YOUR_USERNAME
+WorkingDirectory=/home/YOUR_USERNAME/milaclone
+ExecStart=/home/YOUR_USERNAME/milaclone/scripts/autodeploy.sh
+# Optional settings such as AUTODEPLOY_NOTIFY_URL (the leading - means it may be absent).
+EnvironmentFile=-/home/YOUR_USERNAME/milaclone/.env.autodeploy
+# A rebuild that has to recompile dependencies can take a while.
+TimeoutStartSec=30min
