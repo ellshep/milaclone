@@ -132,6 +132,24 @@ details are in [docs/self-hosting.md](docs/self-hosting.md#access-over-tailscale
 > your boards, so only open it up on networks you trust. The Docker setup
 > listens on `127.0.0.1` only, so the Wi-Fi steps above apply to `npm start`.
 > With Docker, use Tailscale instead.
+>
+> The one exception is the [task API](docs/task-api.md) (`/api/tasks`), which
+> needs a bearer token because it is built for other programs to call.
+
+## Add tasks from outside the app
+
+`POST /api/tasks` adds a to-do from a script, a shortcut or the voice pipeline.
+Set `TASK_API_TOKEN` in `.env` (`openssl rand -hex 32`) first; without it the
+API stays switched off. New tasks land in an **Inbox** list on Home, which the
+server creates the first time it needs one.
+
+```bash
+curl -sS https://mila.your-tailnet.ts.net/api/tasks \
+  -H "Authorization: Bearer $TASK_API_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"title":"Buy printer ink","tags":["errands"],"dueDate":"2026-12-01"}'
+```
+
+Listing, marking done and every field are in [docs/task-api.md](docs/task-api.md).
 
 ## Your data
 
@@ -141,8 +159,10 @@ details are in [docs/self-hosting.md](docs/self-hosting.md#access-over-tailscale
 | Uploads | `public/uploads/` (or the `milaclone_uploads` volume)       |
 | Backup  | **Export → Download database backup**, or `GET /api/backup` |
 
-You can set three environment variables: `PORT` (default 4321), `HOST`
-(default `0.0.0.0`) and `DATA_DIR` (default `./data`).
+You can set these environment variables: `PORT` (default 4321), `HOST`
+(default `0.0.0.0`), `DATA_DIR` (default `./data`), and for the task API
+`TASK_API_TOKEN` (unset = off) and `TASK_TZ` (default `America/Chicago`).
+`.env.example` lists them.
 
 ## Development
 

@@ -17,6 +17,10 @@ services:
     environment:
       - PORT=4321
       - DATA_DIR=/data
+      # Bearer token for the task API (/api/tasks). Unset = the API answers 503.
+      - TASK_API_TOKEN=${TASK_API_TOKEN:-}
+      # Time zone used to turn an ISO datetime into a task's due date.
+      - TASK_TZ=${TASK_TZ:-America/Chicago}
     # Dev loop: `docker compose watch` syncs edits into the running container.
     # Plain `up -d` ignores this block, so the normal deploy is unaffected.
     develop:

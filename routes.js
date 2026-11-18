@@ -598,6 +598,9 @@ router.post('/api/upload', uploadOne, (req, res) => {
   });
 });
 
+// Bearer-token task API for machine clients (voice pipeline, Alexa): tasks-api.js.
+router.use(require('./tasks-api'));
+
 router.get('/api/health', (req, res) => res.json({ ok: true }));
 
 module.exports = router;
