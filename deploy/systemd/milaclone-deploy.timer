@@ -1,0 +1,14 @@
+# Checks for a new commit on main once an hour.
+# Enable with: sudo systemctl enable --now milaclone-deploy.timer
+[Unit]
+Description=Hourly milaclone deploy check
+
+[Timer]
+OnCalendar=hourly
+# Spread the check over the first few minutes of the hour.
+RandomizedDelaySec=5min
+# Run a check missed while the server was off as soon as it boots.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

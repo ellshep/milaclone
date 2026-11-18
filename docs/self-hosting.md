@@ -187,6 +187,96 @@ Worth knowing:
   `db.js` edits. Good for poking at something, but changes live only in that
   container until you commit and rebuild.
 
+## Deploy automatically on push
+
+A systemd timer on the server checks GitHub once an hour and deploys `main`
+whenever it has moved, so a merged PR is live within about an hour without you
+logging in. It only ever pulls: nothing on the internet reaches the server,
+and `main` only changes through PRs that passed the required checks.
+
+The timer runs `scripts/autodeploy.sh`, which wraps `scripts/deploy.sh` (same
+backup, rebuild and health check as a manual deploy) and adds:
+
+- **No overlapping runs.** A run that finds the previous one still building
+  skips itself.
+- **A broken commit is tried once.** If a deploy fails, that commit is written
+  to `.autodeploy-failed` and skipped until a newer commit lands on `main`, so
+  a bad build isn't rebuilt (and backed up) every hour. The app keeps running
+  the last version that started.
+- **Optional phone notification** after each deploy or failure (below).
+
+### One-time setup on the server
+
+1. The user that owns the checkout must be able to run Docker without sudo:
+   `sudo usermod -aG docker $USER`, then log out and back in.
+2. The checkout must be on `main` with no edits to tracked files
+   (`git status` clean), as for `scripts/deploy.sh`.
+3. `git fetch` must work without a password. A public repo needs nothing; if
+   the repo is private, add a read-only
+   [deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)
+   and use the SSH remote.
+4. Install the units, replacing `YOUR_USERNAME` and the path with yours:
+
+   ```bash
+   sudo cp deploy/systemd/milaclone-deploy.service deploy/systemd/milaclone-deploy.timer /etc/systemd/system/
+   sudo nano /etc/systemd/system/milaclone-deploy.service   # User=, WorkingDirectory=, ExecStart=, EnvironmentFile=
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now milaclone-deploy.timer
+   ```
+
+5. Try it straight away instead of waiting for the hour:
+
+   ```bash
+   sudo systemctl start milaclone-deploy      # runs one check now
+   journalctl -u milaclone-deploy -n 50       # what it did
+   ```
+
+### Day to day
+
+```bash
+systemctl list-timers milaclone-deploy.timer   # when the next check runs
+journalctl -u milaclone-deploy -f              # follow deploy output
+sudo systemctl start milaclone-deploy          # deploy now, don't wait for the hour
+```
+
+- **Something urgent:** `sudo systemctl start milaclone-deploy` (or
+  `scripts/deploy.sh`) deploys right away.
+- **A deploy failed:** `journalctl -u milaclone-deploy` shows why. Push a fix
+  to `main` and the next check deploys it. To retry the same commit (say the
+  failure was a full disk you've since cleared), run `scripts/deploy.sh` by
+  hand; a successful deploy clears the skip.
+- **Working on the server by hand** (editing files, deploying a branch, rolling
+  back): pause the timer first. Otherwise the next check refuses to run off
+  `main` or on a dirty tree, and marks the current `main` commit as failed
+  until a newer one lands (run `scripts/deploy.sh` once you're back on a clean
+  `main` to clear that).
+
+  ```bash
+  sudo systemctl stop milaclone-deploy.timer    # pause
+  sudo systemctl start milaclone-deploy.timer   # resume
+  ```
+
+- **Rollback:** pause the timer, check out the older commit and rebuild as in
+  [Deploying to the server](#deploying-to-the-server). The cleaner fix is a
+  revert PR to `main`, which the timer then deploys.
+- **Turn it off:** `sudo systemctl disable --now milaclone-deploy.timer`.
+
+### Optional: a notification on your phone
+
+Put a webhook URL in `.env.autodeploy` next to `docker-compose.yml` (it is
+gitignored):
+
+```bash
+AUTODEPLOY_NOTIFY_URL=http://127.0.0.1:8123/api/webhook/milaclone-deploy
+```
+
+After each real deploy or failure the script POSTs
+`{"status":"deployed"|"failed","commit":"<sha>","host":"<name>"}`. In Home
+Assistant, make an automation with a **Webhook** trigger (ID
+`milaclone-deploy`, local only) and a **Notify** action to your phone, for
+example `milaclone {{ trigger.json.status }} ({{ trigger.json.commit[:7] }})`.
+A check that finds nothing new sends nothing.
+
 ## Run it as a service (auto-start on boot)
 
 Create `/etc/systemd/system/milaclone.service` (adjust the paths and user):
