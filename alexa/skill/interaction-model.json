@@ -1,0 +1,31 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "my tasks",
+      "intents": [
+        {
+          "name": "AddTaskIntent",
+          "slots": [{ "name": "task", "type": "AMAZON.SearchQuery" }],
+          "samples": [
+            "add {task}",
+            "to add {task}",
+            "add a task to {task}",
+            "to add a task to {task}",
+            "remind me to {task}",
+            "to remind me to {task}",
+            "i need to {task}",
+            "that i need to {task}",
+            "put {task} on my list",
+            "to put {task} on my list"
+          ]
+        },
+        { "name": "AMAZON.HelpIntent", "samples": [] },
+        { "name": "AMAZON.CancelIntent", "samples": [] },
+        { "name": "AMAZON.StopIntent", "samples": [] },
+        { "name": "AMAZON.NavigateHomeIntent", "samples": [] },
+        { "name": "AMAZON.FallbackIntent", "samples": [] }
+      ],
+      "types": []
+    }
+  }
+}

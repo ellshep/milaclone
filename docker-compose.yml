@@ -89,6 +89,26 @@ services:
           cpus: '1.00'
           memory: 1G
 
+  # Alexa hop (docs/alexa.md): an outbound-only Cloudflare Tunnel so the Alexa
+  # skill's Worker can reach the pipeline's /ingest/text. Off unless
+  # COMPOSE_PROFILES=alexa is set in .env. Which hostname and path it serves is
+  # set on the tunnel in the Cloudflare dashboard, not here.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: milaclone-cloudflared
+    profiles: ['alexa']
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - pipeline
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
   # Own tailnet node, so the app answers on https://mila.<tailnet>.ts.net
   # at "/" rather than a path prefix. Reaches the app over the compose network;
   # the loopback port binding above stays as-is for local access.

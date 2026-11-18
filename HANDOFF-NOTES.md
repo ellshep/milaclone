@@ -136,3 +136,51 @@ What the repo actually is, against the assumptions in the original handoff:
 - Morning digest time, and whether weekends differ.
 - Tags: let the model assign them freely (current behaviour: only when the
   speaker names a category), or limit them to an allowlist of existing tags?
+
+## Phase 3: Alexa voice capture
+
+**Decided with the owner:** accounts available are an Alexa developer account,
+AWS and Cloudflare (no Home Assistant Cloud); route is a **Cloudflare Worker +
+Cloudflare Tunnel**; tags stay "only when spoken". The routes weighed and why
+are in `docs/alexa.md`.
+
+**Built**
+
+- `alexa/`: the skill's endpoint as a Cloudflare Worker. It verifies Alexa's
+  request signature and the skill ID, rate limits, and forwards the spoken
+  task to the pipeline's `/ingest/text` only, then has Alexa read back the
+  pipeline's answer ("Added Buy printer ink."). Failures are spoken as
+  failures.
+- `alexa/skill/interaction-model.json`: invocation name "my tasks", an
+  `AddTaskIntent` with phrasings such as "add …", "remind me to …", "I need
+  to …".
+- `cloudflared` Compose service (profile `alexa`, off by default, capped at
+  0.25 CPU / 128 MB): an outbound-only tunnel. The hostname, its single
+  allowed path and the Access service-token policy are set in the Cloudflare
+  dashboard.
+- `docs/alexa.md`: the exact steps in the Cloudflare dashboard, the Alexa
+  developer console and on the server, plus troubleshooting.
+- CI: new `Alexa worker tests` job (not required).
+
+**Verified here**
+
+- 9 Worker tests against a made-up certificate chain: the happy path, every
+  intent, pipeline failures, and refusals (wrong skill, wrong or missing
+  signature, tampered body, non-Amazon certificate URLs, wrong-name, expired
+  and broken certificates, stale timestamps, rate limit, missing settings).
+- The Worker bundles with wrangler and runs in Cloudflare's local runtime,
+  where it refused unsigned requests as expected.
+- **Not verified here:** a real Alexa request (Amazon's real certificate and
+  signature), the tunnel, Access, and the skill on an Echo. All need the
+  owner's accounts.
+
+**Needs the owner** (steps in `docs/alexa.md`)
+
+1. Deploy the Phase 2 pipeline on xbox first, if not done (LLM key, tokens).
+2. Create the tunnel and its hostname, the Access service token and policy.
+3. `npx wrangler deploy` and the three secrets.
+4. Create the skill, paste the interaction model, set the endpoint, copy the
+   skill ID into `wrangler.toml`, redeploy, enable Development testing.
+5. Say "Alexa, tell my tasks to add buy printer ink" and check the Inbox.
+
+**Still open before Phase 5:** morning digest time, and whether weekends differ.

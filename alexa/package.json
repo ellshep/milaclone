@@ -1,0 +1,13 @@
+{
+  "name": "milaclone-alexa",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker that receives the Alexa skill's requests and forwards the spoken task to milaclone",
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@peculiar/x509": "1.14.3"
+  }
+}

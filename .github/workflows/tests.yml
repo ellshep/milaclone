@@ -162,3 +162,25 @@ jobs:
       - name: Container logs
         if: ${{ failure() }}
         run: docker logs app; docker logs pipeline
+
+  # Not a required check: the Alexa skill's Cloudflare Worker in alexa/.
+  alexa:
+    name: Alexa worker tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: alexa/package-lock.json
+      - run: npm ci
+        working-directory: alexa
+      - run: npm test
+        working-directory: alexa
+      - name: Bundle for Cloudflare
+        run: npx --yes wrangler@4 deploy --dry-run
+        working-directory: alexa
+        env:
+          WRANGLER_SEND_METRICS: 'false'
