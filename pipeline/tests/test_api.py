@@ -18,7 +18,7 @@ def upload(client, auth, data=b"RIFFfakeaudio", name="note.m4a", **extra):
 def test_health_needs_no_token(client):
     r = client.get("/health")
     assert r.status_code == 200
-    assert r.json() == {"ok": True, "queued": 0}
+    assert r.json() == {"ok": True, "queued": 0, "retrying": 0}
     assert client.get("/ingest/health").status_code == 200
 
 

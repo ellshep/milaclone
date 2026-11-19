@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS ingests (
   source TEXT NOT NULL,
   audio_filename TEXT,
   original_filename TEXT,
-  status TEXT NOT NULL,            -- queued | transcribing | extracting | done | extraction_failed | error
+  status TEXT NOT NULL,            -- queued | transcribing | retrying | extracting | done | extraction_failed | error
   transcript TEXT,
   extraction_json TEXT,
   created_json TEXT,
@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS ingests (
   error TEXT,
   transcribe_ms INTEGER,
   audio_seconds REAL,
-  extract_ms INTEGER
+  extract_ms INTEGER,
+  attempts INTEGER NOT NULL DEFAULT 0,  -- transcription attempts made
+  next_attempt_at INTEGER               -- when a 'retrying' job is due (ms)
 );
 CREATE INDEX IF NOT EXISTS idx_ingests_status ON ingests(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_ingests_created ON ingests(created_at);
@@ -46,7 +48,19 @@ FIELDS = (
     "audio_seconds",
     "extract_ms",
     "audio_filename",
+    "attempts",
+    "next_attempt_at",
 )
+
+# Columns added after the first release, for databases created before them.
+ADDED_COLUMNS = {
+    "attempts": "INTEGER NOT NULL DEFAULT 0",
+    "next_attempt_at": "INTEGER",
+}
+
+
+def now_ms() -> int:
+    return int(time.time() * 1000)
 
 
 def new_id() -> str:
@@ -62,6 +76,10 @@ class Store:
         self._db.execute("PRAGMA journal_mode = WAL")
         self._db.execute("PRAGMA synchronous = NORMAL")
         self._db.executescript(SCHEMA)
+        cols = {r["name"] for r in self._db.execute("PRAGMA table_info(ingests)")}
+        for name, decl in ADDED_COLUMNS.items():
+            if name not in cols:
+                self._db.execute(f"ALTER TABLE ingests ADD COLUMN {name} {decl}")
 
     def close(self) -> None:
         with self._lock:
@@ -107,16 +125,22 @@ class Store:
             ).fetchall()
         return [_row(r) for r in rows]
 
-    def next_queued(self) -> dict | None:
+    def next_queued(self, now: int | None = None) -> dict | None:
+        """The next job to run: a queued one, or a retry whose wait is over."""
+        now = now_ms() if now is None else now
         with self._lock:
             row = self._db.execute(
-                "SELECT * FROM ingests WHERE status = 'queued' ORDER BY created_at, id LIMIT 1"
+                "SELECT * FROM ingests WHERE status = 'queued' "
+                "OR (status = 'retrying' AND COALESCE(next_attempt_at, 0) <= ?) "
+                "ORDER BY COALESCE(next_attempt_at, created_at), created_at, id LIMIT 1",
+                (now,),
             ).fetchone()
         return _row(row) if row else None
 
-    def count(self, status: str) -> int:
+    def count(self, *statuses: str) -> int:
+        marks = ",".join("?" * len(statuses))
         with self._lock:
-            return self._db.execute("SELECT COUNT(*) FROM ingests WHERE status = ?", (status,)).fetchone()[0]
+            return self._db.execute(f"SELECT COUNT(*) FROM ingests WHERE status IN ({marks})", statuses).fetchone()[0]
 
     def requeue_interrupted(self) -> int:
         """Audio jobs cut off by a restart go back in the queue. A text ingest

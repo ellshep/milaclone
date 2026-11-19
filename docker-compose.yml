@@ -74,6 +74,15 @@ services:
       - DEEPGRAM_MODEL=${DEEPGRAM_MODEL:-nova-3}
       - DEEPGRAM_LANGUAGE=${DEEPGRAM_LANGUAGE:-en}
       - DEEPGRAM_MIP_OPT_OUT=${DEEPGRAM_MIP_OPT_OUT:-true}
+      # Seconds between transcription retries when Deepgram is busy or down.
+      - TRANSCRIBE_RETRY_DELAYS=${TRANSCRIBE_RETRY_DELAYS:-60,300,900}
+      # Webhook (e.g. Home Assistant) that gets one POST per note that failed for good.
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - INGEST_REVIEW_URL=${INGEST_REVIEW_URL:-}
+    # Lets ALERT_WEBHOOK_URL reach a service on this host, e.g.
+    # http://host.docker.internal:8123/api/webhook/<id> for Home Assistant.
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
       - EXTRACT_PROVIDER=${EXTRACT_PROVIDER:-anthropic}
       - EXTRACT_MODEL=${EXTRACT_MODEL:-}
       - EXTRACT_API_KEY=${EXTRACT_API_KEY:-}

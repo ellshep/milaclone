@@ -23,9 +23,12 @@ class FakeTranscriber:
         self.text = text
         self.calls = []
         self.fail = None
+        self.fails = []  # errors raised by the next calls, one per call
 
     def transcribe(self, path: Path) -> Transcript:
         self.calls.append(path)
+        if self.fails:
+            raise self.fails.pop(0)
         if self.fail:
             raise self.fail
         return Transcript(self.text, 12.5, 340)
@@ -72,6 +75,14 @@ class FakeExtractor:
         return LLMResult(self.result, "fake", "fake", 10, 20, 5, 1)
 
 
+class FakeAlert:
+    def __init__(self):
+        self.sent = []
+
+    def __call__(self, record):
+        self.sent.append(record)
+
+
 @pytest.fixture
 def env(tmp_path):
     settings = Settings(ingest_token=TOKEN, task_token=TASK_TOKEN, app_url="http://app:4321",
@@ -84,6 +95,7 @@ def env(tmp_path):
         transcriber=FakeTranscriber(),
         tasks=TasksClient(settings.app_url, TASK_TOKEN, http=http),
         extractor=FakeExtractor(),
+        alert=FakeAlert(),
     )
 
     class Env:

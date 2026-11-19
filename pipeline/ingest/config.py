@@ -11,6 +11,22 @@ def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
 
+def _delays(raw: str) -> tuple[int, ...]:
+    """Seconds to wait before each transcription retry, e.g. "60,300,900".
+    Empty or "0" turns retries off."""
+    out = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        n = int(part)
+        if n < 0:
+            raise ValueError("TRANSCRIBE_RETRY_DELAYS values must be 0 or more")
+        if n:
+            out.append(n)
+    return tuple(out)
+
+
 @dataclass(frozen=True)
 class StepConfig:
     """Which model one pipeline step uses. Steps are configured separately
@@ -46,6 +62,9 @@ class Settings:
     deepgram_model: str = "nova-3"
     deepgram_language: str = "en"
     deepgram_mip_opt_out: bool = True
+    retry_delays: tuple[int, ...] = (60, 300, 900)
+    alert_webhook_url: str = ""
+    review_url: str = ""
     max_audio_mb: int = 50
     extract: StepConfig = field(default_factory=lambda: StepConfig("extract", "fake", "fake"))
 
@@ -61,6 +80,9 @@ class Settings:
             deepgram_model=_env("DEEPGRAM_MODEL", "nova-3"),
             deepgram_language=_env("DEEPGRAM_LANGUAGE", "en"),
             deepgram_mip_opt_out=_env("DEEPGRAM_MIP_OPT_OUT", "true").lower() not in ("false", "0", "no"),
+            retry_delays=_delays(_env("TRANSCRIBE_RETRY_DELAYS", "60,300,900")),
+            alert_webhook_url=_env("ALERT_WEBHOOK_URL"),
+            review_url=_env("INGEST_REVIEW_URL"),
             max_audio_mb=int(_env("MAX_AUDIO_MB", "50")),
             extract=StepConfig.from_env("extract"),
         )

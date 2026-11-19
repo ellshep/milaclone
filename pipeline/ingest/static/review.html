@@ -94,6 +94,7 @@
       }
       .status.queued,
       .status.transcribing,
+      .status.retrying,
       .status.extracting {
         color: var(--warn);
       }
@@ -186,6 +187,14 @@
             card.appendChild(ul);
           }
           if (g.error) card.appendChild(el('p', 'err', g.error));
+          if (g.status === 'retrying' && g.nextAttemptAt) {
+            card.appendChild(el('p', 'meta', 'Next try at ' + new Date(g.nextAttemptAt).toLocaleTimeString()));
+          }
+          if (['error', 'extraction_failed', 'retrying'].includes(g.status)) {
+            const btn = el('button', null, g.status === 'retrying' ? 'Retry now' : 'Retry');
+            btn.onclick = () => retry(g.id, btn);
+            card.appendChild(btn);
+          }
           list.appendChild(card);
         }
       }
@@ -209,6 +218,22 @@
         } catch (e) {
           $('error').textContent = 'Could not load: ' + e.message;
         }
+      }
+
+      async function retry(id, btn) {
+        btn.disabled = true;
+        btn.textContent = 'Retrying…';
+        try {
+          const r = await fetch('/ingest/' + encodeURIComponent(id) + '/retry', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token },
+          });
+          const body = await r.json();
+          if (!r.ok) throw new Error(body.error || 'HTTP ' + r.status);
+        } catch (e) {
+          $('error').textContent = 'Retry failed: ' + e.message;
+        }
+        load();
       }
 
       $('save').onclick = () => {

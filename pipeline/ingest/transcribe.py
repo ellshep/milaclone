@@ -33,8 +33,18 @@ CONTENT_TYPES = {
 }
 
 
+# Statuses that mean "try again later": timeout, too many requests, server trouble.
+RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
+
+
 class TranscribeError(Exception):
-    pass
+    """`retryable` is True for failures that may clear up by themselves
+    (Deepgram busy or down, network trouble), False for ones that won't
+    (wrong key, no credits, bad audio)."""
+
+    def __init__(self, message: str, retryable: bool = False):
+        super().__init__(message)
+        self.retryable = retryable
 
 
 @dataclass
@@ -73,12 +83,13 @@ class DeepgramTranscriber:
                 r = client.post(self.api_url, params=self.params(), content=f.read(),
                                 headers={"Authorization": f"Token {self.api_key}", "Content-Type": ctype})
         except httpx.HTTPError as e:
-            raise TranscribeError(f"Deepgram unreachable: {type(e).__name__}") from e
+            raise TranscribeError(f"Deepgram unreachable: {type(e).__name__}", retryable=True) from e
         finally:
             if own:
                 client.close()
         if r.status_code >= 400:
-            raise TranscribeError(f"Deepgram HTTP {r.status_code}: {_err(r)}")
+            raise TranscribeError(f"Deepgram HTTP {r.status_code}: {_err(r)}",
+                                  retryable=r.status_code in RETRYABLE_STATUS)
         try:
             data = r.json()
             alt = data["results"]["channels"][0]["alternatives"][0]

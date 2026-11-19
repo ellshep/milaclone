@@ -139,3 +139,27 @@ def test_bench_script(audio, monkeypatch, capsys):
 
 def test_reply_shape_is_json_serialisable():
     assert json.loads(json.dumps(REPLY))["metadata"]["duration"] == 61.4
+
+
+@pytest.mark.parametrize("status,retryable", [(400, False), (401, False), (402, False), (403, False),
+                                              (408, True), (429, True), (500, True), (502, True),
+                                              (503, True), (504, True)])
+def test_which_http_errors_are_worth_retrying(audio, status, retryable):
+    with pytest.raises(TranscribeError) as e:
+        DeepgramTranscriber("k", http=client(lambda req: httpx.Response(status, text="x"))).transcribe(audio)
+    assert e.value.retryable is retryable
+
+
+def test_network_trouble_is_retryable_but_setup_problems_are_not(audio):
+    def timeout(req):
+        raise httpx.ReadTimeout("slow")
+
+    with pytest.raises(TranscribeError) as e:
+        DeepgramTranscriber("k", http=client(timeout)).transcribe(audio)
+    assert e.value.retryable is True
+    with pytest.raises(TranscribeError) as e:
+        DeepgramTranscriber("").transcribe(audio)
+    assert e.value.retryable is False
+    with pytest.raises(TranscribeError) as e:
+        DeepgramTranscriber("k", http=client(lambda req: httpx.Response(200, text="?"))).transcribe(audio)
+    assert e.value.retryable is False

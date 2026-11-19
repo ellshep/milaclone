@@ -43,6 +43,10 @@ class Worker:
         except Exception as e:  # keep the worker alive whatever one job does
             self.deps.store.update(job["id"], status="error", error=f"unexpected: {e}")
             log("worker.job_crashed", id=job["id"], error=str(e))
+            try:
+                self.deps.alert(self.deps.store.get(job["id"]))
+            except Exception:  # an alert must never stop the worker
+                pass
         return True
 
     def _run(self) -> None:
