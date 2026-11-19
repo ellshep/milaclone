@@ -1,7 +1,6 @@
 # Runtime dependencies for the voice ingest pipeline (pinned).
 anthropic==2.10.0
 fastapi==0.163.2
-faster-whisper==1.2.1
 httpx2==2.16.2
 httpx==0.28.1
 pydantic==2.14.3

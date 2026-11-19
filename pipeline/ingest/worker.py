@@ -1,5 +1,5 @@
 """One background thread that works through queued audio, one job at a time,
-so transcription never runs more than once at a time on the server."""
+so uploads return at once and notes are processed in arrival order."""
 
 from __future__ import annotations
 

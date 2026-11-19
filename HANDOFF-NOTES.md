@@ -184,3 +184,23 @@ are in `docs/alexa.md`.
 5. Say "Alexa, tell my tasks to add buy printer ink" and check the Inbox.
 
 **Still open before Phase 5:** morning digest time, and whether weekends differ.
+
+## Change: Deepgram replaces local Whisper (owner decision)
+
+The owner chose Deepgram for speech-to-text (they have credits), replacing
+local faster-whisper. This reverses the original "audio never leaves the
+server" decision on purpose.
+
+- Model **Nova-3** (Deepgram's most accurate model for recorded audio; Flux
+  is for live streaming conversations), with smart formatting and
+  `language=en`.
+- `mip_opt_out=true` by default: Deepgram keeps no audio or transcript after
+  replying, which may be billed at a higher per-minute rate.
+- Whisper removed entirely (owner's choice): no local fallback, a much
+  smaller image, the `milaclone_models` volume is no longer used, and the
+  pipeline's cap drops to 0.5 CPU / 256 MB. The Whisper benchmark step is
+  replaced by a one-file check (`bench.py`) in `docs/voice-capture.md`.
+- Owner steps: put `DEEPGRAM_API_KEY` in `.env`, then `docker compose up -d`
+  once the change is deployed. Optionally remove the old model volume with
+  `docker volume rm milaclone_milaclone_models` (check the name with
+  `docker volume ls`).

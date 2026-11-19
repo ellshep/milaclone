@@ -42,11 +42,10 @@ class Settings:
     app_url: str = "http://app:4321"
     data_dir: Path = Path("/data")
     tz: str = "America/Chicago"
-    whisper_model: str = "base"
-    whisper_threads: int = 2
-    whisper_compute: str = "int8"
-    whisper_language: str = ""
-    models_dir: Path = Path("/models")
+    deepgram_api_key: str = ""
+    deepgram_model: str = "nova-3"
+    deepgram_language: str = "en"
+    deepgram_mip_opt_out: bool = True
     max_audio_mb: int = 50
     extract: StepConfig = field(default_factory=lambda: StepConfig("extract", "fake", "fake"))
 
@@ -58,11 +57,10 @@ class Settings:
             app_url=_env("APP_URL", "http://app:4321").rstrip("/"),
             data_dir=Path(_env("DATA_DIR", "/data")),
             tz=_env("TASK_TZ", "America/Chicago"),
-            whisper_model=_env("WHISPER_MODEL", "base"),
-            whisper_threads=int(_env("WHISPER_THREADS", "2")),
-            whisper_compute=_env("WHISPER_COMPUTE_TYPE", "int8"),
-            whisper_language=_env("WHISPER_LANGUAGE"),
-            models_dir=Path(_env("WHISPER_MODELS_DIR", "/models")),
+            deepgram_api_key=_env("DEEPGRAM_API_KEY"),
+            deepgram_model=_env("DEEPGRAM_MODEL", "nova-3"),
+            deepgram_language=_env("DEEPGRAM_LANGUAGE", "en"),
+            deepgram_mip_opt_out=_env("DEEPGRAM_MIP_OPT_OUT", "true").lower() not in ("false", "0", "no"),
             max_audio_mb=int(_env("MAX_AUDIO_MB", "50")),
             extract=StepConfig.from_env("extract"),
         )

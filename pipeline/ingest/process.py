@@ -97,7 +97,7 @@ def process_audio(deps: Deps, job: dict) -> dict:
     path = deps.audio_dir / job["audio_filename"]
     try:
         t = deps.transcriber.transcribe(path)
-    except Exception as e:  # any decoder or model failure is recorded, never raised
+    except Exception as e:  # any transcription failure is recorded, never raised
         deps.store.update(ingest_id, status="error", error=f"transcription failed: {e}")
         log("ingest.transcribe_failed", id=ingest_id, error=str(e))
         return deps.store.get(ingest_id)

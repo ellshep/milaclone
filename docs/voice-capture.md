@@ -9,8 +9,8 @@ transcript into tasks:
  (Alexa, later) ──► https://mila.<tailnet>.ts.net/ingest/text
                          │ Tailscale sidecar
                          ▼
-             pipeline (Python, 1 CPU / 1 GB cap)
-   audio ─► queue ─► faster-whisper (local, CPU) ─► transcript ─┐
+             pipeline (Python, 0.5 CPU / 256 MB cap)
+   audio ─► queue ─► Deepgram Nova-3 (cloud) ───► transcript ─┐
    text ──────────────────────────────────────────► transcript ─┤
                                                                  ▼
                         LLM provider (EXTRACT_*) ─► tasks JSON ──┤
@@ -20,15 +20,16 @@ transcript into tasks:
                               Inbox to-do list (canvas + Quick notes)
 ```
 
-- **Audio never leaves the server.** Whisper runs on xbox's CPU. The only
-  data that leaves is the transcript text, sent to the LLM provider you
-  configure. Choose `openai_compatible` with a local model (e.g. Ollama) to
-  keep everything on the server.
+- **Where your data goes.** Each recording is sent to Deepgram for
+  transcription, and the transcript text to the LLM provider you configure.
+  With `DEEPGRAM_MIP_OPT_OUT=true` (the default) Deepgram keeps no audio or
+  transcript after replying; it logs only request metadata and usage. The audio
+  file and transcript are also kept on the server in `ingest.db`.
 - **Nothing is lost.** Every transcript, extraction result and outcome is
   stored in `ingest.db`, and the audio files are kept. If extraction fails
   twice, the transcript is kept and marked `extraction_failed`.
 - **Audio uploads return at once** (`202`) and are processed one at a time in
-  the background, so a burst of notes can't spike the CPU. Text ingests are
+  the background, in the order they arrived. Text ingests are
   answered straight away with the tasks they created, for a voice assistant to
   read back.
 - **Duplicates are skipped:** a task whose title matches an open task is not
@@ -45,29 +46,29 @@ transcript into tasks:
    # the LLM that picks tasks out of the transcript, e.g. Anthropic:
    echo "EXTRACT_PROVIDER=anthropic" >> .env
    echo "EXTRACT_API_KEY=sk-ant-..." >> .env
+   # speech-to-text for audio notes
+   echo "DEEPGRAM_API_KEY=..." >> .env
    ```
 
 2. `scripts/deploy.sh` (or `docker compose up -d --build`).
-3. The first audio note downloads the Whisper model (about 150 MB for
-   `base`) into the `milaclone_models` volume, so it takes longer than later
-   ones.
-4. Check it: `curl -s https://mila.<tailnet>.ts.net/ingest/health`.
+3. Check it: `curl -s https://mila.<tailnet>.ts.net/ingest/health`.
 
 ### Settings
 
-| Variable           | Default              | Purpose                                                         |
-| ------------------ | -------------------- | --------------------------------------------------------------- |
-| `INGEST_API_TOKEN` | unset (ingest off)   | Bearer token for `/ingest/*`. Separate from the task token      |
-| `TASK_API_TOKEN`   | —                    | The app's task API token, used by the pipeline to add tasks     |
-| `EXTRACT_PROVIDER` | `anthropic`          | `anthropic`, `openai`, `gemini`, `openai_compatible`, `fake`    |
-| `EXTRACT_MODEL`    | `claude-haiku-5-5`\* | Model for extraction. \*Only Anthropic has a default            |
-| `EXTRACT_API_KEY`  | —                    | Provider API key (not needed for a local model)                 |
-| `EXTRACT_BASE_URL` | provider's own       | Required for `openai_compatible`, e.g. `http://ollama:11434/v1` |
-| `WHISPER_MODEL`    | `base`               | `tiny`, `base`, `small`, … Bigger is slower and more accurate   |
-| `WHISPER_THREADS`  | `2`                  | CPU threads for one transcription                               |
-| `WHISPER_LANGUAGE` | auto-detect          | e.g. `en` to skip language detection                            |
-| `TASK_TZ`          | `America/Chicago`    | Turns "tomorrow" or "next Friday" into dates                    |
-| `MAX_AUDIO_MB`     | `50`                 | Largest accepted upload                                         |
+| Variable               | Default              | Purpose                                                          |
+| ---------------------- | -------------------- | ---------------------------------------------------------------- |
+| `INGEST_API_TOKEN`     | unset (ingest off)   | Bearer token for `/ingest/*`. Separate from the task token       |
+| `TASK_API_TOKEN`       | —                    | The app's task API token, used by the pipeline to add tasks      |
+| `EXTRACT_PROVIDER`     | `anthropic`          | `anthropic`, `openai`, `gemini`, `openai_compatible`, `fake`     |
+| `EXTRACT_MODEL`        | `claude-haiku-5-5`\* | Model for extraction. \*Only Anthropic has a default             |
+| `EXTRACT_API_KEY`      | —                    | Provider API key (not needed for a local model)                  |
+| `EXTRACT_BASE_URL`     | provider's own       | Required for `openai_compatible`, e.g. `http://ollama:11434/v1`  |
+| `DEEPGRAM_API_KEY`     | —                    | Deepgram key for audio notes. Without it audio ingests fail      |
+| `DEEPGRAM_MODEL`       | `nova-3`             | Deepgram's most accurate model for recorded audio                |
+| `DEEPGRAM_LANGUAGE`    | `en`                 | `multi` for mixed languages; empty for Deepgram's default        |
+| `DEEPGRAM_MIP_OPT_OUT` | `true`               | Deepgram keeps nothing after replying (may cost more per minute) |
+| `TASK_TZ`              | `America/Chicago`    | Turns "tomorrow" or "next Friday" into dates                     |
+| `MAX_AUDIO_MB`         | `50`                 | Largest accepted upload                                          |
 
 Extraction uses the cheapest tier by default and asks for strict JSON. For
 OpenAI and Gemini set `EXTRACT_MODEL` to that provider's smallest current
@@ -128,18 +129,18 @@ Open `https://mila.<tailnet>.ts.net/ingest/review`, paste the ingest token once
 (it stays in that browser), and you see each note: what was heard, what it
 became, and anything skipped or failed.
 
-## Benchmark
+## Check transcription
 
-Time a real clip on xbox before relying on it, and tune the CPU cap:
+Run one real recording through Deepgram the way the pipeline does, and see
+the time and text:
 
 ```bash
 docker compose cp ~/note-60s.m4a pipeline:/data/audio/bench.m4a
 docker compose exec pipeline python bench.py /data/audio/bench.m4a
-docker compose exec pipeline python bench.py /data/audio/bench.m4a --model small
 ```
 
-It prints the model load time and how long the clip took. Record the numbers
-in `HANDOFF-NOTES.md`.
+A 60-second note should come back in a few seconds. Record the numbers in
+`HANDOFF-NOTES.md`.
 
 ## Backups
 
@@ -172,8 +173,11 @@ docker compose logs pipeline | grep llm.call      # compare providers
 - **`extraction_failed`:** the LLM call failed twice. The `error` field and
   `llm.error` log lines say why (bad key, wrong model name, provider down).
   The transcript is kept; re-send it with `POST /ingest/text`.
-- **First audio note is slow or fails offline:** the Whisper model downloads on
-  first use from Hugging Face.
+- **Audio ingest ends in `error` with "transcription failed":** the `error`
+  field says why. "DEEPGRAM_API_KEY is not set" → add it to `.env` and
+  `docker compose up -d`; "HTTP 401" → the key is wrong or revoked; "HTTP
+  402" → out of Deepgram credits; "unreachable" → xbox can't reach
+  `api.deepgram.com`. The audio file is kept; re-upload it once fixed.
 - **`/ingest/...` returns the milaclone page or 404 over Tailscale:** check
   `docker compose exec tailscale tailscale serve status` shows `/ingest/`
   proxied to `pipeline:8000`.

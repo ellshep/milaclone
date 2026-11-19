@@ -18,7 +18,7 @@ from .logs import log
 from .process import Deps, default_extractor, extract_and_create, speech_for
 from .store import Store, new_id
 from .tasks_client import TasksClient
-from .transcribe import WhisperTranscriber
+from .transcribe import DeepgramTranscriber
 from .worker import Worker
 
 STATIC = Path(__file__).parent / "static"
@@ -54,9 +54,8 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None, start
         deps = Deps(
             settings=settings,
             store=Store(settings.data_dir / "ingest.db"),
-            transcriber=WhisperTranscriber(settings.whisper_model, settings.whisper_threads,
-                                           settings.whisper_compute, settings.models_dir,
-                                           settings.whisper_language),
+            transcriber=DeepgramTranscriber(settings.deepgram_api_key, settings.deepgram_model,
+                                            settings.deepgram_language, settings.deepgram_mip_opt_out),
             tasks=TasksClient(settings.app_url, settings.task_token),
             extractor=default_extractor(settings),
         )
@@ -67,7 +66,7 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None, start
     async def lifespan(app: FastAPI):
         if start_worker:
             worker.start()
-        log("pipeline.start", whisper_model=settings.whisper_model, extract_provider=settings.extract.provider,
+        log("pipeline.start", transcribe_model=settings.deepgram_model, deepgram_key=bool(settings.deepgram_api_key), extract_provider=settings.extract.provider,
             extract_model=settings.extract.model or None, auth=bool(settings.ingest_token))
         yield
         if start_worker:
