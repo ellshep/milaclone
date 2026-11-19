@@ -228,3 +228,23 @@ Asked for by the owner after moving transcription to Deepgram.
   `ALERT_WEBHOOK_URL` and `INGEST_REVIEW_URL` in `.env`, `docker compose up -d`,
   and run the test command in `docs/voice-capture.md` ("Failure alert on your
   phone"). If it times out, allow the Docker network through UFW to port 8123.
+
+## Fix: slow first extraction after a restart
+
+Found during setup on xbox: the first voice note after a deploy took 11.5 s to
+extract; the next took 2.9 s.
+
+- **Cause:** `_call_anthropic` imported the Anthropic SDK on first use, and
+  `complete_json` times the call including it. The import costs about 3.6 s of
+  CPU, 7–9 s under the pipeline's 0.5 CPU cap. Structured-output schema
+  compilation adds only about 1 s, the first time a schema is used in 24 h.
+  The model is not slow: warm extraction takes about 2 s, and turning thinking
+  off made no difference.
+- **Why it mattered:** `/ingest/text` shares the path and the Alexa Worker
+  waits 6.5 s, so the first Alexa request after each deploy would time out.
+- **Fix:** `llm.preload` imports the SDK and builds one shared client per key
+  in a background thread at startup (`llm.preloaded` log line). Calls reuse
+  that client and its connections. Thinking and the JSON schema are unchanged.
+- **Measured** in a throwaway container with the same 0.5 CPU cap and the
+  real key: first extraction 7.72 s → 1.61 s (preload finished 4.9 s after
+  start, before any request); second extraction 1.41 s → 1.46 s.
