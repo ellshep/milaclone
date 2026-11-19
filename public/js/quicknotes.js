@@ -187,12 +187,15 @@ const openCount = list => tasksOf(list).filter(t => !t.done).length;
 const listHasTag = (list, tag) => list.tags.includes(tag) || tasksOf(list).some(t => t.tags.includes(tag));
 
 // Smart views are computed filters over every list, so their rows carry the
-// list they came from for the sub-line and for writes.
+// list they came from for the sub-line and for writes. Newest first: tasks
+// made on the canvas have no createdAt, so they take their list's, and within
+// a list a later position counts as newer.
 function smartPairs(key) {
   const f = SMART[key].f;
   const out = [];
-  for (const list of qn.lists) for (const task of tasksOf(list)) if (f(task)) out.push({ list, task });
-  return out;
+  for (const list of qn.lists) for (const task of tasksOf(list)) if (f(task)) out.push({ list, task, at: out.length });
+  const made = p => p.task.createdAt || p.list.createdAt || 0;
+  return out.sort((a, b) => made(b) - made(a) || b.at - a.at);
 }
 
 function allTags() {

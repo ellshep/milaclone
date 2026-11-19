@@ -106,6 +106,26 @@ test('starring a task feeds the Starred smart view', async ({ page }) => {
   await expect(page.locator('#qnAddBar')).toBeHidden();
 });
 
+test('the All smart view lists the newest task first', async ({ page }) => {
+  const title = uniq('Ordered');
+  const old = uniq('Older task');
+  const mid = uniq('Undated task'); // made on the canvas: no createdAt, so it takes its list's
+  const fresh = uniq('Newer task');
+  await seedList(page, title, [
+    { id: 'a', text: old, done: false, createdAt: 1000 },
+    { id: 'b', text: mid, done: false },
+    { id: 'c', text: fresh, done: false, createdAt: Date.now() + 60000 },
+  ]);
+  await openQuickNotes(page);
+  await page.locator('.qn-tile[data-smart="all"]').click();
+  await expect(page.locator('#qnListTitle')).toHaveText('All');
+  const texts = await page.locator('.qn-task').allTextContents();
+  const pos = t => texts.findIndex(s => s.includes(t));
+  expect(pos(fresh)).toBeGreaterThanOrEqual(0);
+  expect(pos(fresh)).toBeLessThan(pos(mid));
+  expect(pos(mid)).toBeLessThan(pos(old));
+});
+
 test('the add bar appends tasks and stays open for the next one', async ({ page }) => {
   const title = uniq('Groceries');
   await seedList(page, title, []);
