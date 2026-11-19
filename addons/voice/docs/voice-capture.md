@@ -1,7 +1,7 @@
 # Voice capture
 
 Talk into your phone and the to-dos you mention show up in milaclone's Inbox.
-A small service next to the app (`pipeline/`) turns a recording or a
+A small service next to the app (`addons/voice/pipeline/`) turns a recording or a
 transcript into tasks:
 
 ```
@@ -40,8 +40,10 @@ transcript into tasks:
 1. Add to `.env` next to `docker-compose.yml`:
 
    ```bash
+   # switch the add-on on (it is off by default)
+   echo "COMPOSE_PROFILES=voice" >> .env
    echo "INGEST_API_TOKEN=$(openssl rand -hex 32)" >> .env
-   # the task API token too, if you haven't set it yet (docs/task-api.md)
+   # the task API token too, if you haven't set it yet (see docs/task-api.md)
    echo "TASK_API_TOKEN=$(openssl rand -hex 32)" >> .env
    # the LLM that picks tasks out of the transcript, e.g. Anthropic:
    echo "EXTRACT_PROVIDER=anthropic" >> .env
@@ -217,8 +219,7 @@ docker compose cp ~/note-60s.m4a pipeline:/data/audio/bench.m4a
 docker compose exec pipeline python bench.py /data/audio/bench.m4a
 ```
 
-A 60-second note should come back in a few seconds. Record the numbers in
-`HANDOFF-NOTES.md`.
+A 60-second note should come back in a few seconds.
 
 ## Backups
 
@@ -254,7 +255,7 @@ docker compose logs pipeline | grep llm.call      # compare providers
 - **Audio ingest ends in `error` with "transcription failed":** the `error`
   field says why. "DEEPGRAM_API_KEY is not set" → add it to `.env` and
   `docker compose up -d`; "HTTP 401" → the key is wrong or revoked; "HTTP
-  402" → out of Deepgram credits; "unreachable" → xbox can't reach
+  402" → out of Deepgram credits; "unreachable" → the server can't reach
   `api.deepgram.com`. The audio file is kept; re-upload it once fixed.
 - **`/ingest/...` returns the milaclone page or 404 over Tailscale:** check
   `docker compose exec tailscale tailscale serve status` shows `/ingest/`

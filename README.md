@@ -138,7 +138,7 @@ details are in [docs/self-hosting.md](docs/self-hosting.md#access-over-tailscale
 
 ## Add tasks from outside the app
 
-`POST /api/tasks` adds a to-do from a script, a shortcut or the voice pipeline.
+`POST /api/tasks` adds a to-do from a script, a shortcut or another program.
 Set `TASK_API_TOKEN` in `.env` (`openssl rand -hex 32`) first; without it the
 API stays switched off. New tasks land in an **Inbox** list on Home, which the
 server creates the first time it needs one.
@@ -151,32 +151,27 @@ curl -sS https://mila.your-tailnet.ts.net/api/tasks \
 
 Listing, marking done and every field are in [docs/task-api.md](docs/task-api.md).
 
-### By voice
+## Optional add-ons
 
-Record a note on the phone and the to-dos you mention land in the Inbox. A
-separate service transcribes the audio with Deepgram (Nova-3), asks the LLM
-you configure to pick out the tasks, and adds them through the task API. The
-recording goes to Deepgram, which by default keeps nothing after replying, and
-the transcript text goes to the LLM provider. Setup, the iPhone Shortcut and the review page are in
-[docs/voice-capture.md](docs/voice-capture.md).
+Add-ons live in `addons/` and stay switched off unless you enable them; the
+board works the same without them.
 
-With an Echo you can also say "Alexa, tell my tasks to add buy printer ink". A
-small Cloudflare Worker checks the request is from your own Alexa skill and
-passes the text on through a Cloudflare Tunnel that serves that one path. See
-[docs/alexa.md](docs/alexa.md).
+- **Voice capture** ([addons/voice](addons/voice/README.md)): speak a note on
+  your phone or to an Echo and the to-dos in it land in your Inbox. Uses
+  third-party services (Deepgram for speech-to-text, an LLM provider, and
+  Cloudflare for Alexa), so read its page before turning it on.
 
 ## Your data
 
-| What        | Where                                                                          |
-| ----------- | ------------------------------------------------------------------------------ |
-| Boards      | `data/board.db` (SQLite, or the `milaclone_data` volume)                       |
-| Uploads     | `public/uploads/` (or the `milaclone_uploads` volume)                          |
-| Backup      | **Export → Download database backup**, or `GET /api/backup`                    |
-| Voice notes | `milaclone_ingest` volume: `ingest.db` (transcripts and results) and the audio |
+| What    | Where                                                       |
+| ------- | ----------------------------------------------------------- |
+| Boards  | `data/board.db` (SQLite, or the `milaclone_data` volume)    |
+| Uploads | `public/uploads/` (or the `milaclone_uploads` volume)       |
+| Backup  | **Export → Download database backup**, or `GET /api/backup` |
 
 You can set these environment variables: `PORT` (default 4321), `HOST`
 (default `0.0.0.0`), `DATA_DIR` (default `./data`), and for the task API
-`TASK_API_TOKEN` (unset = off) and `TASK_TZ` (default `America/Chicago`).
+`TASK_API_TOKEN` (unset = off) and `TASK_TZ` (default `UTC`).
 `.env.example` lists them.
 
 ## Development
@@ -186,7 +181,7 @@ npm test             # API tests (80% coverage floor)
 npm run test:ui      # front-end unit tests (Vitest)
 npm run test:e2e     # Playwright (run `npx playwright install` once first)
 npm run lint && npm run format
-cd pipeline && pip install -r requirements-dev.txt && python -m pytest   # voice pipeline
+cd addons/voice/pipeline && pip install -r requirements-dev.txt && python -m pytest   # voice add-on
 ```
 
 The backend is Express with `better-sqlite3`. The frontend is vanilla ES modules

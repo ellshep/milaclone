@@ -1,10 +1,10 @@
 # Task API
 
 An HTTP API for adding and updating to-do tasks without opening the app. It is
-meant for machine clients: the voice-note pipeline, an Alexa hop, shortcuts and
-scripts. The board UI itself still has no login (see the note in the README);
-this API needs a bearer token because it is the one surface built to be called
-by other programs and, later, reached through a public Alexa hop.
+meant for machine clients: shortcuts, scripts, and the optional voice add-on
+(`addons/voice/`). The board UI itself still has no login (see the note in the
+README); this API needs a bearer token because it is the one surface built to
+be called by other programs.
 
 ## Where tasks live
 
@@ -27,10 +27,10 @@ docker compose up -d
 Without `TASK_API_TOKEN` the API answers `503` to everything, so it is never
 open by accident. Outside Docker, export it before `npm start`.
 
-| Variable         | Default           | Purpose                                                     |
-| ---------------- | ----------------- | ----------------------------------------------------------- |
-| `TASK_API_TOKEN` | unset (API off)   | Bearer token every `/api/tasks` request must send           |
-| `TASK_TZ`        | `America/Chicago` | Time zone that turns an ISO datetime into a task's due date |
+| Variable         | Default         | Purpose                                                     |
+| ---------------- | --------------- | ----------------------------------------------------------- |
+| `TASK_API_TOKEN` | unset (API off) | Bearer token every `/api/tasks` request must send           |
+| `TASK_TZ`        | `UTC`           | Time zone that turns an ISO datetime into a task's due date |
 
 Every request sends `Authorization: Bearer <token>`. A missing or wrong token
 gets `401`.
