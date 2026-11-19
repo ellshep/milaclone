@@ -146,6 +146,17 @@ jobs:
         run: |
           docker build -t milaclone:ci .
           docker build -t milaclone-pipeline:ci pipeline
+      # `compose config` accepts some mistakes the daemon rejects (an empty
+      # extra_hosts IP), so create the real containers without starting them.
+      - name: Compose file creates containers
+        env:
+          TS_AUTHKEY: ci-dummy
+        run: |
+          docker tag milaclone:ci milaclone:local
+          docker tag milaclone-pipeline:ci milaclone-pipeline:local
+          docker compose config -q
+          docker compose create --no-build --pull never app pipeline
+          docker compose down
       - name: Voice text to task, end to end
         run: |
           docker network create smoke
