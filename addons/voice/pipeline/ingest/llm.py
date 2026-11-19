@@ -20,6 +20,7 @@ import os
 import re
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Callable
 
 import httpx
@@ -66,17 +67,49 @@ def _schema_hint(schema: dict) -> str:
     return "Respond with only a JSON object matching this JSON Schema:\n" + json.dumps(schema)
 
 
-def _call_anthropic(cfg, model, system, prompt, schema, http):
+def _new_anthropic(api_key, base_url, http=None):
     import anthropic
 
-    client = anthropic.Anthropic(
-        api_key=cfg.api_key or None,
-        base_url=cfg.base_url or None,
+    return anthropic.Anthropic(
+        api_key=api_key or None,
+        base_url=base_url or None,
         timeout=TIMEOUT_S,
         max_retries=2,
         # The SDK runs on httpx2; only an httpx2 client (tests pass a mock one) is handed over.
         http_client=http if type(http).__module__.partition(".")[0] == "httpx2" else None,
     )
+
+
+@lru_cache(maxsize=4)
+def _anthropic_client(api_key, base_url):
+    """One client per key, so calls reuse its connection pool."""
+    return _new_anthropic(api_key, base_url)
+
+
+def preload(cfg: StepConfig) -> None:
+    """Import the provider SDK and build its client before the first request.
+
+    Importing the Anthropic SDK costs about 4 s of CPU, 7-9 s under the
+    pipeline's 0.5 CPU cap. Done lazily, that lands on the first note after
+    every restart, longer than the Alexa Worker waits. main.py runs this in a
+    background thread at startup; a request that arrives mid-import waits on
+    the import lock instead of importing twice.
+    """
+    if cfg.provider != "anthropic":
+        return
+    start = time.monotonic()
+    try:
+        _anthropic_client(cfg.api_key, cfg.base_url)
+    except Exception as e:  # the first real call reports it properly
+        log("llm.preload_failed", step=cfg.step, provider=cfg.provider, error=str(e))
+        return
+    log("llm.preloaded", step=cfg.step, provider=cfg.provider, ms=int((time.monotonic() - start) * 1000))
+
+
+def _call_anthropic(cfg, model, system, prompt, schema, http):
+    import anthropic
+
+    client = _new_anthropic(cfg.api_key, cfg.base_url, http) if http else _anthropic_client(cfg.api_key, cfg.base_url)
     try:
         resp = client.messages.create(
             model=model,

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hmac
 import re
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.responses import FileResponse, JSONResponse
 
 from .config import Settings
+from .llm import preload
 from .logs import log
 from .process import (Deps, ReprocessError, default_alert, default_extractor, extract_and_create, reprocess,
                       speech_for)
@@ -68,6 +70,8 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None, start
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        # In the background so /health answers while the SDK loads.
+        threading.Thread(target=preload, args=(settings.extract,), name="llm-preload", daemon=True).start()
         if start_worker:
             worker.start()
         log("pipeline.start", transcribe_model=settings.deepgram_model, deepgram_key=bool(settings.deepgram_api_key), extract_provider=settings.extract.provider,

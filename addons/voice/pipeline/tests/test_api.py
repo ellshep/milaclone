@@ -1,8 +1,10 @@
 import io
+import threading
 import time
 
 from ingest.config import Settings
 from ingest.llm import LLMError
+import ingest.main as main
 from ingest.main import create_app
 from ingest.worker import Worker
 from fastapi.testclient import TestClient
@@ -209,6 +211,15 @@ def test_background_thread_processes_queue(env):
             time.sleep(0.05)
         assert env.deps.store.get(ingest_id)["status"] == "done"
 
+
+
+def test_startup_preloads_the_extract_sdk(env, monkeypatch):
+    seen, done = [], threading.Event()
+    monkeypatch.setattr(main, "preload", lambda cfg: (seen.append(cfg), done.set()))
+    with TestClient(create_app(deps=env.deps, start_worker=False)) as c:
+        assert c.get("/health").status_code == 200
+        assert done.wait(2)
+    assert seen == [env.deps.settings.extract]
 
 def test_restart_requeues_interrupted_audio(env):
     store = env.deps.store
