@@ -57,23 +57,34 @@ transcript into tasks:
 
 ### Settings
 
-| Variable                  | Default              | Purpose                                                               |
-| ------------------------- | -------------------- | --------------------------------------------------------------------- |
-| `INGEST_API_TOKEN`        | unset (ingest off)   | Bearer token for `/ingest/*`. Separate from the task token            |
-| `TASK_API_TOKEN`          | —                    | The app's task API token, used by the pipeline to add tasks           |
-| `EXTRACT_PROVIDER`        | `anthropic`          | `anthropic`, `openai`, `gemini`, `openai_compatible`, `fake`          |
-| `EXTRACT_MODEL`           | `claude-haiku-5-5`\* | Model for extraction. \*Only Anthropic has a default                  |
-| `EXTRACT_API_KEY`         | —                    | Provider API key (not needed for a local model)                       |
-| `EXTRACT_BASE_URL`        | provider's own       | Required for `openai_compatible`, e.g. `http://ollama:11434/v1`       |
-| `DEEPGRAM_API_KEY`        | —                    | Deepgram key for audio notes. Without it audio ingests fail           |
-| `DEEPGRAM_MODEL`          | `nova-3`             | Deepgram's most accurate model for recorded audio                     |
-| `DEEPGRAM_LANGUAGE`       | `en`                 | `multi` for mixed languages; empty for Deepgram's default             |
-| `DEEPGRAM_MIP_OPT_OUT`    | `true`               | Deepgram keeps nothing after replying (may cost more per minute)      |
-| `TRANSCRIBE_RETRY_DELAYS` | `60,300,900`         | Seconds before each retry when Deepgram is busy or down; empty = none |
-| `ALERT_WEBHOOK_URL`       | unset (no alerts)    | Gets one POST per note that failed for good                           |
-| `INGEST_REVIEW_URL`       | unset                | Link put in the alert, e.g. the review page                           |
-| `TASK_TZ`                 | `America/Chicago`    | Turns "tomorrow" or "next Friday" into dates                          |
-| `MAX_AUDIO_MB`            | `50`                 | Largest accepted upload                                               |
+| Variable                  | Default              | Purpose                                                                                          |
+| ------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ |
+| `INGEST_API_TOKEN`        | unset (ingest off)   | Bearer token for `/ingest/*`. Separate from the task token                                       |
+| `TASK_API_TOKEN`          | —                    | The app's task API token, used by the pipeline to add tasks                                      |
+| `EXTRACT_PROVIDER`        | `anthropic`          | `anthropic`, `openai`, `gemini`, `openai_compatible`, `fake`                                     |
+| `EXTRACT_MODEL`           | `claude-haiku-5-5`\* | Model for extraction. \*Only Anthropic has a default                                             |
+| `EXTRACT_API_KEY`         | —                    | Provider API key (not needed for a local model)                                                  |
+| `EXTRACT_BASE_URL`        | provider's own       | Required for `openai_compatible`, e.g. `http://ollama:11434/v1`                                  |
+| `DEEPGRAM_API_KEY`        | —                    | Deepgram key for audio notes. Without it audio ingests fail                                      |
+| `DEEPGRAM_MODEL`          | `nova-3`             | Deepgram's most accurate model for recorded audio                                                |
+| `DEEPGRAM_LANGUAGE`       | `en`                 | `multi` for mixed languages; empty for Deepgram's default                                        |
+| `DEEPGRAM_MIP_OPT_OUT`    | `true`               | Deepgram keeps nothing after replying (may cost more per minute)                                 |
+| `DEEPGRAM_KEYTERMS`       | unset                | Comma-separated names and jargon to listen for, e.g. `Claude,Tailscale` (nova-3 only; see below) |
+| `TRANSCRIBE_RETRY_DELAYS` | `60,300,900`         | Seconds before each retry when Deepgram is busy or down; empty = none                            |
+| `ALERT_WEBHOOK_URL`       | unset (no alerts)    | Gets one POST per note that failed for good                                                      |
+| `INGEST_REVIEW_URL`       | unset                | Link put in the alert, e.g. the review page                                                      |
+| `TASK_TZ`                 | `America/Chicago`    | Turns "tomorrow" or "next Friday" into dates                                                     |
+| `MAX_AUDIO_MB`            | `50`                 | Largest accepted upload                                                                          |
+
+`DEEPGRAM_KEYTERMS` uses Deepgram's
+[keyterm prompting](https://developers.deepgram.com/docs/keyterm): it helps with
+names the model mishears, such as "claw" for Claude or "tail scale" for
+Tailscale. Write proper nouns capitalised as you want them to appear. Deepgram
+takes up to 100 terms and 500 tokens in all, but works best with the 20 to 50
+that matter most; skip common words it already gets right. A list over the limit
+makes every audio note fail with a Deepgram error, which the alert reports.
+Deepgram keeps the terms in its usage records even with `DEEPGRAM_MIP_OPT_OUT`,
+so leave out anything you would not want stored there.
 
 Extraction uses the cheapest tier by default and asks for strict JSON. For
 OpenAI and Gemini set `EXTRACT_MODEL` to that provider's smallest current

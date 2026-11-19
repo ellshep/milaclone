@@ -64,6 +64,17 @@ def test_options_can_change(tmp_path):
     assert seen[-1].headers["content-type"] == "audio/wav"
 
 
+def test_keyterms_go_as_one_parameter_each(audio):
+    seen = []
+
+    def handler(req):
+        seen.append(req)
+        return httpx.Response(200, json=REPLY)
+
+    DeepgramTranscriber("k", keyterms=("Claude", "Home Assistant"), http=client(handler)).transcribe(audio)
+    assert seen[0].url.params.get_list("keyterm") == ["Claude", "Home Assistant"]
+
+
 def test_empty_transcript_and_missing_duration(audio):
     reply = {"results": {"channels": [{"alternatives": [{"transcript": ""}]}]}}
     r = DeepgramTranscriber("k", http=client(lambda req: httpx.Response(200, json=reply))).transcribe(audio)

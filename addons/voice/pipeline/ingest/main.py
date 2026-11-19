@@ -60,7 +60,8 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None, start
             settings=settings,
             store=Store(settings.data_dir / "ingest.db"),
             transcriber=DeepgramTranscriber(settings.deepgram_api_key, settings.deepgram_model,
-                                            settings.deepgram_language, settings.deepgram_mip_opt_out),
+                                            settings.deepgram_language, settings.deepgram_mip_opt_out,
+                                            keyterms=settings.deepgram_keyterms),
             tasks=TasksClient(settings.app_url, settings.task_token),
             extractor=default_extractor(settings),
             alert=default_alert(settings),
@@ -74,7 +75,8 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None, start
         threading.Thread(target=preload, args=(settings.extract,), name="llm-preload", daemon=True).start()
         if start_worker:
             worker.start()
-        log("pipeline.start", transcribe_model=settings.deepgram_model, deepgram_key=bool(settings.deepgram_api_key), extract_provider=settings.extract.provider,
+        log("pipeline.start", transcribe_model=settings.deepgram_model, deepgram_key=bool(settings.deepgram_api_key),
+            deepgram_keyterms=len(settings.deepgram_keyterms), extract_provider=settings.extract.provider,
             extract_model=settings.extract.model or None, auth=bool(settings.ingest_token))
         yield
         if start_worker:

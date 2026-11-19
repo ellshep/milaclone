@@ -60,6 +60,8 @@ class DeepgramTranscriber:
     model: str = "nova-3"
     language: str = "en"
     mip_opt_out: bool = True
+    # Names and jargon to listen for (keyterm prompting; nova-3 only).
+    keyterms: tuple[str, ...] = ()
     api_url: str = API_URL
     http: httpx.Client | None = None
 
@@ -69,6 +71,8 @@ class DeepgramTranscriber:
             p["language"] = self.language
         if self.mip_opt_out:
             p["mip_opt_out"] = "true"
+        if self.keyterms:
+            p["keyterm"] = list(self.keyterms)  # one query parameter per term
         return p
 
     def transcribe(self, path: Path) -> Transcript:
