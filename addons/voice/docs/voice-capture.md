@@ -91,6 +91,13 @@ OpenAI and Gemini set `EXTRACT_MODEL` to that provider's smallest current
 model. The `RANK_*` variables are reserved for the nightly ranking (later
 phase), so the two steps can use different providers.
 
+Tags: before each extraction the pipeline reads the tags already on your task
+list (`GET /api/tasks?status=all`, the 100 most used), and the model may only
+give a task some of those. They are listed in the prompt and, for Anthropic
+and OpenAI, enforced by the JSON schema; any other tag is dropped. New tags
+only come from you, on the board. With no tags on the list yet, tasks get none.
+If the task API can't be read, extraction runs without tags.
+
 ## Capture from the iPhone
 
 Build a Shortcut called **Capture task**:

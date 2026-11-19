@@ -248,3 +248,22 @@ extract; the next took 2.9 s.
 - **Measured** in a throwaway container with the same 0.5 CPU cap and the
   real key: first extraction 7.72 s → 1.61 s (preload finished 4.9 s after
   start, before any request); second extraction 1.41 s → 1.46 s.
+
+## Change: tags only from the existing list (owner decision)
+
+Answers the open question "let the model assign tags freely, or limit them to
+an allowlist of existing tags?": the allowlist.
+
+- Before each extraction the pipeline reads the tags on the task list (open
+  and done, most used first, at most 100) through the task API.
+- The prompt lists them, and the schema makes each task's `tags` an `enum` of
+  them. Anthropic and OpenAI enforce it. For other providers, and as a backstop,
+  `extract_tasks` drops any tag not on the list and keeps the list's spelling.
+- No tags on the list: the prompt says so, and tasks get none. Task API down:
+  extraction runs without tags (`ingest.tags_unavailable` log line), and
+  creating the tasks fails as before.
+- A changed tag list is a new schema, so the first extraction after a change
+  pays the ~1 s schema compile once.
+- Checked against the real API (Haiku 5.5) with tags `money, taste`: "pay the
+  electric bill by Friday" → `money`, "try that new ramen place" → `taste`,
+  "call the plumber" → none.
