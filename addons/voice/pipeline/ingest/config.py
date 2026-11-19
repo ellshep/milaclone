@@ -57,7 +57,7 @@ class Settings:
     task_token: str = ""
     app_url: str = "http://app:4321"
     data_dir: Path = Path("/data")
-    tz: str = "America/Chicago"
+    tz: str = "UTC"
     deepgram_api_key: str = ""
     deepgram_model: str = "nova-3"
     deepgram_language: str = "en"
@@ -75,7 +75,7 @@ class Settings:
             task_token=_env("TASK_API_TOKEN"),
             app_url=_env("APP_URL", "http://app:4321").rstrip("/"),
             data_dir=Path(_env("DATA_DIR", "/data")),
-            tz=_env("TASK_TZ", "America/Chicago"),
+            tz=_env("TASK_TZ") or "UTC",
             deepgram_api_key=_env("DEEPGRAM_API_KEY"),
             deepgram_model=_env("DEEPGRAM_MODEL", "nova-3"),
             deepgram_language=_env("DEEPGRAM_LANGUAGE", "en"),

@@ -1,0 +1,103 @@
+name: Voice add-on
+
+# The optional voice capture add-on (addons/voice/). Not required checks, and
+# only run when the add-on, or the core pieces it relies on, change.
+on:
+  pull_request:
+    paths:
+      - 'addons/voice/**'
+      - 'docker-compose.yml'
+      - 'tailscale/**'
+      - 'tasks-api.js'
+      - 'Dockerfile'
+      - '.github/workflows/voice-addon.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'addons/voice/**'
+      - 'docker-compose.yml'
+      - 'tailscale/**'
+      - 'tasks-api.js'
+      - 'Dockerfile'
+      - '.github/workflows/voice-addon.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pipeline:
+    name: Pipeline tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: addons/voice/pipeline/requirements*.txt
+      - run: pip install -r addons/voice/pipeline/requirements-dev.txt
+      - run: python -m pytest -q
+        working-directory: addons/voice/pipeline
+      - name: Build images
+        run: |
+          docker build -t milaclone:ci .
+          docker build -t milaclone-pipeline:ci addons/voice/pipeline
+      # The add-on is opt-in: without a profile, compose must not start it.
+      - name: Off unless enabled
+        env:
+          TS_AUTHKEY: ci-dummy
+        run: |
+          test "$(docker compose config --services | sort | tr '\n' ' ')" = "app tailscale "
+          test "$(COMPOSE_PROFILES=voice docker compose config --services | sort | tr '\n' ' ')" = "app pipeline tailscale "
+          test "$(COMPOSE_PROFILES=alexa docker compose config --services | sort | tr '\n' ' ')" = "app cloudflared pipeline tailscale "
+      # `compose config` accepts some mistakes the daemon rejects (an empty
+      # extra_hosts IP), so create the real containers without starting them.
+      - name: Compose file creates containers
+        env:
+          TS_AUTHKEY: ci-dummy
+          COMPOSE_PROFILES: voice
+        run: |
+          docker tag milaclone:ci milaclone:local
+          docker tag milaclone-pipeline:ci milaclone-pipeline:local
+          docker compose config -q
+          docker compose create --no-build --pull never app pipeline
+          docker compose down
+      - name: Voice text to task, end to end
+        run: |
+          docker network create smoke
+          docker run -d --name app --network smoke -p 4321:4321 -e TASK_API_TOKEN=task-token milaclone:ci
+          docker run -d --name pipeline --network smoke -p 8000:8000 \
+            -e INGEST_API_TOKEN=ingest-token -e TASK_API_TOKEN=task-token -e APP_URL=http://app:4321 \
+            -e EXTRACT_PROVIDER=fake milaclone-pipeline:ci
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8000/health && curl -fs http://127.0.0.1:4321/api/health && break; sleep 1; done
+          curl -fs -X POST -H 'Authorization: Bearer ingest-token' -H 'Content-Type: application/json' \
+            -d '{"text":"buy printer ink"}' http://127.0.0.1:8000/ingest/text | tee /dev/stderr | grep -q '"status":"done"'
+          curl -fs -H 'Authorization: Bearer task-token' http://127.0.0.1:4321/api/tasks \
+            | grep -q '"text":"Buy printer ink"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4321/api/tasks)" = 401
+      - name: Container logs
+        if: ${{ failure() }}
+        run: docker logs app; docker logs pipeline
+
+  alexa:
+    name: Alexa worker tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: addons/voice/alexa/package-lock.json
+      - run: npm ci
+        working-directory: addons/voice/alexa
+      - run: npm test
+        working-directory: addons/voice/alexa
+      - name: Bundle for Cloudflare
+        run: npx --yes wrangler@4 deploy --dry-run
+        working-directory: addons/voice/alexa
+        env:
+          WRANGLER_SEND_METRICS: 'false'

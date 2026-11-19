@@ -4,13 +4,13 @@
 milaclone's Inbox, and Alexa answers "Added Buy printer ink."
 
 ```
- Echo ─► Alexa cloud ─► Cloudflare Worker (alexa/)
+ Echo ─► Alexa cloud ─► Cloudflare Worker (addons/voice/alexa/)
                           checks Alexa's signature, the skill ID, a rate limit
                           │ POST /ingest/text  (bearer token + Access service token)
                           ▼
             Cloudflare Access ─► Cloudflare Tunnel ─► cloudflared on the server
                                                         ▼
-                                  pipeline:8000 /ingest/text  (docs/voice-capture.md)
+                                  pipeline:8000 /ingest/text  (voice-capture.md)
                                                         ▼
                                            task API ─► Inbox
 ```
@@ -50,7 +50,7 @@ provider you configured.
 
 ## Setup
 
-You need the voice pipeline running first (`docs/voice-capture.md`), a domain
+You need the voice pipeline running first ([voice-capture.md](voice-capture.md)), a domain
 on your Cloudflare account, and an Amazon developer account that uses the
 **same Amazon login as your Echo**. Menu names in the two consoles change now
 and then; the fields are what matter.
@@ -98,18 +98,21 @@ and then; the fields are what matter.
 
 ### 3. Worker (your computer)
 
+Pass your settings with `--var` rather than editing `wrangler.toml`, so the
+checkout stays unmodified (the auto-deploy refuses to run on a modified one).
+
 ```bash
-cd alexa
+cd addons/voice/alexa
 npm ci
-# edit wrangler.toml: INGEST_URL = "https://alexa-ingest.<your domain>/ingest/text"
 npx wrangler login
-npx wrangler deploy                      # prints https://milaclone-alexa.<you>.workers.dev
+npx wrangler deploy --var INGEST_URL:https://alexa-ingest.<your domain>/ingest/text --var SKILL_ID:pending
+#   prints https://milaclone-alexa.<you>.workers.dev
 npx wrangler secret put INGEST_API_TOKEN          # the pipeline's token from the server's .env
 npx wrangler secret put CF_ACCESS_CLIENT_ID
 npx wrangler secret put CF_ACCESS_CLIENT_SECRET
 ```
 
-Until the skill ID is set (next step) the Worker answers 503 to everything.
+Until the real skill ID is set (next step) the Worker refuses every request.
 
 ### 4. Skill (Alexa developer console)
 
@@ -117,13 +120,14 @@ Until the skill ID is set (next step) the Worker answers 503 to everything.
    `My Tasks`, your Echo's language, experience **Other**, model **Custom**,
    hosting **Provision your own**, template **Start from Scratch**.
 2. **Interaction Model** → **JSON Editor**: paste
-   `alexa/skill/interaction-model.json`, **Save**, then **Build**. The
+   `addons/voice/alexa/skill/interaction-model.json`, **Save**, then **Build**. The
    invocation name is `my tasks`; change it there if you want another.
 3. **Endpoint** → **HTTPS**. Default Region: the Worker URL. Certificate type:
    **My development endpoint is a sub-domain of a domain that has a wildcard
    certificate from a certificate authority**. Save.
-4. Copy **Your Skill ID** (`amzn1.ask.skill.…`) from the Endpoint page into
-   `SKILL_ID` in `alexa/wrangler.toml`, then `npx wrangler deploy` again.
+4. Copy **Your Skill ID** (`amzn1.ask.skill.…`) from the Endpoint page and
+   deploy again with it:
+   `npx wrangler deploy --var INGEST_URL:https://alexa-ingest.<your domain>/ingest/text --var SKILL_ID:amzn1.ask.skill.…`
 5. **Test** tab → set skill testing to **Development**. That makes the skill
    work on every Echo signed in to this Amazon account. Don't publish it; a
    development skill stays private to you.
@@ -153,16 +157,16 @@ each way. Each capture also appears on the pipeline's review page
 
 ## Troubleshooting
 
-`npx wrangler tail` (in `alexa/`) shows the Worker's log live.
+`npx wrangler tail` (in `addons/voice/alexa/`) shows the Worker's log live.
 
 | Symptom                                                   | Look at                                                                                                                                                                                       |
 | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "There was a problem with the requested skill's response" | `wrangler tail`. `alexa.rejected … wrong skill id` → `SKILL_ID` in `wrangler.toml` doesn't match; redeploy. A 503 → a var or secret is missing.                                               |
+| "There was a problem with the requested skill's response" | `wrangler tail`. `alexa.rejected … wrong skill id` → the `SKILL_ID` you deployed with doesn't match; redeploy with the right one. A 503 → a var or secret is missing.                         |
 | "Sorry, I couldn't reach your task list"                  | The tunnel or pipeline is down or slow: `docker compose ps`, `docker compose logs cloudflared pipeline`, tunnel health in the dashboard.                                                      |
 | "Your task list didn't accept that"                       | `ingest.error` status in `wrangler tail`: 401 → wrong `INGEST_API_TOKEN` secret; 302/403 → Access service token secrets wrong or policy missing; 404 → the tunnel's path or service is wrong. |
 | Alexa doesn't know the skill                              | Testing isn't set to Development, or the Echo is on a different Amazon account or language than the skill.                                                                                    |
 | "I didn't hear any tasks in that"                         | The pipeline found no action item in the text; see the transcript on the review page.                                                                                                         |
 
-To switch Alexa capture off: disable the skill's testing, or remove
-`COMPOSE_PROFILES=alexa` and run `docker compose up -d --remove-orphans` to
-stop the tunnel.
+To switch Alexa capture off: disable the skill's testing, or change
+`COMPOSE_PROFILES=alexa` to `COMPOSE_PROFILES=voice` (keeps phone capture) and
+run `docker compose up -d --remove-orphans` to stop the tunnel.

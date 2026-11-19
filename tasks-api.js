@@ -45,7 +45,7 @@ const bad = msg => {
   throw new BadRequest(msg);
 };
 
-const tz = () => process.env.TASK_TZ || 'America/Chicago';
+const tz = () => process.env.TASK_TZ || 'UTC';
 
 function cleanTitle(v) {
   if (typeof v !== 'string' || !v.trim()) bad('title is required');

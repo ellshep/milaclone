@@ -39,7 +39,7 @@ __pycache__/
 .autodeploy-failed
 .env.autodeploy
 
-# Alexa Worker (alexa/): wrangler's local state and secrets
+# Alexa Worker (addons/voice/alexa/): wrangler's local state and secrets
 .wrangler/
 .dev.vars
 .coverage

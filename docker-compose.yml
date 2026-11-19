@@ -20,7 +20,7 @@ services:
       # Bearer token for the task API (/api/tasks). Unset = the API answers 503.
       - TASK_API_TOKEN=${TASK_API_TOKEN:-}
       # Time zone used to turn an ISO datetime into a task's due date.
-      - TASK_TZ=${TASK_TZ:-America/Chicago}
+      - TASK_TZ=${TASK_TZ:-UTC}
     # Dev loop: `docker compose watch` syncs edits into the running container.
     # Plain `up -d` ignores this block, so the normal deploy is unaffected.
     develop:
@@ -51,13 +51,15 @@ services:
           cpus: '0.50'
           memory: 256M
 
-  # Voice note -> tasks pipeline (pipeline/, docs/voice-capture.md). Sends audio
-  # to Deepgram for transcription and the transcript to the LLM, then creates
-  # tasks through the task API over the compose network.
+  # ---- Optional voice capture add-on (addons/voice/README.md) ----------------
+  # Off unless enabled: COMPOSE_PROFILES=voice in .env (or alexa, which needs it).
+  # Sends audio to Deepgram for transcription and the transcript to the LLM,
+  # then creates tasks through the task API over the compose network.
   pipeline:
-    build: ./pipeline
+    build: ./addons/voice/pipeline
     image: milaclone-pipeline:local
     container_name: milaclone-pipeline
+    profiles: ['voice', 'alexa']
     restart: unless-stopped
     # Loopback only, like the app; the Tailscale sidecar serves /ingest/.
     ports:
@@ -69,7 +71,7 @@ services:
       - INGEST_API_TOKEN=${INGEST_API_TOKEN:-}
       - TASK_API_TOKEN=${TASK_API_TOKEN:-}
       - APP_URL=http://app:4321
-      - TASK_TZ=${TASK_TZ:-America/Chicago}
+      - TASK_TZ=${TASK_TZ:-UTC}
       - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY:-}
       - DEEPGRAM_MODEL=${DEEPGRAM_MODEL:-nova-3}
       - DEEPGRAM_LANGUAGE=${DEEPGRAM_LANGUAGE:-en}
@@ -90,19 +92,20 @@ services:
     depends_on:
       - app
     # Transcription and extraction run remotely, so this is mostly waiting on
-    # HTTP; the cap keeps it well clear of the CCTV / Home Assistant workload.
+    # HTTP; the cap keeps it well clear of anything else on the server.
     deploy:
       resources:
         limits:
           cpus: '0.50'
           memory: 256M
 
-  # Alexa hop (docs/alexa.md): an outbound-only Cloudflare Tunnel so the Alexa
-  # skill's Worker can reach the pipeline's /ingest/text. Off unless
-  # COMPOSE_PROFILES=alexa is set in .env. Which hostname and path it serves is
-  # set on the tunnel in the Cloudflare dashboard, not here.
+  # Alexa part of the voice add-on (addons/voice/docs/alexa.md): an
+  # outbound-only Cloudflare Tunnel so the Alexa skill's Worker can reach the
+  # pipeline's /ingest/text. Off unless COMPOSE_PROFILES=alexa is set in .env.
+  # Which hostname and path it serves is set on the tunnel in the Cloudflare
+  # dashboard, not here.
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2026.10.7
     container_name: milaclone-cloudflared
     profiles: ['alexa']
     restart: unless-stopped
@@ -133,9 +136,10 @@ services:
     volumes:
       - milaclone_ts_state:/var/lib/tailscale
       - ./tailscale/serve.json:/config/serve.json:ro
+    # serve.json also routes /ingest/ to the voice add-on; without the add-on
+    # that path just answers 502.
     depends_on:
       - app
-      - pipeline
     deploy:
       resources:
         limits:
