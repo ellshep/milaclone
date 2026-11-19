@@ -43,7 +43,7 @@ data, not a copy: tick a task on your phone and it's ticked on the board.
 
 - **Smart views.** _Today_, _Starred_, _All_ and _Completed_ collect tasks
   from every list, so you can see what's due without opening boards one by
-  one. Each task in a smart view names the list it came from.
+  one. Each task in a smart view names the list it came from, newest first.
 - **One list at a time.** Tap a list to see only its tasks. Finished tasks fold
   into a _Completed_ group you can collapse, and **Add a task** stays at the
   bottom of the screen.
