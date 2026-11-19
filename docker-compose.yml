@@ -79,14 +79,14 @@ services:
       # Webhook (e.g. Home Assistant) that gets one POST per note that failed for good.
       - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
       - INGEST_REVIEW_URL=${INGEST_REVIEW_URL:-}
-    # Lets ALERT_WEBHOOK_URL reach a service on this host, e.g.
-    # http://host.docker.internal:8123/api/webhook/<id> for Home Assistant.
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
       - EXTRACT_PROVIDER=${EXTRACT_PROVIDER:-anthropic}
       - EXTRACT_MODEL=${EXTRACT_MODEL:-}
       - EXTRACT_API_KEY=${EXTRACT_API_KEY:-}
       - EXTRACT_BASE_URL=${EXTRACT_BASE_URL:-}
+    # Lets ALERT_WEBHOOK_URL reach a service on this host, e.g.
+    # http://host.docker.internal:8123/api/webhook/<id> for Home Assistant.
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     depends_on:
       - app
     # Transcription and extraction run remotely, so this is mostly waiting on
