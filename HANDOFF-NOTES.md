@@ -184,3 +184,47 @@ are in `docs/alexa.md`.
 5. Say "Alexa, tell my tasks to add buy printer ink" and check the Inbox.
 
 **Still open before Phase 5:** morning digest time, and whether weekends differ.
+
+## Change: Deepgram replaces local Whisper (owner decision)
+
+The owner chose Deepgram for speech-to-text (they have credits), replacing
+local faster-whisper. This reverses the original "audio never leaves the
+server" decision on purpose.
+
+- Model **Nova-3** (Deepgram's most accurate model for recorded audio; Flux
+  is for live streaming conversations), with smart formatting and
+  `language=en`.
+- `mip_opt_out=true` by default: Deepgram keeps no audio or transcript after
+  replying, which may be billed at a higher per-minute rate.
+- Whisper removed entirely (owner's choice): no local fallback, a much
+  smaller image, the `milaclone_models` volume is no longer used, and the
+  pipeline's cap drops to 0.5 CPU / 256 MB. The Whisper benchmark step is
+  replaced by a one-file check (`bench.py`) in `docs/voice-capture.md`.
+- Owner steps: put `DEEPGRAM_API_KEY` in `.env`, then `docker compose up -d`
+  once the change is deployed. Optionally remove the old model volume with
+  `docker volume rm milaclone_milaclone_models` (check the name with
+  `docker volume ls`).
+
+## Change: retries, reprocess and failure alerts for voice notes
+
+Asked for by the owner after moving transcription to Deepgram.
+
+- **Retries:** a transcription failure that may clear up by itself
+  (timeouts, network errors, HTTP 408/429/5xx) is retried after 1, 5 and 15
+  minutes (`TRANSCRIBE_RETRY_DELAYS`). A wrong key (401/403), no credits
+  (402) or an unreadable file fails at once. Other notes keep flowing while
+  one waits.
+- **Reprocess:** `POST /ingest/{id}/retry` and a Retry button on the review
+  page. With a saved transcript only extraction and task creation run again
+  (no new Deepgram call; tasks already added are skipped as duplicates);
+  otherwise the saved audio is queued again.
+- **Failure alert:** one POST per note that finally fails, to
+  `ALERT_WEBHOOK_URL` (a Home Assistant webhook), with the reason and a link
+  to the review page, never the transcript. The pipeline container reaches
+  the host as `host.docker.internal`.
+- `ingest.db` gains two columns (`attempts`, `next_attempt_at`), added
+  automatically at startup to the existing database.
+- Owner steps: create the Home Assistant webhook automation, set
+  `ALERT_WEBHOOK_URL` and `INGEST_REVIEW_URL` in `.env`, `docker compose up -d`,
+  and run the test command in `docs/voice-capture.md` ("Failure alert on your
+  phone"). If it times out, allow the Docker network through UFW to port 8123.

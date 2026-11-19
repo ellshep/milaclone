@@ -1,6 +1,11 @@
 """The steps of one ingest: transcribe (audio only), extract, create tasks.
 Each step's output is saved before the next runs, so a failure keeps what
-came before it."""
+came before it.
+
+A transcription failure that may clear up by itself (Deepgram busy or down,
+network trouble) is retried after each of `settings.retry_delays`; anything
+else, or the last retry, fails the ingest. A failed ingest sends one alert
+and can be run again with `reprocess`."""
 
 from __future__ import annotations
 
@@ -9,13 +14,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Protocol
 
+from .alerts import Alerter
+
 from .config import Settings
 from .extract import Extraction, extract_tasks
 from .llm import LLMError, LLMResult
 from .logs import log
-from .store import Store
+from .store import Store, now_ms
 from .tasks_client import TaskAPIError, TasksClient
-from .transcribe import Transcript
+from .transcribe import TranscribeError, Transcript
 
 
 class Transcriber(Protocol):
@@ -32,6 +39,7 @@ class Deps:
     transcriber: Transcriber
     tasks: TasksClient
     extractor: Extractor
+    alert: Callable[[dict], None] = lambda record: None
 
     @property
     def audio_dir(self) -> Path:
@@ -40,6 +48,20 @@ class Deps:
 
 def default_extractor(settings: Settings) -> Extractor:
     return lambda transcript: extract_tasks(transcript, settings.extract, settings.tz)
+
+
+def default_alert(settings: Settings) -> Alerter:
+    return Alerter(settings.alert_webhook_url, settings.review_url)
+
+
+def _failed(deps: Deps, ingest_id: str) -> dict:
+    """Reads back a record that just failed for good and sends its alert."""
+    record = deps.store.get(ingest_id)
+    try:
+        deps.alert(record)
+    except Exception as e:  # an alert must never break processing
+        log("alert.failed", id=ingest_id, error=type(e).__name__)
+    return record
 
 
 def extract_and_create(deps: Deps, ingest_id: str, transcript: str, source: str) -> dict:
@@ -59,7 +81,7 @@ def extract_and_create(deps: Deps, ingest_id: str, transcript: str, source: str)
         store.update(ingest_id, status="extraction_failed", error=str(e),
                      extract_ms=int((time.monotonic() - start) * 1000))
         log("ingest.extraction_failed", id=ingest_id, error=str(e))
-        return store.get(ingest_id)
+        return _failed(deps, ingest_id)
 
     ext: Extraction = result.data  # type: ignore[assignment]
     store.update(ingest_id, extraction_json={
@@ -88,23 +110,72 @@ def extract_and_create(deps: Deps, ingest_id: str, transcript: str, source: str)
                  error="; ".join(errors) if errors else None)
     log("ingest.done", id=ingest_id, status=status, created=len(created), skipped=len(skipped),
         failed=len(errors), source=source)
-    return store.get(ingest_id)
+    return _failed(deps, ingest_id) if errors else store.get(ingest_id)
 
 
 def process_audio(deps: Deps, job: dict) -> dict:
     ingest_id = job["id"]
-    deps.store.update(ingest_id, status="transcribing")
+    attempt = (job.get("attempts") or 0) + 1
+    deps.store.update(ingest_id, status="transcribing", attempts=attempt, next_attempt_at=None)
     path = deps.audio_dir / job["audio_filename"]
     try:
         t = deps.transcriber.transcribe(path)
-    except Exception as e:  # any decoder or model failure is recorded, never raised
-        deps.store.update(ingest_id, status="error", error=f"transcription failed: {e}")
-        log("ingest.transcribe_failed", id=ingest_id, error=str(e))
-        return deps.store.get(ingest_id)
-    deps.store.update(ingest_id, transcript=t.text, transcribe_ms=t.elapsed_ms, audio_seconds=t.audio_seconds)
+    except Exception as e:  # any transcription failure is recorded, never raised
+        delays = deps.settings.retry_delays
+        if isinstance(e, TranscribeError) and e.retryable and attempt <= len(delays):
+            wait = delays[attempt - 1]
+            deps.store.update(ingest_id, status="retrying", next_attempt_at=now_ms() + wait * 1000,
+                              error=f"transcription failed (attempt {attempt}), retrying in {_ago(wait)}: {e}")
+            log("ingest.transcribe_retry", id=ingest_id, attempt=attempt, wait_s=wait, error=str(e))
+            return deps.store.get(ingest_id)
+        tries = f" after {attempt} attempts" if attempt > 1 else ""
+        deps.store.update(ingest_id, status="error", error=f"transcription failed{tries}: {e}")
+        log("ingest.transcribe_failed", id=ingest_id, attempt=attempt, error=str(e))
+        return _failed(deps, ingest_id)
+    deps.store.update(ingest_id, transcript=t.text, transcribe_ms=t.elapsed_ms, audio_seconds=t.audio_seconds,
+                      error=None)
     log("ingest.transcribed", id=ingest_id, audio_seconds=round(t.audio_seconds, 1), transcribe_ms=t.elapsed_ms,
         chars=len(t.text))
     return extract_and_create(deps, ingest_id, t.text, job["source"])
+
+
+class ReprocessError(Exception):
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
+
+
+IN_PROGRESS = {"queued", "transcribing", "extracting"}
+
+
+def reprocess(deps: Deps, ingest_id: str) -> tuple[str, dict]:
+    """Runs a failed ingest again from what was saved.
+
+    Returns ("done", record) when it was re-run here and finished, or
+    ("queued", record) when its audio went back in the queue. With a saved
+    transcript only extraction and task creation run again (no new
+    transcription); tasks already added are skipped as duplicates."""
+    record = deps.store.get(ingest_id)
+    if not record:
+        raise ReprocessError(404, "not found")
+    status = record["status"]
+    if status in IN_PROGRESS:
+        raise ReprocessError(409, "this note is already being processed")
+    if status == "done":
+        raise ReprocessError(409, "this note already finished; nothing to retry")
+    log("ingest.reprocess", id=ingest_id, previous=status)
+    if record.get("transcript") is not None:
+        return "done", extract_and_create(deps, ingest_id, record["transcript"], record["source"])
+    if record["kind"] != "audio" or not record.get("audio_filename"):
+        raise ReprocessError(409, "nothing saved to retry from")
+    if not (deps.audio_dir / record["audio_filename"]).is_file():
+        raise ReprocessError(409, "the saved audio file is missing")
+    deps.store.update(ingest_id, status="queued", attempts=0, next_attempt_at=None, error=None)
+    return "queued", deps.store.get(ingest_id)
+
+
+def _ago(seconds: int) -> str:
+    return f"{seconds // 60} min" if seconds >= 60 and seconds % 60 == 0 else f"{seconds} s"
 
 
 def speech_for(record: dict) -> str:

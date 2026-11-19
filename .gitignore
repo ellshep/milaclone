@@ -42,3 +42,4 @@ __pycache__/
 # Alexa Worker (alexa/): wrangler's local state and secrets
 .wrangler/
 .dev.vars
+.coverage

@@ -15,10 +15,11 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from .config import Settings
 from .logs import log
-from .process import Deps, default_extractor, extract_and_create, speech_for
+from .process import (Deps, ReprocessError, default_alert, default_extractor, extract_and_create, reprocess,
+                      speech_for)
 from .store import Store, new_id
 from .tasks_client import TasksClient
-from .transcribe import WhisperTranscriber
+from .transcribe import DeepgramTranscriber
 from .worker import Worker
 
 STATIC = Path(__file__).parent / "static"
@@ -45,6 +46,8 @@ def _public(record: dict) -> dict:
         "audioSeconds": record.get("audio_seconds"),
         "transcribeMs": record.get("transcribe_ms"),
         "extractMs": record.get("extract_ms"),
+        "attempts": record.get("attempts") or 0,
+        "nextAttemptAt": record.get("next_attempt_at"),
     }
 
 
@@ -54,11 +57,11 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None, start
         deps = Deps(
             settings=settings,
             store=Store(settings.data_dir / "ingest.db"),
-            transcriber=WhisperTranscriber(settings.whisper_model, settings.whisper_threads,
-                                           settings.whisper_compute, settings.models_dir,
-                                           settings.whisper_language),
+            transcriber=DeepgramTranscriber(settings.deepgram_api_key, settings.deepgram_model,
+                                            settings.deepgram_language, settings.deepgram_mip_opt_out),
             tasks=TasksClient(settings.app_url, settings.task_token),
             extractor=default_extractor(settings),
+            alert=default_alert(settings),
         )
     deps.audio_dir.mkdir(parents=True, exist_ok=True)
     worker = Worker(deps)
@@ -67,7 +70,7 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None, start
     async def lifespan(app: FastAPI):
         if start_worker:
             worker.start()
-        log("pipeline.start", whisper_model=settings.whisper_model, extract_provider=settings.extract.provider,
+        log("pipeline.start", transcribe_model=settings.deepgram_model, deepgram_key=bool(settings.deepgram_api_key), extract_provider=settings.extract.provider,
             extract_model=settings.extract.model or None, auth=bool(settings.ingest_token))
         yield
         if start_worker:
@@ -96,7 +99,7 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None, start
     @app.get("/health")
     @app.get("/ingest/health")
     def health():
-        return {"ok": True, "queued": deps.store.count("queued")}
+        return {"ok": True, "queued": deps.store.count("queued"), "retrying": deps.store.count("retrying")}
 
     @app.post("/ingest/audio", status_code=202, dependencies=[Depends(auth)])
     async def ingest_audio(file: UploadFile = File(...), source: str | None = Form(None)):
@@ -164,13 +167,24 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None, start
         # The page holds no data; it asks for the token and calls /ingest/recent.
         return FileResponse(STATIC / "review.html", media_type="text/html")
 
+    @app.post("/ingest/{ingest_id}/retry", dependencies=[Depends(auth)])
+    def retry(ingest_id: str):
+        try:
+            outcome, record = reprocess(deps, ingest_id)
+        except ReprocessError as e:
+            raise HTTPException(e.status, str(e))
+        if outcome == "queued":
+            worker.notify()
+            return JSONResponse({**_public(record), "speech": None}, status_code=202)
+        return {**_public(record), "speech": speech_for(record)}
+
     @app.get("/ingest/{ingest_id}", dependencies=[Depends(auth)])
     def get_one(ingest_id: str):
         record = deps.store.get(ingest_id)
         if not record:
             raise HTTPException(404, "not found")
         return {**_public(record), "speech": speech_for(record) if record["status"] not in
-                ("queued", "transcribing", "extracting") else None}
+                ("queued", "transcribing", "retrying", "extracting") else None}
 
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, exc: HTTPException):

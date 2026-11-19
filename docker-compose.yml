@@ -51,9 +51,9 @@ services:
           cpus: '0.50'
           memory: 256M
 
-  # Voice note -> tasks pipeline (pipeline/, docs/voice-capture.md). Separate so
-  # Whisper's CPU spikes are capped on their own; it reaches the app over the
-  # compose network and creates tasks through the task API.
+  # Voice note -> tasks pipeline (pipeline/, docs/voice-capture.md). Sends audio
+  # to Deepgram for transcription and the transcript to the LLM, then creates
+  # tasks through the task API over the compose network.
   pipeline:
     build: ./pipeline
     image: milaclone-pipeline:local
@@ -65,29 +65,37 @@ services:
     volumes:
       # ingest.db (every transcript and extraction) + the uploaded audio.
       - milaclone_ingest:/data
-      # Whisper model files, downloaded on first use.
-      - milaclone_models:/models
     environment:
       - INGEST_API_TOKEN=${INGEST_API_TOKEN:-}
       - TASK_API_TOKEN=${TASK_API_TOKEN:-}
       - APP_URL=http://app:4321
       - TASK_TZ=${TASK_TZ:-America/Chicago}
-      - WHISPER_MODEL=${WHISPER_MODEL:-base}
-      - WHISPER_THREADS=${WHISPER_THREADS:-2}
-      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY:-}
+      - DEEPGRAM_MODEL=${DEEPGRAM_MODEL:-nova-3}
+      - DEEPGRAM_LANGUAGE=${DEEPGRAM_LANGUAGE:-en}
+      - DEEPGRAM_MIP_OPT_OUT=${DEEPGRAM_MIP_OPT_OUT:-true}
+      # Seconds between transcription retries when Deepgram is busy or down.
+      - TRANSCRIBE_RETRY_DELAYS=${TRANSCRIBE_RETRY_DELAYS:-60,300,900}
+      # Webhook (e.g. Home Assistant) that gets one POST per note that failed for good.
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - INGEST_REVIEW_URL=${INGEST_REVIEW_URL:-}
+    # Lets ALERT_WEBHOOK_URL reach a service on this host, e.g.
+    # http://host.docker.internal:8123/api/webhook/<id> for Home Assistant.
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
       - EXTRACT_PROVIDER=${EXTRACT_PROVIDER:-anthropic}
       - EXTRACT_MODEL=${EXTRACT_MODEL:-}
       - EXTRACT_API_KEY=${EXTRACT_API_KEY:-}
       - EXTRACT_BASE_URL=${EXTRACT_BASE_URL:-}
     depends_on:
       - app
-    # Transcription is one job at a time on WHISPER_THREADS threads; this cap
-    # keeps it off the CCTV / Home Assistant workload. Tune after benchmarking.
+    # Transcription and extraction run remotely, so this is mostly waiting on
+    # HTTP; the cap keeps it well clear of the CCTV / Home Assistant workload.
     deploy:
       resources:
         limits:
-          cpus: '1.00'
-          memory: 1G
+          cpus: '0.50'
+          memory: 256M
 
   # Alexa hop (docs/alexa.md): an outbound-only Cloudflare Tunnel so the Alexa
   # skill's Worker can reach the pipeline's /ingest/text. Off unless
@@ -139,4 +147,3 @@ volumes:
   milaclone_uploads:
   milaclone_ts_state:
   milaclone_ingest:
-  milaclone_models:

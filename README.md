@@ -154,10 +154,10 @@ Listing, marking done and every field are in [docs/task-api.md](docs/task-api.md
 ### By voice
 
 Record a note on the phone and the to-dos you mention land in the Inbox. A
-separate service transcribes the audio on your server (faster-whisper, CPU
-only), asks the LLM you configure to pick out the tasks, and adds them through
-the task API. Audio never leaves the server; only the transcript text goes to
-the LLM provider. Setup, the iPhone Shortcut and the review page are in
+separate service transcribes the audio with Deepgram (Nova-3), asks the LLM
+you configure to pick out the tasks, and adds them through the task API. The
+recording goes to Deepgram, which by default keeps nothing after replying, and
+the transcript text goes to the LLM provider. Setup, the iPhone Shortcut and the review page are in
 [docs/voice-capture.md](docs/voice-capture.md).
 
 With an Echo you can also say "Alexa, tell my tasks to add buy printer ink". A

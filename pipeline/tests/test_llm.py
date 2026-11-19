@@ -207,14 +207,17 @@ def test_settings_from_env(monkeypatch):
     monkeypatch.setenv("APP_URL", "http://x:1/")
     monkeypatch.setenv("EXTRACT_PROVIDER", "OpenAI")
     monkeypatch.setenv("EXTRACT_MODEL", "m")
-    monkeypatch.setenv("WHISPER_THREADS", "4")
+    monkeypatch.setenv("DEEPGRAM_API_KEY", " dg-key ")
+    monkeypatch.setenv("DEEPGRAM_MIP_OPT_OUT", "false")
     s = Settings.from_env()
     assert s.ingest_token == "tok"
     assert s.app_url == "http://x:1"
     assert s.extract.provider == "openai"
     assert s.extract.model == "m"
-    assert s.whisper_threads == 4
-    assert s.whisper_model == "base"
+    assert s.deepgram_api_key == "dg-key"
+    assert s.deepgram_mip_opt_out is False
+    assert s.deepgram_model == "nova-3"
+    assert s.deepgram_language == "en"
 
 
 def test_prompt_mentions_rules():
