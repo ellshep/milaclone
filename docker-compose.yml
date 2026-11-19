@@ -136,7 +136,10 @@ services:
       - TS_USERSPACE=true
     volumes:
       - milaclone_ts_state:/var/lib/tailscale
-      - ./tailscale/serve.json:/config/serve.json:ro
+      # The folder, not the file: git replaces serve.json on update, and a
+      # single-file mount would keep showing the old copy. Tailscale watches
+      # this folder and applies a changed serve.json without a restart.
+      - ./tailscale:/config:ro
     # serve.json also routes /ingest/ to the voice add-on; without the add-on
     # that path just answers 502.
     depends_on:

@@ -70,13 +70,15 @@ How the pieces fit:
 | ---------------------- | ------------------------------- | -------------------------------------------- |
 | `TS_AUTHKEY`           | `.env` (gitignored)             | Authenticates the node on first start        |
 | `TS_HOSTNAME=mila`     | `docker-compose.yml`            | Names the node → `mila.your-tailnet.ts.net`  |
-| `tailscale/serve.json` | mounted at `/config/serve.json` | Terminates HTTPS, proxies `/` → `app:4321`   |
+| `tailscale/serve.json` | its folder mounted at `/config` | Terminates HTTPS, proxies `/` → `app:4321`   |
 | `milaclone_ts_state`   | volume at `/var/lib/tailscale`  | Remembers the node so restarts don't re-auth |
 
 The Serve config uses `${TS_CERT_DOMAIN}`, which the container substitutes at
 startup, so it works on any tailnet without editing. Tailscale provisions the
 TLS certificate itself. To change the hostname, edit `TS_HOSTNAME` and run
-`docker compose up -d` — the node is renamed on next start.
+`docker compose up -d` — the node is renamed on next start. An edit to
+`serve.json` (or a deploy that changes it) applies within seconds, with no
+restart: Compose mounts the whole `tailscale/` folder, which Tailscale watches.
 
 Checking and troubleshooting:
 
@@ -89,8 +91,7 @@ docker compose exec tailscale tailscale serve status  # is / proxied to app:4321
 If `docker compose up` fails immediately with `set TS_AUTHKEY in .env`, the
 `.env` file is missing or empty. If the node appears on the tailnet but the URL
 returns nothing, the Serve config didn't load — check that `tailscale/serve.json`
-exists as a **file** (a missing file makes Docker create an empty directory in
-its place) and is valid JSON.
+exists and is valid JSON.
 
 Traffic reaches the app over the private Compose network, so the app's
 `127.0.0.1:8182` binding stays loopback-only and is never exposed.
