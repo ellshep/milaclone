@@ -251,6 +251,7 @@ def test_settings_from_env(monkeypatch):
     monkeypatch.setenv("EXTRACT_MODEL", "m")
     monkeypatch.setenv("DEEPGRAM_API_KEY", " dg-key ")
     monkeypatch.setenv("DEEPGRAM_MIP_OPT_OUT", "false")
+    monkeypatch.setenv("DEEPGRAM_KEYTERMS", " Claude, Tailscale,,Home   Assistant,Claude ")
     s = Settings.from_env()
     assert s.ingest_token == "tok"
     assert s.app_url == "http://x:1"
@@ -260,6 +261,7 @@ def test_settings_from_env(monkeypatch):
     assert s.deepgram_mip_opt_out is False
     assert s.deepgram_model == "nova-3"
     assert s.deepgram_language == "en"
+    assert s.deepgram_keyterms == ("Claude", "Tailscale", "Home Assistant")
 
 
 def test_prompt_mentions_rules():

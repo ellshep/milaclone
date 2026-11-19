@@ -27,6 +27,17 @@ def _delays(raw: str) -> tuple[int, ...]:
     return tuple(out)
 
 
+def _terms(raw: str) -> tuple[str, ...]:
+    """Comma-separated words or phrases, e.g. "Claude,Tailscale,Home Assistant".
+    Blanks and repeats are dropped; order is kept."""
+    out: list[str] = []
+    for part in raw.split(","):
+        part = " ".join(part.split())
+        if part and part not in out:
+            out.append(part)
+    return tuple(out)
+
+
 @dataclass(frozen=True)
 class StepConfig:
     """Which model one pipeline step uses. Steps are configured separately
@@ -62,6 +73,7 @@ class Settings:
     deepgram_model: str = "nova-3"
     deepgram_language: str = "en"
     deepgram_mip_opt_out: bool = True
+    deepgram_keyterms: tuple[str, ...] = ()
     retry_delays: tuple[int, ...] = (60, 300, 900)
     alert_webhook_url: str = ""
     review_url: str = ""
@@ -80,6 +92,7 @@ class Settings:
             deepgram_model=_env("DEEPGRAM_MODEL", "nova-3"),
             deepgram_language=_env("DEEPGRAM_LANGUAGE", "en"),
             deepgram_mip_opt_out=_env("DEEPGRAM_MIP_OPT_OUT", "true").lower() not in ("false", "0", "no"),
+            deepgram_keyterms=_terms(_env("DEEPGRAM_KEYTERMS")),
             retry_delays=_delays(_env("TRANSCRIBE_RETRY_DELAYS", "60,300,900")),
             alert_webhook_url=_env("ALERT_WEBHOOK_URL"),
             review_url=_env("INGEST_REVIEW_URL"),

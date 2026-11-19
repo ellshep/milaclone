@@ -76,6 +76,7 @@ services:
       - DEEPGRAM_MODEL=${DEEPGRAM_MODEL:-nova-3}
       - DEEPGRAM_LANGUAGE=${DEEPGRAM_LANGUAGE:-en}
       - DEEPGRAM_MIP_OPT_OUT=${DEEPGRAM_MIP_OPT_OUT:-true}
+      - DEEPGRAM_KEYTERMS=${DEEPGRAM_KEYTERMS:-}
       # Seconds between transcription retries when Deepgram is busy or down.
       - TRANSCRIBE_RETRY_DELAYS=${TRANSCRIBE_RETRY_DELAYS:-60,300,900}
       # Webhook (e.g. Home Assistant) that gets one POST per note that failed for good.

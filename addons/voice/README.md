@@ -25,7 +25,8 @@ acceptable for you:
 
 - **Recordings go to [Deepgram](https://deepgram.com)** for speech-to-text. By
   default the request asks Deepgram to keep nothing afterwards
-  (`DEEPGRAM_MIP_OPT_OUT=true`).
+  (`DEEPGRAM_MIP_OPT_OUT=true`). Words you list in `DEEPGRAM_KEYTERMS` are sent
+  with each recording and do appear in Deepgram's usage records.
 - **Transcripts go to the LLM provider you configure** (Anthropic by default;
   OpenAI, Gemini, or a local model through any OpenAI-compatible endpoint) to
   pick out the tasks.
