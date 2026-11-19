@@ -8,7 +8,8 @@ import pytest
 
 from ingest.config import Settings, StepConfig
 from ingest.extract import SCHEMA, build_prompt, extract_tasks
-from ingest.llm import LLMError, complete_json
+import ingest.llm as llm
+from ingest.llm import LLMError, complete_json, preload
 from ingest.extract import Extraction
 
 GOOD = {"summary": "Errands.", "tasks": [
@@ -99,6 +100,47 @@ def test_anthropic_http_error():
     with pytest.raises(LLMError, match="HTTP 400"):
         complete_json(cfg, "s", "p", Extraction, SCHEMA, http=amock(lambda req: httpx2.Response(400, json=err)))
 
+
+
+def test_anthropic_reuses_one_client_per_key(monkeypatch):
+    calls = []
+
+    def handler(req):
+        return httpx2.Response(200, json=anthropic_reply(json.dumps(GOOD)))
+
+    def build(api_key, base_url):
+        calls.append((api_key, base_url))
+        return llm._new_anthropic(api_key, base_url, amock(handler))
+
+    monkeypatch.setattr(llm, "_anthropic_client", llm.lru_cache(maxsize=4)(build))
+    cfg = StepConfig("extract", "anthropic", "claude-haiku-5-5", api_key="k")
+    complete_json(cfg, "s", "p", Extraction, SCHEMA)
+    complete_json(cfg, "s", "p", Extraction, SCHEMA)
+    assert calls == [("k", "")]
+
+
+def test_preload_builds_the_anthropic_client(capsys):
+    llm._anthropic_client.cache_clear()
+    preload(StepConfig("extract", "anthropic", "", api_key="sk-test"))
+    assert llm._anthropic_client.cache_info().currsize == 1
+    assert llm._anthropic_client("sk-test", "") is llm._anthropic_client("sk-test", "")
+    log = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert log[-1]["event"] == "llm.preloaded"
+    assert log[-1]["ms"] >= 0
+    llm._anthropic_client.cache_clear()
+
+
+def test_preload_skips_other_providers_and_logs_failures(capsys, monkeypatch):
+    preload(StepConfig("extract", "openai", "gpt-x", api_key="k"))
+    assert capsys.readouterr().out == ""
+
+    def boom(api_key, base_url):
+        raise RuntimeError("no sdk")
+
+    monkeypatch.setattr(llm, "_anthropic_client", boom)
+    preload(StepConfig("extract", "anthropic", "", api_key="k"))
+    log = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert (log["event"], log["error"]) == ("llm.preload_failed", "no sdk")
 
 def test_openai_strict_schema():
     seen = []

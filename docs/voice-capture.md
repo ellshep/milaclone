@@ -236,7 +236,9 @@ The audio files are in the same volume under `/data/audio` and are not pruned.
 
 Every step writes one JSON line: `ingest.queued`, `ingest.transcribed`
 (`audio_seconds`, `transcribe_ms`), `llm.call` (`provider`, `model`, token
-counts, `latency_ms`), `ingest.done`, and the failures.
+counts, `latency_ms`), `ingest.done`, and the failures. At startup,
+`llm.preloaded` (`ms`) says the Anthropic SDK has loaded; a note that arrives
+in the first few seconds after a restart waits for it.
 
 ```bash
 docker compose logs -f pipeline
