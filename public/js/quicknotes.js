@@ -297,7 +297,7 @@ export function openQuickNotes(opts) {
   }); // …then refresh
 }
 
-export function closeQuickNotes() {
+function closeQuickNotes() {
   const sent = flushSaves();
   qn.open = false;
   qn.desk = false;
@@ -321,7 +321,7 @@ export function closeQuickNotes() {
   }
 }
 
-export function togglePhoneNotes() {
+function togglePhoneNotes() {
   if (qn.open && qn.desk) closeQuickNotes();
   else openQuickNotes({ desk: true });
 }
