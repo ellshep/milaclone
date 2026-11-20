@@ -6,7 +6,7 @@ transcript into tasks:
 
 ```
  iPhone Shortcut ──► https://mila.<tailnet>.ts.net/ingest/audio
- (Alexa, later) ──► https://mila.<tailnet>.ts.net/ingest/text
+ Alexa ────────────► /ingest/text  (alexa.md, alexa-home-assistant.md)
                          │ Tailscale sidecar
                          ▼
              pipeline (Python, 0.5 CPU / 256 MB cap)
