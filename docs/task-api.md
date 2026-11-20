@@ -78,6 +78,31 @@ curl -sS "https://mila.your-tailnet.ts.net/api/tasks?status=open" \
   -H "Authorization: Bearer $TASK_API_TOKEN"
 ```
 
+### `GET /api/tasks?view=focus&limit=3` — the focus order
+
+The ranked open tasks the focus page, the watch and the morning digest share
+(`focus.js`). `limit` is 1–1000 or `all` (default 3). Returns
+`{ today, tasks, counts }`: `today` is the date in `TASK_TZ`; each task carries
+`listId`, `listTitle`, `tier` and `dueIn` (days, negative when overdue);
+`counts` is `{ overdue, dueToday, open }`.
+
+The order:
+
+1. Overdue (most overdue first), then due today. Nothing outranks these.
+2. Tasks placed by hand (`focusOrder`, lowest first).
+3. The rest by tier: due within 3 days, then starred, then everything else. A
+   `rankNudge` of `1` or `-1` moves a task one tier; within a tier, higher
+   `rankScore` first, then unscored tasks oldest first.
+
+Left out: done, blank and `stale` tasks, to-do lists labelled **Reference**,
+and lists inside the **Templates** board on Home. The board serves the same
+order without a token at `GET /api/focus` for the `/focus` page.
+
+```bash
+curl -sS "https://mila.your-tailnet.ts.net/api/tasks?view=focus&limit=3" \
+  -H "Authorization: Bearer $TASK_API_TOKEN"
+```
+
 ### `PATCH /api/tasks/:id` — mark done, pin, edit
 
 Any of `title`, `notes`, `tags`, `dueDate`, `done`, `starred`, `priority`,
@@ -100,6 +125,8 @@ Stored on each task next to the fields the app already uses (`id`, `text`,
 | `source`     | create                    | Who created the task                           |
 | `pinned`     | `PATCH`                   | Locks the task into the focus three (Phase 4)  |
 | `stale`      | nightly ranking (Phase 4) | Looks abandoned; hidden from the focus view    |
+| `rankNudge`  | nightly ranking (Phase 4) | `1`/`-1`: move one tier up/down in the order   |
+| `focusOrder` | focus page (List mode)    | Placed by hand; ranks above the model's order  |
 | `rankScore`  | nightly ranking (Phase 4) | Model score used within a deterministic tier   |
 | `rankReason` | nightly ranking (Phase 4) | One-line reason for the score                  |
 | `rankedAt`   | nightly ranking (Phase 4) | When it was last scored                        |

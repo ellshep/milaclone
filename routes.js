@@ -23,6 +23,7 @@ const {
   toRich,
 } = require('./db');
 const { exportMarkdown } = require('./export-md');
+const focus = require('./focus');
 
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -599,6 +600,14 @@ router.post('/api/upload', uploadOne, (req, res) => {
 });
 
 // Bearer-token task API for machine clients (voice pipeline, Alexa): tasks-api.js.
+// The focus order for the /focus page (unauthenticated like the other board
+// routes; the task API serves the same order behind its token).
+router.get('/api/focus', (req, res) => {
+  const limit = focus.parseLimit(req.query.limit);
+  if (limit === null) return res.status(400).json({ error: `limit must be 1 to ${focus.LIMIT_MAX} or all` });
+  res.json(focus.focusView({ limit }));
+});
+
 router.use(require('./tasks-api'));
 
 router.get('/api/health', (req, res) => res.json({ ok: true }));

@@ -13,6 +13,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const { db, stmt, id, rootCanvasId, rowToItem } = require('./db');
+const focus = require('./focus');
 
 const router = express.Router();
 
@@ -277,6 +278,12 @@ const STATUSES = { open: t => !t.done, done: t => !!t.done, all: () => true };
 router.get(
   '/api/tasks',
   handle((req, res) => {
+    if (req.query.view !== undefined) {
+      if (req.query.view !== 'focus') bad('view must be focus');
+      const limit = focus.parseLimit(req.query.limit);
+      if (limit === null) bad(`limit must be 1 to ${focus.LIMIT_MAX} or all`);
+      return res.json(focus.focusView({ limit }));
+    }
     const status = req.query.status || 'open';
     const keep = STATUSES[status];
     if (!keep) bad('status must be open, done or all');
