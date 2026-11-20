@@ -114,3 +114,50 @@ field as its default.
 Each create, skip and update writes one JSON line to the server log, for
 example `{"event":"task.create","source":"voice-note","taskId":"t_…","listId":"i_…"}`.
 With Docker: `docker compose logs app | grep task.`
+
+## Importing a task list
+
+`scripts/import-tasks-json.js` brings a whole task list from another app (for
+example a Microsoft To Do export, cleaned up first) in through this API. It
+reads one file in this shape:
+
+```json
+{
+  "format": "milaclone-import/1",
+  "lists": [
+    {
+      "name": "Errands",
+      "target": { "new": true },
+      "tasks": [
+        {
+          "importId": "mstodo:AAMk…",
+          "title": "Buy printer ink",
+          "note": "Black only",
+          "due": "2026-11-28",
+          "starred": false,
+          "tags": []
+        }
+      ]
+    },
+    { "name": "Doctor", "target": { "listId": "i_…" }, "tasks": [] }
+  ]
+}
+```
+
+- `target` is `{ "new": true }` (optionally with `"title"`) for a new to-do
+  list, or `{ "listId": "…" }` (an `id` from `GET /api/todos`) to add to an
+  existing one.
+- Every task needs a unique `importId` and a `title`; `note`, `due`, `starred`
+  and `tags` are optional and follow the limits of `POST /api/tasks`.
+
+```bash
+node scripts/import-tasks-json.js --base http://127.0.0.1:8182 --dry-run tasks.json
+TASK_API_TOKEN=… node scripts/import-tasks-json.js --base http://127.0.0.1:8182 tasks.json
+```
+
+New lists go on a board on Home (`--into`, default "From Microsoft To Do"),
+made on the first run; a list with the same title already on that board is
+reused. Tasks are created with `source: migration` and their `importId`, so
+running it again adds nothing twice. `--dry-run` prints what would be created,
+writes nothing and needs no token. Rows the API refuses are listed with the
+reason, and the script then exits with status 2.
