@@ -2,18 +2,19 @@
 
 Say a to-do out loud and it lands in milaclone's Inbox, either as a voice note
 recorded on your phone or by asking an Amazon Echo ("Alexa, tell my tasks to
-add buy printer ink").
+add buy printer ink", or with Home Assistant, "Alexa, add buy printer ink to my
+to-do list").
 
 **Off by default.** Nothing in this folder runs, and none of its services start,
 unless you switch it on. The board works the same without it.
 
 ## What's in here
 
-| Part                     | What it is                                                                                                |
-| ------------------------ | --------------------------------------------------------------------------------------------------------- |
-| [`pipeline/`](pipeline/) | A small Python service (its own container) that turns a recording or a sentence into tasks                |
-| [`alexa/`](alexa/)       | A Cloudflare Worker that receives your private Alexa skill's requests and passes the text to the pipeline |
-| [`docs/`](docs/)         | Setup and operation: [voice-capture.md](docs/voice-capture.md), [alexa.md](docs/alexa.md)                 |
+| Part                     | What it is                                                                                                                                                                                   |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`pipeline/`](pipeline/) | A small Python service (its own container) that turns a recording or a sentence into tasks                                                                                                   |
+| [`alexa/`](alexa/)       | A Cloudflare Worker that receives your private Alexa skill's requests and passes the text to the pipeline                                                                                    |
+| [`docs/`](docs/)         | Setup and operation: [voice-capture.md](docs/voice-capture.md), [alexa.md](docs/alexa.md) (skill), [alexa-home-assistant.md](docs/alexa-home-assistant.md) (private, through Home Assistant) |
 
 Both talk to the board only through the core [task API](../../docs/task-api.md),
 which stays off until you set `TASK_API_TOKEN`.
@@ -30,10 +31,12 @@ acceptable for you:
 - **Transcripts go to the LLM provider you configure** (Anthropic by default;
   OpenAI, Gemini, or a local model through any OpenAI-compatible endpoint) to
   pick out the tasks.
-- **With Alexa,** Amazon hears what you say to the Echo, and the text passes
-  through Cloudflare. That part puts one path of the pipeline on the internet,
-  behind Alexa's request signature, Cloudflare Access and a bearer token. See
-  [docs/alexa.md](docs/alexa.md) for exactly what is exposed.
+- **With Alexa,** Amazon hears what you say to the Echo. With the skill, the
+  text also passes through Cloudflare, and one path of the pipeline is on the
+  internet, behind Alexa's request signature, Cloudflare Access and a bearer
+  token; see [docs/alexa.md](docs/alexa.md) for exactly what is exposed. The
+  Home Assistant route ([docs/alexa-home-assistant.md](docs/alexa-home-assistant.md))
+  exposes nothing: Home Assistant picks the item up from Alexa's to-do list.
 
 Everything else stays on your server: the audio files, every transcript and
 result (in the pipeline's own database), and your boards.
@@ -44,7 +47,8 @@ In `.env` next to `docker-compose.yml`:
 
 ```bash
 COMPOSE_PROFILES=voice     # phone voice notes
-# COMPOSE_PROFILES=alexa   # the same, plus Alexa (starts the Cloudflare Tunnel too)
+# COMPOSE_PROFILES=alexa   # the same, plus the Alexa skill (starts the Cloudflare Tunnel too)
+#                          # (the Home Assistant Alexa route only needs voice)
 ```
 
 then the settings in [docs/voice-capture.md](docs/voice-capture.md#setup)
