@@ -1,0 +1,34 @@
+# Voice add-on notes (`addons/voice/`)
+
+Loaded when you work under `addons/voice/`. Optional and off by default: core code never imports from here, and everything reaches the board through the task API (`docs/task-api.md`). Overview in `README.md`, operation in `docs/voice-capture.md`, Alexa setup in `docs/alexa.md`. 1,500-word cap (`npm run check:docs`).
+
+CI: `.github/workflows/voice-addon.yml` (Pipeline tests + Alexa worker tests, not required) runs only when `addons/voice/`, the compose file, `tasks-api.js` or the app `Dockerfile` change.
+
+## Pipeline (`pipeline/`, Python 3.12)
+
+Its own Compose service and image behind the `voice` and `alexa` profiles. FastAPI app (`ingest/main.py`, started with `uvicorn ingest.main:create_app --factory`) behind `INGEST_API_TOKEN`.
+
+- `POST /ingest/audio` stores the file and queues it (202). One `Worker` thread transcribes queued files one at a time with Deepgram's pre-recorded API (`transcribe.py` `DeepgramTranscriber`: raw POST to `/v1/listen` with `model=nova-3`, `smart_format`, `language`, `mip_opt_out`, and one `keyterm` per `DEEPGRAM_KEYTERMS` entry). Failures become the ingest's `error`; **the key never appears in messages**. There is no local speech model.
+- A `TranscribeError` with `retryable` (network errors, 408/429/5xx) puts the job in `retrying` with `next_attempt_at` after each of `TRANSCRIBE_RETRY_DELAYS` (default 60,300,900 s); `store.next_queued` picks due retries.
+- A final failure (non-retryable, retries used up, `extraction_failed`, task API errors, worker crash) calls `Deps.alert` once (`alerts.py` `Alerter`, POST to `ALERT_WEBHOOK_URL` with the reason and `INGEST_REVIEW_URL`, **never the transcript**).
+- `POST /ingest/{id}/retry` (`process.reprocess`) re-runs extraction from a saved transcript, or re-queues saved audio when there is none.
+- `POST /ingest/text` runs synchronously and returns `speech` for a voice assistant.
+- `process.py` saves each step's output to `ingest.db` (`store.py`, rows never deleted) before the next runs, then posts each task to the app's `/api/tasks` with `dedupe: true` and `TASK_API_TOKEN`. New `ingest.db` columns are added at startup (`store.ADDED_COLUMNS`).
+- `llm.py` `complete_json` is the provider abstraction (anthropic via the official SDK; openai, gemini, openai_compatible via httpx; fake for tests), configured per step by `<STEP>_PROVIDER/_MODEL/_API_KEY/_BASE_URL` (`EXTRACT_*` now, `RANK_*` reserved). It validates against a pydantic model and retries once.
+- The Anthropic client is built once per key (`_anthropic_client`), and `llm.preload` builds it in a background thread at startup: importing the SDK takes 7–9 s under the 0.5 CPU cap, longer than the Alexa Worker waits.
+- Tests (`pipeline/tests`, pytest) inject fakes through `Deps`. The `Pipeline tests` job also checks the add-on is off without a profile, creates the compose containers and checks text → task end to end in Docker.
+- `tailscale/serve.json` routes `/ingest/` to `pipeline:8000`.
+
+## Alexa (`alexa/`)
+
+Its own npm package, deployed to Cloudflare with wrangler, not part of the Docker image.
+
+- `src/worker.js` is the skill's HTTPS endpoint. `handle()` rate-limits, runs `src/verify.js` (`SignatureCertChainUrl` must be `https://s3.amazonaws.com/echo.api/…`, chain links and dates, SAN `echo-api.amazon.com`, `Signature-256` over the raw body, timestamp within 150 s, via `@peculiar/x509` + WebCrypto), checks the skill ID, then forwards `AddTaskIntent`'s `task` slot to exactly one URL, the pipeline's `/ingest/text` (`source: alexa`), and speaks the returned `speech`. On any failure it says the task wasn't added.
+- Deploy settings are passed as `wrangler deploy --var INGEST_URL:… --var SKILL_ID:…` so the server's checkout stays unmodified.
+- The path to the server is a Cloudflare Tunnel (`cloudflared` Compose service, pinned image, profile `alexa`, token in `.env`); its hostname, single path and Access service-token policy live in the Cloudflare dashboard.
+- `skill/interaction-model.json` is pasted into the Alexa console.
+- Tests: `cd addons/voice/alexa && npm test` (node:test with a made-up certificate chain); the `Alexa worker tests` job also dry-run bundles with wrangler.
+
+## Env vars
+
+Only read when `COMPOSE_PROFILES` includes `voice` or `alexa`: `INGEST_API_TOKEN`, `TASK_API_TOKEN`, `APP_URL`, `EXTRACT_*`, `DEEPGRAM_API_KEY`/`_MODEL`/`_LANGUAGE`/`_MIP_OPT_OUT`/`_KEYTERMS`, `TRANSCRIBE_RETRY_DELAYS`, `ALERT_WEBHOOK_URL`, `INGEST_REVIEW_URL`, `TASK_TZ`, `MAX_AUDIO_MB`. Data lives in the `milaclone_ingest` volume.
