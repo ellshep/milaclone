@@ -248,3 +248,12 @@ extract; the next took 2.9 s.
 - **Measured** in a throwaway container with the same 0.5 CPU cap and the
   real key: first extraction 7.72 s → 1.61 s (preload finished 4.9 s after
   start, before any request); second extraction 1.41 s → 1.46 s.
+
+## Plan: the next phases (owner decisions)
+
+Phases 4 and 5 of the handoff were re-planned with the owner on 2026-11-20,
+together with list filing, a Pebble watch app and a Microsoft To Do backlog
+import. The decisions and the work items are in `docs/next-phases.md`; where it
+differs from the handoff (no polling, a fixed stale rule, Opus for ranking,
+owner ordering instead of a pin button, Home Assistant running the digest), it
+is the newer decision.
