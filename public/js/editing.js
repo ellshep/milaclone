@@ -1,7 +1,7 @@
 'use strict';
 
 import { state, elMap } from './state.js';
-import { api } from './api.js';
+import { api, retryDelay } from './api.js';
 import { toast, hexColor } from './util.js';
 import { render, renderCrumbs, refreshItem } from './cards.js';
 import { closePalette, closeCtx } from './menus.js';
@@ -141,20 +141,27 @@ export function trackTasks(it) {
 
 // A save that failed but may work later goes back in the queue with the item's
 // current values for those fields (never the old ones, so a retry can't undo a
-// newer edit) and is retried with backoff, or as soon as the network returns.
+// newer edit) and is retried with backoff (api.js retryDelay), or as soon as
+// the network returns. A newer edit already queued keeps its own, sooner timer.
 const retryCount = new Map();
 function requeue(it, patch) {
+  const newer = pending.has(it.id);
   const p = pending.get(it.id) || { it, patch: {} };
   for (const k of Object.keys(patch)) if (!(k in p.patch)) p.patch[k] = it.data[k];
   pending.set(it.id, p);
   const n = (retryCount.get(it.id) || 0) + 1;
   retryCount.set(it.id, n);
-  clearTimeout(saveTimers.get(it.id));
+  const wait = retryDelay(n);
+  if (newer || wait === null) return;
   saveTimers.set(
     it.id,
-    setTimeout(() => flushSave(it.id), Math.min(60000, 1000 * 2 ** n))
+    setTimeout(() => flushSave(it.id), wait)
   );
 }
+
+// Edits that haven't reached the server yet (queued, or failed and waiting to
+// retry): while there are any, don't replace the view with the server's copy.
+export const hasPendingSaves = () => pending.size > 0;
 
 async function flushSave(id, keepalive = false) {
   const p = pending.get(id);

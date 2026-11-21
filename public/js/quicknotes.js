@@ -1,7 +1,7 @@
 'use strict';
 
 import { state } from './state.js';
-import { api } from './api.js';
+import { api, retryDelay } from './api.js';
 import { autoGrow, colorVar, lucideEl, refreshIcons, toast, rid, daysUntil, dueInfo } from './util.js';
 import { screenToWorld } from './viewport.js';
 import { createAt, defaultsFor } from './create.js';
@@ -171,15 +171,17 @@ function flushSaves(only, keepalive = false) {
 const retryCount = new Map();
 function requeue(list, body) {
   if (!list) return;
+  const newer = savePending.has(list.id); // a newer edit keeps its own, sooner timer
   const p = savePending.get(list.id) || {};
   for (const k of Object.keys(body)) if (!(k in p)) p[k] = list[k];
   savePending.set(list.id, p);
   const n = (retryCount.get(list.id) || 0) + 1;
   retryCount.set(list.id, n);
-  clearTimeout(saveTimers.get(list.id));
+  const wait = retryDelay(n);
+  if (newer || wait === null) return;
   saveTimers.set(
     list.id,
-    setTimeout(() => flushSaves(list.id), Math.min(60000, 1000 * 2 ** n))
+    setTimeout(() => flushSaves(list.id), wait)
   );
 }
 
@@ -343,8 +345,12 @@ function closeQuickNotes() {
   // once the last write has actually landed
   if (qn.dirty && state.view.canvas) {
     const id = state.view.canvas.id;
-    qn.dirty = false;
-    Promise.all(sent).then(() => openCanvas(id));
+    // a save that failed is still queued: keep the board as it is until it lands
+    Promise.all(sent).then(() => {
+      if (savePending.size) return;
+      qn.dirty = false;
+      openCanvas(id);
+    });
   }
 }
 
