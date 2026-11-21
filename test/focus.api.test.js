@@ -186,3 +186,41 @@ test('limit and view validation; the task API view needs the token', async () =>
   assert.match(badView.body.error, /view must be focus/);
   assert.equal((await json('GET', '/api/tasks?view=focus')).status, 401);
 });
+
+test('POST /api/focus/:taskId/done marks the task done once', async () => {
+  const { rootCanvasId } = (await json('GET', '/api/root')).body;
+  const list = await todo(rootCanvasId, 'Done list', [{ id: 'd-1', text: 'Finish me', done: false, createdAt: 1 }]);
+  assert.deepEqual((await json('POST', '/api/focus/d-1/done')).body, { ok: true });
+  const card = (await json('GET', '/api/canvas/' + rootCanvasId)).body.items.find(it => it.id === list.id);
+  assert.equal(card.data.tasks[0].done, true);
+  assert.equal((await json('POST', '/api/focus/d-1/done')).status, 404); // already done
+  assert.equal((await json('POST', '/api/focus/nope/done')).status, 404);
+});
+
+test('PUT /api/focus/order places tasks across lists, and [] resets', async () => {
+  const { rootCanvasId } = (await json('GET', '/api/root')).body;
+  const mk = (id, f = {}) => Object.assign({ id, text: id, done: false, createdAt: 1 }, f);
+  const a = await todo(rootCanvasId, 'Place A', [mk('p-a1'), mk('p-a2', { focusOrder: 7 })]);
+  await todo(rootCanvasId, 'Place B', [mk('p-b1')]);
+
+  const r = await json('PUT', '/api/focus/order', { ids: ['p-b1', 'p-a1'] });
+  assert.equal(r.status, 200);
+  const placed = r.body.tasks.filter(t => t.tier === 'placed').map(t => [t.id, t.focusOrder]);
+  assert.deepEqual(placed, [
+    ['p-b1', 1],
+    ['p-a1', 2],
+  ]);
+  // a task left out loses its old placement
+  const cardA = (await json('GET', '/api/canvas/' + rootCanvasId)).body.items.find(it => it.id === a.id);
+  assert.equal('focusOrder' in cardA.data.tasks[1], false);
+
+  const reset = await json('PUT', '/api/focus/order', { ids: [] });
+  assert.equal(
+    reset.body.tasks.some(t => t.tier === 'placed'),
+    false
+  );
+
+  for (const ids of [undefined, 'p-a1', ['p-a1', 'p-a1'], [''], [3]]) {
+    assert.equal((await json('PUT', '/api/focus/order', { ids })).status, 400, JSON.stringify(ids));
+  }
+});

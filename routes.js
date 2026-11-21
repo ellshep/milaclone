@@ -23,7 +23,7 @@ const {
   toRich,
 } = require('./db');
 const { exportMarkdown } = require('./export-md');
-const { focusView, parseLimit, LIMIT_MAX } = require('./focus');
+const { focusView, markDone, setPlacements, parseLimit, LIMIT_MAX } = require('./focus');
 
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -606,6 +606,22 @@ router.get('/api/focus', (req, res) => {
   const limit = parseLimit(req.query.limit);
   if (limit === null) return res.status(400).json({ error: `limit must be 1 to ${LIMIT_MAX} or all` });
   res.json(focusView({ limit }));
+});
+router.post('/api/focus/:taskId/done', (req, res) => {
+  if (!markDone(req.params.taskId)) return res.status(404).json({ error: 'no open task with that id' });
+  res.json({ ok: true });
+});
+// Body `{ ids }`: the placed tasks, top first; `[]` clears every placement.
+router.put('/api/focus/order', (req, res) => {
+  const ids = req.body && req.body.ids;
+  const ok =
+    Array.isArray(ids) &&
+    ids.length <= LIMIT_MAX &&
+    ids.every(x => typeof x === 'string' && x) &&
+    new Set(ids).size === ids.length;
+  if (!ok) return res.status(400).json({ error: `ids must be up to ${LIMIT_MAX} distinct task ids` });
+  setPlacements(ids);
+  res.json(focusView({ limit: LIMIT_MAX }));
 });
 
 router.use(require('./tasks-api'));

@@ -14,8 +14,11 @@
 // Left out: done, blank and `stale` tasks, lists labelled "Reference", and
 // anything inside the Templates board on Home. Dates are calendar days in
 // TASK_TZ.
+//
+// The /focus page writes back through `markDone` and `setPlacements` (its List
+// mode drag and Reset).
 
-const { stmt, rowToItem, breadcrumb } = require('./db');
+const { db, stmt, rowToItem, breadcrumb } = require('./db');
 
 const SOON_DAYS = 3;
 const TIERS = ['soon', 'starred', 'rest'];
@@ -106,6 +109,52 @@ function focusView({ limit = 3, now = new Date() } = {}) {
   return { today, tasks: tasks.slice(0, limit), counts };
 }
 
+// ---- Writes from the /focus page ----------------------------------------------
+// Board routes (unauthenticated like the rest of the board UI). Each runs in one
+// transaction over the to-do cards, so a placement change spanning several lists
+// lands whole.
+
+const saveCard = card => stmt.updateItem.run({ ...card, data: JSON.stringify(card.data) });
+
+/** Marks one open task done. Returns false when no open task has that id. */
+function markDone(taskId) {
+  return db.transaction(() => {
+    for (const card of stmt.todoItems.all().map(rowToItem)) {
+      const task = (Array.isArray(card.data.tasks) ? card.data.tasks : []).find(t => t.id === taskId);
+      if (!task) continue;
+      if (task.done) return false;
+      task.done = true;
+      saveCard(card);
+      return true;
+    }
+    return false;
+  })();
+}
+
+/**
+ * The owner's placements (List mode): the tasks in `ids` get `focusOrder` 1..n
+ * in that order and every other task loses its `focusOrder`, so `[]` is Reset.
+ */
+function setPlacements(ids) {
+  const at = new Map(ids.map((taskId, i) => [taskId, i + 1]));
+  db.transaction(() => {
+    for (const card of stmt.todoItems.all().map(rowToItem)) {
+      let changed = false;
+      for (const task of Array.isArray(card.data.tasks) ? card.data.tasks : []) {
+        const want = at.get(task.id);
+        if (want !== undefined && task.focusOrder !== want) {
+          task.focusOrder = want;
+          changed = true;
+        } else if (want === undefined && 'focusOrder' in task) {
+          delete task.focusOrder;
+          changed = true;
+        }
+      }
+      if (changed) saveCard(card);
+    }
+  })();
+}
+
 const LIMIT_MAX = 1000;
 /** Parses a `limit` query value: default 3, "all" or 1..LIMIT_MAX; null when invalid. */
 function parseLimit(v) {
@@ -116,4 +165,4 @@ function parseLimit(v) {
   return n >= 1 && n <= LIMIT_MAX ? n : null;
 }
 
-module.exports = { orderTasks, focusView, parseLimit, dayOf, LIMIT_MAX };
+module.exports = { orderTasks, focusView, markDone, setPlacements, parseLimit, dayOf, LIMIT_MAX };
