@@ -29,7 +29,8 @@ class Transcriber(Protocol):
     def transcribe(self, path: Path) -> Transcript: ...
 
 
-Extractor = Callable[[str], LLMResult]
+# (transcript, existing tags) -> extraction
+Extractor = Callable[[str, tuple[str, ...]], LLMResult]
 
 
 @dataclass
@@ -47,7 +48,7 @@ class Deps:
 
 
 def default_extractor(settings: Settings) -> Extractor:
-    return lambda transcript: extract_tasks(transcript, settings.extract, settings.tz)
+    return lambda transcript, tags=(): extract_tasks(transcript, settings.extract, settings.tz, tags=tags)
 
 
 def default_alert(settings: Settings) -> Alerter:
@@ -73,9 +74,14 @@ def extract_and_create(deps: Deps, ingest_id: str, transcript: str, source: str)
         return store.get(ingest_id)
 
     store.update(ingest_id, status="extracting")
+    try:
+        tags = deps.tasks.existing_tags()
+    except TaskAPIError as e:  # tags are a nicety; extract without them
+        tags = ()
+        log("ingest.tags_unavailable", id=ingest_id, error=str(e))
     start = time.monotonic()
     try:
-        result = deps.extractor(transcript)
+        result = deps.extractor(transcript, tags)
     except LLMError as e:
         # The raw transcript is already stored; nothing is lost.
         store.update(ingest_id, status="extraction_failed", error=str(e),

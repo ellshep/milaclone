@@ -2,6 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "public/js/main.js",
+    "public/js/focuspage.js",
     "public/js/editor.js",
     "public/sw.js",
     "scripts/*.js",

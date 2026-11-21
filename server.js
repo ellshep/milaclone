@@ -28,6 +28,8 @@ app.get('/sw.js', (req, res) => {
   res.set('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'public', 'sw.js'));
 });
+// The full-screen focus page at a clean URL, for an app-mode window on a second screen.
+app.get('/focus', (req, res) => res.sendFile(path.join(__dirname, 'public', 'focus.html')));
 app.use(express.static(path.join(__dirname, 'public'), { setHeaders: routes.setUploadHeaders }));
 
 app.listen(PORT, HOST, () => {

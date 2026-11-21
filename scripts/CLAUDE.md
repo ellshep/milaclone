@@ -14,6 +14,10 @@ Split into readers and one engine.
 - Lines and shortcuts go last on purpose: line ends and shortcut targets name other cards by sourceId.
 - `export-md.js` writes the shape `import-milanote-md.js` reads back; keep the two in step (round-trip tested in `test/findkeep.api.test.js`). Nested boards are flattened to `#` sections because the importer nests one level.
 
+## Task list import (`import-tasks-json.js`)
+
+Reads one `milaclone-import/1` file (lists, each `{ new: true }` or an existing `listId`, with tasks carrying an `importId`) and writes only through the board API and `POST /api/tasks` (`source: migration`). New lists go on the `--into` board on Home and are reused by title; tasks are idempotent by `importId`, so a re-run creates nothing twice. Refused rows are reported and the run exits 2, never dropped silently. Documented in `docs/task-api.md`.
+
 ## Deploy (`deploy.sh`, `autodeploy.sh`)
 
 `deploy/systemd/milaclone-deploy.{service,timer}` run `autodeploy.sh` hourly on the server. It wraps `deploy.sh` with a `flock`, skips a commit that already failed (`.autodeploy-failed`) until `main` moves, and can POST to `AUTODEPLOY_NOTIFY_URL` (from `.env.autodeploy`). Polling only, by choice: nothing public reaches the server. `deploy.sh` saves a database snapshot to `backups/` before every redeploy. Documented in `docs/self-hosting.md`.
