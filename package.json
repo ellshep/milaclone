@@ -11,7 +11,9 @@
     "test:e2e": "playwright test",
     "lint": "oxlint --deny-warnings",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "deadcode": "knip",
+    "check:docs": "node scripts/check-doc-size.js"
   },
   "engines": {
     "node": ">=18"
@@ -32,6 +34,7 @@
     "@playwright/test": "^1.61.1",
     "@vitest/coverage-v8": "^4.1.11",
     "jsdom": "^29.1.1",
+    "knip": "6.46.1",
     "oxlint": "^1.89.0",
     "prettier": "^3.9.10",
     "vitest": "^4.1.11"

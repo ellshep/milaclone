@@ -63,6 +63,31 @@ def test_text_ingest_creates_tasks_synchronously(client, env):
     assert stored["kind"] == "text"
 
 
+def test_text_ingest_does_not_block_other_requests(client, env):
+    started, release = threading.Event(), threading.Event()
+    slow = env.deps.extractor
+
+    def blocking(transcript):
+        started.set()
+        release.wait(5)
+        return slow(transcript)
+
+    env.deps.extractor = blocking
+    result = {}
+    t = threading.Thread(target=lambda: result.update(
+        r=client.post("/ingest/text", headers=env.auth, json={"text": "Buy printer ink"})))
+    t.start()
+    try:
+        assert started.wait(5)
+        begin = time.monotonic()
+        assert client.get("/health").status_code == 200
+        assert time.monotonic() - begin < 2  # answered while the extraction still runs
+    finally:
+        release.set()
+        t.join(10)
+    assert result["r"].status_code == 200 and result["r"].json()["status"] == "done"
+
+
 def test_text_ingest_plain_body_and_source(client, env):
     r = client.post("/ingest/text", headers={**env.auth, "Content-Type": "text/plain"}, content="Buy milk")
     assert r.status_code == 200

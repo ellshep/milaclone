@@ -159,7 +159,8 @@ board works the same without them.
 - **Voice capture** ([addons/voice](addons/voice/README.md)): speak a note on
   your phone or to an Echo and the to-dos in it land in your Inbox. Uses
   third-party services (Deepgram for speech-to-text, an LLM provider, and
-  Cloudflare for Alexa), so read its page before turning it on.
+  Cloudflare for the Alexa skill, or Home Assistant for the private Alexa
+  route), so read its page before turning it on.
 
 ## Your data
 
@@ -181,12 +182,16 @@ npm test             # API tests (80% coverage floor)
 npm run test:ui      # front-end unit tests (Vitest)
 npm run test:e2e     # Playwright (run `npx playwright install` once first)
 npm run lint && npm run format
+npm run deadcode     # unused files, exports and dependencies (knip)
 cd addons/voice/pipeline && pip install -r requirements-dev.txt && python -m pytest   # voice add-on
 ```
 
 The backend is Express with `better-sqlite3`. The frontend is vanilla ES modules
 with no framework, and the only build step is the rich-text editor, which the
 server bundles at boot. [CLAUDE.md](CLAUDE.md) explains the architecture.
+
+Want to help? Read [CONTRIBUTING.md](CONTRIBUTING.md) first, including its
+rules for AI-assisted contributions. Security problems: [SECURITY.md](SECURITY.md).
 
 ## License
 
