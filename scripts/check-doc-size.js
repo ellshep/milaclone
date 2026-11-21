@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Fails when an agent-instruction file grows past its word cap. These files are
+// Fails when an agent-instruction file or the backlog grows past its word cap. These are
 // loaded into AI sessions, so every extra line costs context and buries the
 // rules that matter. Trim before raising a cap.
 const fs = require('node:fs');
@@ -10,6 +10,7 @@ const CAPS = {
   'public/CLAUDE.md': 1500,
   'addons/voice/CLAUDE.md': 1500,
   'scripts/CLAUDE.md': 1500,
+  'docs/backlog.md': 2000,
 };
 
 let failed = false;
