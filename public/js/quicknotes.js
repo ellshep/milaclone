@@ -1,7 +1,7 @@
 'use strict';
 
 import { state } from './state.js';
-import { api } from './api.js';
+import { api, retryDelay } from './api.js';
 import { createSaveQueue } from './savequeue.js';
 import { autoGrow, colorVar, lucideEl, refreshIcons, toast, rid, daysUntil, dueInfo } from './util.js';
 import { screenToWorld } from './viewport.js';
@@ -137,6 +137,7 @@ async function load() {
 const saves = createSaveQueue({
   send: api.patch,
   delay: 200,
+  retryDelay,
   current: (id, key) => listById(id)?.[key],
   // The server merges task edits with changes made elsewhere (the canvas card,
   // another device); show its result if it differs.
@@ -302,8 +303,12 @@ function closeQuickNotes() {
   // once the last write has actually landed
   if (qn.dirty && state.view.canvas) {
     const id = state.view.canvas.id;
-    qn.dirty = false;
-    sent.then(() => openCanvas(id));
+    // a save that failed is still queued: keep the board as it is until it lands
+    sent.then(() => {
+      if (saves.pending()) return;
+      qn.dirty = false;
+      openCanvas(id);
+    });
   }
 }
 

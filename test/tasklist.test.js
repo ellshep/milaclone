@@ -5,7 +5,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normTask, isBlank, withIds, newTask, merge } = require('../tasklist');
+const { normTask, isBlank, withIds, copyTasks, newTask, merge } = require('../tasklist');
 
 let n = 0;
 const makeId = () => 'new' + n++;
@@ -108,4 +108,48 @@ test('merge: adds and deletes on both sides survive, unknown fields are kept', (
     { id: 'm', text: 'Added here' },
     { id: 's', text: 'Added on the server' },
   ]);
+});
+
+test('withIds can make ids unique across lists, and a renamed task drops importId and focusOrder', () => {
+  const seen = new Set();
+  const first = withIds([{ id: 'p1', text: 'Socks', importId: 'x', focusOrder: 1 }], makeId, seen);
+  const second = withIds([{ id: 'p1', text: 'Socks', importId: 'x', focusOrder: 1 }], makeId, seen);
+  assert.deepEqual(first, [{ id: 'p1', text: 'Socks', importId: 'x', focusOrder: 1 }]);
+  assert.notEqual(second[0].id, 'p1');
+  assert.equal(second[0].importId, undefined);
+  assert.equal(second[0].focusOrder, undefined);
+});
+
+test('copyTasks gives every task a fresh id', () => {
+  const orig = [{ id: 'a', text: 'Socks', importId: 'x' }, { text: 'no id' }];
+  const copy = copyTasks(orig, makeId);
+  assert.equal(copy.length, 2);
+  assert.ok(copy.every(t => t.id && t.id !== 'a'));
+  assert.equal(copy[0].text, 'Socks');
+  assert.equal(copy[0].importId, undefined);
+  assert.equal(orig[0].id, 'a', 'the original is untouched');
+});
+
+test('merge: a base with missing or repeated ids lets the client list win', () => {
+  const server = [
+    { id: 't_1', text: 'Milk' },
+    { id: 't_2', text: 'Eggs' },
+  ];
+  const mine = [
+    { id: 'r1', text: 'Milk' },
+    { id: 'r2', text: 'Eggs', done: true },
+  ];
+  assert.deepEqual(merge([{ text: 'Milk' }, { text: 'Eggs' }], server, mine), mine);
+  assert.deepEqual(
+    merge(
+      [
+        { id: 'k', text: 'Milk' },
+        { id: 'k', text: 'Eggs' },
+      ],
+      server,
+      mine
+    ),
+    mine
+  );
+  assert.deepEqual(merge([null], server, mine), mine);
 });

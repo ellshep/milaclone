@@ -1,7 +1,7 @@
 'use strict';
 
 import { state, elMap } from './state.js';
-import { api } from './api.js';
+import { api, retryDelay } from './api.js';
 import { createSaveQueue } from './savequeue.js';
 import { toast, hexColor } from './util.js';
 import { render, renderCrumbs, refreshItem } from './cards.js';
@@ -118,6 +118,7 @@ const items = new Map(); // id -> the card object last edited, for retries and r
 const saves = createSaveQueue({
   send: api.patch,
   delay: 400,
+  retryDelay,
   current: (id, key) => items.get(id)?.data[key],
   onSaved(id, saved, patch) {
     const it = items.get(id);
@@ -148,6 +149,10 @@ export function trackTasks(it) {
   tracked.add(it);
   saves.track(it.id, it.data.tasks);
 }
+
+// Edits that haven't reached the server yet (queued, in flight, or failed and
+// waiting to retry): while there are any, don't replace the view with the server's copy.
+export const hasPendingSaves = () => saves.pending();
 
 // keepalive (64 KB body cap) is only needed while the page is going away.
 export function flushAllSaves(keepalive = true) {

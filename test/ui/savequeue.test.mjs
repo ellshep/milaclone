@@ -140,4 +140,80 @@ describe('save queue', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(sent).toHaveLength(0);
   });
+
+  it('stops retrying after six tries and keeps the edit for the next flush', async () => {
+    const { q, sent, server } = setup();
+    server.send.mockImplementation(async (id, body) => {
+      sent.push({ id, body });
+      return null;
+    });
+    q.edit('a', { title: 'x' });
+    await q.flush('a');
+    await vi.advanceTimersByTimeAsync(20 * 60000);
+    expect(sent).toHaveLength(7); // the first save plus six retries
+    expect(q.pending('a')).toBe(true);
+
+    server.send.mockImplementation(async (id, body) => {
+      sent.push({ id, body });
+      return { id, data: body.data };
+    });
+    await q.flush(); // e.g. the browser is back online
+    expect(sent).toHaveLength(8);
+    expect(q.pending()).toBe(false);
+  });
+
+  it('a newer edit queued while a save fails goes out on its own debounce', async () => {
+    const { q, sent, server, local } = setup();
+    let fail;
+    server.send.mockImplementationOnce(async (id, body) => {
+      sent.push({ id, body });
+      return new Promise(r => (fail = r));
+    });
+    q.edit('a', { title: 'Old' });
+    const inFlight = q.flush('a');
+    local.a.caption = 'New';
+    q.edit('a', { caption: 'New' });
+    fail(null);
+    await inFlight;
+    await vi.advanceTimersByTimeAsync(400); // the debounce, not the 2 s retry
+    expect(sent).toHaveLength(2);
+    expect(sent[1].body.data.caption).toBe('New');
+  });
+
+  it('counts a save in flight as pending', async () => {
+    const { q, server } = setup();
+    let land;
+    server.send.mockImplementationOnce(async (id, body) => new Promise(r => (land = () => r({ id, data: body.data }))));
+    q.edit('a', { title: 'x' });
+    const inFlight = q.flush('a');
+    expect(q.pending('a')).toBe(true);
+    expect(q.pending()).toBe(true);
+    land();
+    await inFlight;
+    expect(q.pending()).toBe(false);
+  });
+
+  it('a save without tasks leaves the task base alone', async () => {
+    const { q, sent, server } = setup();
+    q.track('a', [{ id: 't1', text: 'Milk' }]);
+    // the server's list has a task this surface hasn't shown yet
+    server.send.mockImplementationOnce(async (id, body) => {
+      sent.push({ id, body });
+      return {
+        id,
+        data: {
+          title: body.data.title,
+          tasks: [
+            { id: 't1', text: 'Milk' },
+            { id: 't2', text: 'Eggs' },
+          ],
+        },
+      };
+    });
+    q.edit('a', { title: 'Shopping' });
+    await q.flush('a');
+    q.edit('a', { tasks: [{ id: 't1', text: 'Milk', done: true }] });
+    await q.flush('a');
+    expect(sent[1].body.baseTasks).toEqual([{ id: 't1', text: 'Milk' }]); // so Eggs isn't read as deleted
+  });
 });
