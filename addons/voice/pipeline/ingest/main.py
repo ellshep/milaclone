@@ -13,6 +13,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from .config import Settings
 from .llm import preload
@@ -160,7 +161,9 @@ def create_app(settings: Settings | None = None, deps: Deps | None = None, start
         src = clean_source(source, "voice-note")
         ingest_id = deps.store.create(kind="text", source=src, status="extracting", transcript=text)
         log("ingest.received", id=ingest_id, kind="text", source=src, chars=len(text))
-        record = extract_and_create(deps, ingest_id, text, src)
+        # Extraction blocks for seconds (LLM, then the task API); off the event
+        # loop, other requests (uploads, /health) are answered meanwhile.
+        record = await run_in_threadpool(extract_and_create, deps, ingest_id, text, src)
         return {**_public(record), "speech": speech_for(record)}
 
     @app.get("/ingest/recent", dependencies=[Depends(auth)])

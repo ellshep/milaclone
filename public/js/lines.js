@@ -40,7 +40,7 @@ function rectOf(id) {
 const centre = r => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
 
 // Where the ray from the box's centre towards `to` leaves the box.
-export function edgePoint(r, to) {
+function edgePoint(r, to) {
   const c = centre(r);
   const dx = to.x - c.x,
     dy = to.y - c.y;
