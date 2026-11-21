@@ -1,6 +1,6 @@
 # Voice add-on notes (`addons/voice/`)
 
-Loaded when you work under `addons/voice/`. Optional and off by default: core code never imports from here, and everything reaches the board through the task API (`docs/task-api.md`). Overview in `README.md`, operation in `docs/voice-capture.md`, Alexa setup in `docs/alexa.md`. 1,500-word cap (`npm run check:docs`).
+Loaded when you work under `addons/voice/`. Optional and off by default: core code never imports from here, and everything reaches the board through the task API (`docs/task-api.md`). Overview in `README.md`, operation in `docs/voice-capture.md`, Alexa setup in `docs/alexa.md` (Worker) and `docs/alexa-home-assistant.md` (Home Assistant). 1,500-word cap (`npm run check:docs`).
 
 CI: `.github/workflows/voice-addon.yml` (Pipeline tests + Alexa worker tests, not required) runs only when `addons/voice/`, the compose file, `tasks-api.js` or the app `Dockerfile` change.
 
@@ -27,6 +27,7 @@ Its own npm package, deployed to Cloudflare with wrangler, not part of the Docke
 - Deploy settings are passed as `wrangler deploy --var INGEST_URL:… --var SKILL_ID:…` so the server's checkout stays unmodified.
 - The path to the server is a Cloudflare Tunnel (`cloudflared` Compose service, pinned image, profile `alexa`, token in `.env`); its hostname, single path and Access service-token policy live in the Cloudflare dashboard.
 - `skill/interaction-model.json` is pasted into the Alexa console.
+- A second, no-code route needs no Worker or tunnel: Home Assistant's Alexa Devices integration (2026.7+) exposes Alexa's to-do list, and a Home Assistant automation posts each new item to `/ingest/text` over the local network and removes it from the list (`docs/alexa-home-assistant.md`; only docs live in the repo, the YAML runs in Home Assistant).
 - Tests: `cd addons/voice/alexa && npm test` (node:test with a made-up certificate chain); the `Alexa worker tests` job also dry-run bundles with wrangler.
 
 ## Env vars

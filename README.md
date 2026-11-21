@@ -159,7 +159,8 @@ board works the same without them.
 - **Voice capture** ([addons/voice](addons/voice/README.md)): speak a note on
   your phone or to an Echo and the to-dos in it land in your Inbox. Uses
   third-party services (Deepgram for speech-to-text, an LLM provider, and
-  Cloudflare for Alexa), so read its page before turning it on.
+  Cloudflare for the Alexa skill, or Home Assistant for the private Alexa
+  route), so read its page before turning it on.
 
 ## Your data
 
