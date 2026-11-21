@@ -14,7 +14,12 @@ export default defineConfig({
       include: ['public/js/**'],
       // ponytail: floor applies per unit-tested module; add a glob entry as more modules get unit tests
       thresholds: {
-        'public/js/{state,util,viewport,focusorder}.js': { lines: 80, branches: 80, functions: 80, statements: 80 },
+        'public/js/{state,util,viewport,savequeue,focusorder}.js': {
+          lines: 80,
+          branches: 80,
+          functions: 80,
+          statements: 80,
+        },
       },
     },
   },

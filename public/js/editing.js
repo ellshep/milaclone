@@ -2,6 +2,7 @@
 
 import { state, elMap } from './state.js';
 import { api } from './api.js';
+import { createSaveQueue } from './savequeue.js';
 import { toast, hexColor } from './util.js';
 import { render, renderCrumbs, refreshItem } from './cards.js';
 import { closePalette, closeCtx } from './menus.js';
@@ -85,13 +86,11 @@ export function exitEdit() {
   if (it) delete it._fresh;
   if (hex) {
     // One PATCH carries any queued body edit too, so a later flush can't undo the hex.
-    const p = pending.get(it.id);
-    pending.delete(it.id);
-    clearTimeout(saveTimers.get(it.id));
+    const queued = saves.take(it.id);
     it.type = 'swatch';
     Object.assign(it.data, { hex, text: hex });
     refreshItem(it);
-    api.patch(it.id, { type: 'swatch', data: { ...p?.patch, hex, text: hex } }).then(saved => {
+    api.patch(it.id, { type: 'swatch', data: { ...queued, hex, text: hex } }).then(saved => {
       if (saved) return;
       it.type = 'note'; // the server still has a note
       refreshItem(it);
@@ -113,74 +112,46 @@ export function renameSelected() {
   }
 }
 
-// Edits are debounced per item. Every field changed during the debounce window
-// is accumulated, so typing a title and then a body sends both, not just the last.
-const saveTimers = new Map();
-const pending = new Map(); // item id -> { it, patch }
-const clone = v => JSON.parse(JSON.stringify(v));
+// Edits are debounced per item and every field changed in the window goes out
+// together (savequeue.js has the protocol: retries, task-list bases, merging).
+const items = new Map(); // id -> the card object last edited, for retries and refreshes
+const saves = createSaveQueue({
+  send: api.patch,
+  delay: 400,
+  current: (id, key) => items.get(id)?.data[key],
+  onSaved(id, saved, patch) {
+    const it = items.get(id);
+    if (!it) return;
+    if (it.type === 'board' && patch.title != null) renderCrumbs();
+    // Another device changed this list meanwhile: show the merged result
+    // (unless more local edits are already queued; they'll merge on their save).
+    if (patch.tasks && !saves.pending(id) && JSON.stringify(saved.data.tasks) !== JSON.stringify(it.data.tasks)) {
+      it.data.tasks = saved.data.tasks;
+      refreshItem(it);
+    }
+  },
+});
 
 export function saveData(it, patch) {
   Object.assign(it.data, patch);
   if (it.type === 'board' && patch.title != null) it._childTitle = patch.title;
   if (it.type === 'board' && patch.icon != null) it._childIcon = patch.icon;
-  const p = pending.get(it.id) || { it, patch: {} };
-  Object.assign(p.patch, patch);
-  pending.set(it.id, p);
-  clearTimeout(saveTimers.get(it.id));
-  saveTimers.set(
-    it.id,
-    setTimeout(() => flushSave(it.id), 400)
-  );
+  items.set(it.id, it);
+  saves.edit(it.id, patch);
 }
 
-// Remember the task list as the server last confirmed it; edits are sent along
-// with it so the server can merge instead of overwriting another device's changes.
+// Remember the task list as the server sent this card, once per card object
+// (a re-render of the same card keeps the base; a reload brings a new object).
+const tracked = new WeakSet();
 export function trackTasks(it) {
-  if (it.type === 'todo' && !it._baseTasks) it._baseTasks = clone(it.data.tasks || []);
-}
-
-// A save that failed but may work later goes back in the queue with the item's
-// current values for those fields (never the old ones, so a retry can't undo a
-// newer edit) and is retried with backoff, or as soon as the network returns.
-const retryCount = new Map();
-function requeue(it, patch) {
-  const p = pending.get(it.id) || { it, patch: {} };
-  for (const k of Object.keys(patch)) if (!(k in p.patch)) p.patch[k] = it.data[k];
-  pending.set(it.id, p);
-  const n = (retryCount.get(it.id) || 0) + 1;
-  retryCount.set(it.id, n);
-  clearTimeout(saveTimers.get(it.id));
-  saveTimers.set(
-    it.id,
-    setTimeout(() => flushSave(it.id), Math.min(60000, 1000 * 2 ** n))
-  );
-}
-
-async function flushSave(id, keepalive = false) {
-  const p = pending.get(id);
-  if (!p) return;
-  pending.delete(id);
-  clearTimeout(saveTimers.get(id));
-  const { it, patch } = p;
-  const body = { data: patch };
-  if (patch.tasks) body.baseTasks = it._baseTasks || [];
-  const saved = await api.patch(id, body, keepalive);
-  if (saved === null) return requeue(it, patch);
-  retryCount.delete(id);
-  if (it.type === 'board' && patch.title != null) renderCrumbs();
-  if (!saved || !patch.tasks) return;
-  it._baseTasks = clone(saved.data.tasks || []);
-  // Another device changed this list meanwhile: show the merged result
-  // (unless more local edits are already queued; they'll merge on their save).
-  if (!pending.has(id) && JSON.stringify(saved.data.tasks) !== JSON.stringify(it.data.tasks)) {
-    it.data.tasks = saved.data.tasks;
-    refreshItem(it);
-  }
+  if (it.type !== 'todo' || tracked.has(it)) return;
+  tracked.add(it);
+  saves.track(it.id, it.data.tasks);
 }
 
 // keepalive (64 KB body cap) is only needed while the page is going away.
 export function flushAllSaves(keepalive = true) {
-  return Promise.all([...pending.keys()].map(id => flushSave(id, keepalive)));
+  return saves.flush(undefined, { keepalive });
 }
 // Send queued edits before the tab is closed, reloaded or backgrounded.
 document.addEventListener('visibilitychange', () => {
@@ -195,7 +166,7 @@ window.addEventListener('online', () => flushAllSaves(false));
 const trashed = [];
 async function deleteItems(ids) {
   if (!ids.length) return;
-  await Promise.all(ids.map(id => flushSave(id))); // keep last-second edits so Undo brings them back too
+  await Promise.all(ids.map(id => saves.flush(id))); // keep last-second edits so Undo brings them back too
   await Promise.all(ids.map(id => api.remove(id)));
   const entry = [...ids];
   trashed.push(entry);
