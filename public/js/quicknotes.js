@@ -109,6 +109,12 @@ function normTask(t) {
   };
 }
 
+// The base sent with an edit is built exactly like the edited copy (normTask,
+// same ids), so filled-in defaults such as `starred: false` don't count as
+// edits and overwrite a star or due date set on another device.
+const clone = v => JSON.parse(JSON.stringify(v));
+const withBase = tasks => ({ tasks, baseTasks: clone(tasks) });
+
 async function load() {
   const r = await api.todos();
   qn.rootCanvasId = r.rootCanvasId;
@@ -120,8 +126,7 @@ async function load() {
     title: l.title || 'To-do',
     color: l.color || null,
     tags: Array.isArray(l.tags) ? l.tags : [],
-    tasks: (l.tasks || []).map(normTask),
-    baseTasks: l.tasks || [], // as the server has it; sent with edits so they merge
+    ...withBase((l.tasks || []).map(normTask)),
     createdAt: l.createdAt,
   }));
   qn.loaded = true;
@@ -153,17 +158,38 @@ function flushSaves(only, keepalive = false) {
     const list = listById(id);
     const req = { data: body };
     if (body.tasks && list) req.baseTasks = list.baseTasks || [];
-    sent.push(api.patch(id, req, keepalive).then(saved => adoptMerged(list, saved)));
+    sent.push(
+      api.patch(id, req, keepalive).then(saved => (saved === null ? requeue(list, body) : adoptMerged(list, saved)))
+    );
   }
   return sent;
+}
+
+// A save that may work later goes back in the queue with the list's current
+// values (never the failed ones, so a retry can't undo a newer edit) and is
+// retried with backoff, or as soon as the network returns.
+const retryCount = new Map();
+function requeue(list, body) {
+  if (!list) return;
+  const p = savePending.get(list.id) || {};
+  for (const k of Object.keys(body)) if (!(k in p)) p[k] = list[k];
+  savePending.set(list.id, p);
+  const n = (retryCount.get(list.id) || 0) + 1;
+  retryCount.set(list.id, n);
+  clearTimeout(saveTimers.get(list.id));
+  saveTimers.set(
+    list.id,
+    setTimeout(() => flushSaves(list.id), Math.min(60000, 1000 * 2 ** n))
+  );
 }
 
 // The server merges task edits with changes made elsewhere (the canvas card,
 // another device); take its result as the new base and show it if it differs.
 function adoptMerged(list, saved) {
+  if (list) retryCount.delete(list.id);
   if (!saved || !list || !Array.isArray(saved.data.tasks)) return;
-  list.baseTasks = saved.data.tasks;
   const merged = saved.data.tasks.map(normTask);
+  list.baseTasks = clone(merged);
   if (savePending.has(list.id) || JSON.stringify(merged) === JSON.stringify(list.tasks)) return;
   list.tasks = merged;
   render();
@@ -178,6 +204,7 @@ document.addEventListener('visibilitychange', async () => {
   }
 });
 window.addEventListener('pagehide', () => flushSaves(null, true));
+window.addEventListener('online', () => flushSaves(null));
 const saveTasks = list => save(list, { tasks: list.tasks });
 const saveMeta = list => save(list, { title: list.title, tags: list.tags });
 
