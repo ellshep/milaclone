@@ -7,12 +7,13 @@
 // card, the same lists the canvas and Quick notes edit. Tasks created here land
 // in an "Inbox" todo card on Home (made on first use, its id kept in
 // meta.inboxItemId) unless the request names another list. Both clients merge
-// task arrays three-way (routes.js mergeTasks), so tasks appended here survive
+// task arrays three-way (tasklist.js merge), so tasks appended here survive
 // an edit made from a stale copy, and the extra fields below are passed through.
 
 const crypto = require('crypto');
 const express = require('express');
 const { db, stmt, id, rootCanvasId, rowToItem } = require('./db');
+const { isBlank, newTask } = require('./tasklist');
 
 const router = express.Router();
 
@@ -133,7 +134,6 @@ const normTitle = s =>
 // ---- Lists -------------------------------------------------------------------
 const todoCards = () => stmt.todoItems.all().map(rowToItem);
 const tasksOf = card => (Array.isArray(card.data.tasks) ? card.data.tasks : []);
-const isBlank = t => typeof t.text !== 'string' || !t.text.trim();
 
 function saveCard(card) {
   stmt.updateItem.run({
@@ -239,23 +239,23 @@ router.post(
       } else {
         card = inboxCard();
       }
-      const task = {
-        id: id('t_'),
-        text,
-        done: false,
-        starred,
-        due,
-        tags,
-        note,
-        createdAt: Date.now(),
-        source,
-        pinned: false,
-        stale: false,
-        rankScore: null,
-        rankReason: null,
-        rankedAt: null,
-        importId,
-      };
+      const task = newTask(
+        {
+          text,
+          starred,
+          due,
+          tags,
+          note,
+          source,
+          pinned: false,
+          stale: false,
+          rankScore: null,
+          rankReason: null,
+          rankedAt: null,
+          importId,
+        },
+        id('t_')
+      );
       card.data.tasks = tasksOf(card).concat([task]);
       saveCard(card);
       return { status: 201, body: { task: listView(task, card), created: true } };

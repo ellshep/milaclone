@@ -23,6 +23,7 @@ const {
   toRich,
 } = require('./db');
 const { exportMarkdown } = require('./export-md');
+const tasklist = require('./tasklist');
 
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -105,37 +106,6 @@ function setUploadHeaders(res, filePath) {
   if (!INLINE_UPLOAD.test(filePath)) res.set('Content-Disposition', 'attachment');
 }
 router.use('/uploads', express.static(UPLOAD_DIR, { setHeaders: setUploadHeaders }));
-
-// Three-way merge of a todo's task array. `base` is the list the client last got
-// from the server, `mine` its edited copy, `server` what is stored now (another
-// device or the Quick notes screen may have written since). Fields the client
-// changed win; everything else keeps the server's value, and tasks added or
-// deleted on either side stay added or deleted.
-function mergeTasks(base, server, mine) {
-  const byId = list => new Map(list.map(t => [t.id, t]));
-  const B = byId(base),
-    S = byId(server),
-    M = byId(mine);
-  const out = [];
-  for (const t of mine) {
-    const b = B.get(t.id),
-      s = S.get(t.id);
-    if (b && !s) continue; // deleted elsewhere
-    if (!b || !s) {
-      out.push(t);
-      continue;
-    } // added here
-    const merged = Object.assign({}, s);
-    // Only keys this client sent count: one it doesn't know (e.g. `indent` from
-    // the canvas, edited in an older Quick notes) isn't a deletion.
-    for (const k of Object.keys(t)) {
-      if (JSON.stringify(t[k]) !== JSON.stringify(b[k])) merged[k] = t[k];
-    }
-    out.push(merged);
-  }
-  for (const t of server) if (!B.has(t.id) && !M.has(t.id)) out.push(t); // added elsewhere
-  return out;
-}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -229,6 +199,7 @@ router.post('/api/item', (req, res) => {
     createdAt: Date.now(),
   };
   if (RICH_TYPES.has(item.type)) item.data = toRich(item.data);
+  if (Array.isArray(item.data.tasks)) item.data.tasks = tasklist.withIds(item.data.tasks, () => id('t_'));
 
   db.transaction(() => {
     // A board item owns a freshly created child canvas.
@@ -283,8 +254,10 @@ router.patch('/api/item/:id', (req, res) => {
   if (b.data && typeof b.data === 'object') {
     const stored = it.data.tasks;
     it.data = Object.assign({}, it.data, b.data);
-    if (Array.isArray(b.baseTasks) && Array.isArray(b.data.tasks) && Array.isArray(stored)) {
-      it.data.tasks = mergeTasks(b.baseTasks, stored, b.data.tasks);
+    if (Array.isArray(b.data.tasks)) {
+      const mine = tasklist.withIds(b.data.tasks, () => id('t_'));
+      it.data.tasks =
+        Array.isArray(b.baseTasks) && Array.isArray(stored) ? tasklist.merge(b.baseTasks, stored, mine) : mine;
     }
   }
 
