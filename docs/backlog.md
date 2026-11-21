@@ -22,6 +22,7 @@ Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-c
 - **AU8** The service worker caches every query-string URL (each search prefix) and never evicts; trashed images stay on the phone (`sw.js:7`). Fix: don't cache same-origin URLs with `url.search`.
 - **AU9** Cut-and-paste leaves an invisible, unselectable line on the old board when one end stays behind (`db.js:248`, `lines.js:109`). Fix: in `moveItemDeep`, turn that end into a free point at the card's old position.
 - **AU10** Copy/duplicate within 400 ms of an edit miss the last words (`clipboard.js:42`). Fix: `await flushAllSaves(false)` at the start of `placeAll`.
+- **V1** Next phases, planned with the owner on 2026-11-20 (decisions N1–N17, work items M1–M5 in `docs/next-phases.md`): Microsoft To Do import (M1), focus order, `/focus` page, nightly ranking and retention (M2), filing into lists (M3), Pebble watch app (M4), morning digest at 7:30 on weekdays, which settles V3 (M5). Replaces V2.
 
 ## Later
 
@@ -32,20 +33,16 @@ Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-c
 - **AU15** `api.create`/`api.remove` throw instead of toasting when offline.
 - **AU16** `deleteList` in Quick notes flushes a save without `baseTasks`.
 - **AU17** File cards link `data.src` without checking the URL scheme.
-- **V1** Nightly ranking and the focus view ("Phase 4"): the task fields `pinned`, `stale`, `rankScore`, `rankReason`, `rankedAt` and `RANK_*` config are reserved for it (`docs/task-api.md`). Not built.
-- **V2** Daily resurfacing / morning digest ("Phase 5"). Not built; blocked on V3.
 - **U1.1, U1.4, U1.5** Milanote migration: backup and inventory, staged import, reconciliation report. Specs in `docs/next-updates.md`.
 
 ## Needs a decision
 
 - **DM3** Turn `db.js` into an item store that owns the board/canvas duality (write-through, projection, row serialisation). Conflicts with the documented "routes call prepared statements directly"; worth reopening because `tasks-api.js` is a second caller with the same invariants.
-- **V3** Morning digest time, and whether weekends differ.
-- **V4** Voice tags: let the model assign them freely (today: only when the speaker names a category), or limit them to an allowlist of existing tags?
 
 ## Closed
 
 - **DM1** `tasklist.js` owns the task shape, blank rule, ids and the merge; the merge compares with defaults filled in.
 - **AU1, AU2, AU3, AU11** Failed saves now retry, big background saves skip `keepalive`, Quick notes' base no longer erases stars and due dates; `e2e/saves.spec.js` covers all three.
-
+- **V4** Voice tags are limited to tags already on the list (an `enum` built from the 100 most used). Done in #63.
 - **AU7** `/ingest/text` blocked the pipeline's event loop during the model call. Fixed in #62.
 - **AU13** `HANDOFF-NOTES.md` working log at the repo root. Deleted; open items moved here (#67).

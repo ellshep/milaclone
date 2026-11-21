@@ -63,14 +63,29 @@ def test_text_ingest_creates_tasks_synchronously(client, env):
     assert stored["kind"] == "text"
 
 
+def test_extraction_gets_the_existing_tags(client, env):
+    env.app_api.tasks = [{"id": "t_a", "text": "Old", "tags": ["taste", "Money"]},
+                         {"id": "t_b", "text": "Older", "tags": ["money", " "]},
+                         {"id": "t_c", "text": "Oldest"}]
+    assert client.post("/ingest/text", headers=env.auth, json={"text": "Buy milk"}).status_code == 200
+    assert env.deps.extractor.tags[-1] == ("Money", "taste")  # most used first, first spelling kept
+
+
+def test_extraction_runs_without_tags_when_the_task_api_is_down(client, env):
+    env.deps.tasks.token = ""
+    r = client.post("/ingest/text", headers=env.auth, json={"text": "Buy milk"})
+    assert env.deps.extractor.tags[-1] == ()
+    assert r.json()["status"] == "error"  # creating the tasks then fails as before
+
+
 def test_text_ingest_does_not_block_other_requests(client, env):
     started, release = threading.Event(), threading.Event()
     slow = env.deps.extractor
 
-    def blocking(transcript):
+    def blocking(transcript, tags=()):
         started.set()
         release.wait(5)
-        return slow(transcript)
+        return slow(transcript, tags)
 
     env.deps.extractor = blocking
     result = {}
