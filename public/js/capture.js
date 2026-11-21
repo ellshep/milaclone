@@ -18,7 +18,7 @@ const CELL_H = 240;
 
 // Where pasted content lands: under the last pointer position, else mid-screen.
 let lastPointer = null;
-export function pointerWorld() {
+function pointerWorld() {
   const p = lastPointer || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
   return screenToWorld(p.x, p.y);
 }
@@ -68,7 +68,7 @@ export async function addFiles(files, at = pointerWorld()) {
 
 // A URL becomes a link card (it plays inline if it's a video/music embed);
 // other text becomes a note.
-export async function addText(text, at = pointerWorld()) {
+async function addText(text, at = pointerWorld()) {
   const t = String(text || '').trim();
   if (!t) return null;
   const x = Math.round(at.x - 120);
@@ -108,7 +108,7 @@ function onCopy(e, cut) {
 // so without this every later cmd+V would move the card again.
 const movedCuts = new Set();
 
-export async function pasteData(dt) {
+async function pasteData(dt) {
   const text = dt.getData('text/plain');
   const marker = parseClipMarker(text);
   if (marker) {

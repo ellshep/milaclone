@@ -182,12 +182,16 @@ npm test             # API tests (80% coverage floor)
 npm run test:ui      # front-end unit tests (Vitest)
 npm run test:e2e     # Playwright (run `npx playwright install` once first)
 npm run lint && npm run format
+npm run deadcode     # unused files, exports and dependencies (knip)
 cd addons/voice/pipeline && pip install -r requirements-dev.txt && python -m pytest   # voice add-on
 ```
 
 The backend is Express with `better-sqlite3`. The frontend is vanilla ES modules
 with no framework, and the only build step is the rich-text editor, which the
 server bundles at boot. [CLAUDE.md](CLAUDE.md) explains the architecture.
+
+Want to help? Read [CONTRIBUTING.md](CONTRIBUTING.md) first, including its
+rules for AI-assisted contributions. Security problems: [SECURITY.md](SECURITY.md).
 
 ## License
 

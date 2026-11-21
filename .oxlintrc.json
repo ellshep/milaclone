@@ -1,14 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "env": { "node": true, "es2024": true },
-  "ignorePatterns": [
-    ".lavish/**",
-    ".claude/**",
-    ".impeccable/**",
-    "public/vendor/**",
-    "coverage/**",
-    "playwright-report/**"
-  ],
+  "ignorePatterns": [".claude/**", "public/vendor/**", "coverage/**", "playwright-report/**"],
   "rules": {
     "no-undef": "error"
   },

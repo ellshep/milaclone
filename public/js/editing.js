@@ -173,7 +173,7 @@ window.addEventListener('pagehide', flushAllSaves);
 // restores them with everything that was inside them. Each undo entry is the
 // list of ids one delete action trashed.
 const trashed = [];
-export async function deleteItems(ids) {
+async function deleteItems(ids) {
   if (!ids.length) return;
   await Promise.all(ids.map(id => flushSave(id))); // keep last-second edits so Undo brings them back too
   await Promise.all(ids.map(id => api.remove(id)));
