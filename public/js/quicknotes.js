@@ -93,7 +93,8 @@ function saveSettings() {
 // ---------------------------------------------------------------------------
 
 // Tasks gain their Quick-notes fields on read; blank rows (the canvas editor's
-// "type here" placeholders) are never surfaced as tasks.
+// "type here" placeholders) are never surfaced as tasks. Keep the defaults in
+// step with the server's tasklist.js normTask.
 function normTask(t) {
   return {
     ...t, // keep fields Quick notes doesn't use (the canvas's `indent`)

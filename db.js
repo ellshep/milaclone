@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
+const { withIds } = require('./tasklist');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'board.db');
@@ -315,11 +316,32 @@ function migrateRichText() {
 }
 migrateRichText();
 
+// Older rows (imports, early canvas cards) can hold tasks with no id or a
+// duplicated one, which the merge and PATCH /api/tasks/:id can't address. Give
+// them ids once; writes keep them that way (routes.js). Only adds ids, so no backup.
+function migrateTaskIds() {
+  const update = db.prepare('UPDATE items SET data = ? WHERE id = ?');
+  let fixed = 0;
+  db.transaction(() => {
+    for (const r of db.prepare("SELECT id, data FROM items WHERE type = 'todo'").all()) {
+      const data = JSON.parse(r.data || '{}');
+      if (!Array.isArray(data.tasks)) continue;
+      const tasks = withIds(data.tasks, () => id('t_'));
+      if (tasks === data.tasks) continue;
+      update.run(JSON.stringify({ ...data, tasks }), r.id);
+      fixed++;
+    }
+  })();
+  return fixed;
+}
+migrateTaskIds();
+
 module.exports = {
   DB_FILE,
   RICH_TYPES,
   toRich,
   migrateRichText,
+  migrateTaskIds,
   db,
   stmt,
   id,
