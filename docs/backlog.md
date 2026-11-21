@@ -12,7 +12,7 @@ Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-c
 
 ## Now
 
-- **DM2** One client save queue shared by the canvas and Quick notes (`editing.js:117-170`, `quicknotes.js:132-182`): pending edits, base tracking, flush, retry, adopt. The PATCH is the seam (`api.js` + an in-memory adapter for Vitest). Puts the AU1/AU2 retry and keepalive logic, now duplicated in both files, in one place.
+Nothing in progress: pick from Next.
 
 ## Next
 
@@ -44,8 +44,8 @@ Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-c
 
 ## Closed
 
+- **DM2** `public/js/savequeue.js` is the one client save protocol (debounce, base, retry, adopt) for the canvas and Quick notes, unit-tested in Vitest.
 - **DM1** `tasklist.js` owns the task shape, blank rule, ids and the merge; the merge compares with defaults filled in.
 - **AU1, AU2, AU3, AU11** Failed saves now retry, big background saves skip `keepalive`, Quick notes' base no longer erases stars and due dates; `e2e/saves.spec.js` covers all three.
-
 - **AU7** `/ingest/text` blocked the pipeline's event loop during the model call. Fixed in #62.
 - **AU13** `HANDOFF-NOTES.md` working log at the repo root. Deleted; open items moved here (#67).
