@@ -24,9 +24,9 @@ npm run check:docs            # word caps on the CLAUDE.md files
 
 ## How we work
 
-- **Scope comes first.** Build only what the task, roadmap ID or tracked item asks for. No speculative options, flags, wrappers or "while I'm here" features. See `CONTRIBUTING.md`.
+- **Scope comes first.** Build only what the task, roadmap ID or `docs/backlog.md` item asks for. No speculative options, flags, wrappers or "while I'm here" features. See `CONTRIBUTING.md`.
 - **Prefer deleting.** Reuse what exists before adding a helper, dependency or module. A PR should say what it removes, or why nothing.
-- **No working logs in the repo.** Don't add handoff notes, phase logs or status files. Decisions go in the tracker or the PR body; lasting facts go in the nearest `CLAUDE.md` or `docs/`.
+- **No working logs in the repo.** Don't add handoff notes, phase logs or status files. Open work and owner decisions go in `docs/backlog.md` (update it in the same PR: delete an item's line when it ships), reasoning in the PR body; lasting facts go in the nearest `CLAUDE.md` or `docs/`.
 - **Keep these files short.** Add a line to a `CLAUDE.md` only when not knowing it would cause a bug. Describe features in the code's header comment, not here.
 - **Never** skip or `.only` a test, lower a coverage floor, or edit branch protection to get green.
 
