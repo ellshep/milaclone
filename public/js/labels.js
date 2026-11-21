@@ -16,7 +16,7 @@ const filter = { labels: new Set(), hide: false };
 const labelsOf = it => (Array.isArray(it.data.labels) ? it.data.labels : []);
 const labelled = it => it.type !== 'line';
 
-export function boardLabels() {
+function boardLabels() {
   const all = new Set();
   for (const it of state.view.items) for (const l of labelsOf(it)) all.add(l);
   return [...all].sort((a, b) => a.localeCompare(b));

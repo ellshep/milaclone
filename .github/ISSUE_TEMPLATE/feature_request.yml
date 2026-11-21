@@ -1,0 +1,20 @@
+name: Idea or feature request
+description: A problem milaclone could solve. The app aims to stay small, so many ideas will be declined.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today? Describe the problem before any solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: Optional. The smallest change that would solve it.
+  - type: textarea
+    id: workaround
+    attributes:
+      label: How you handle it now
