@@ -46,11 +46,13 @@ function normTask(t) {
 // list, but never surfaced as a task (task API, export).
 const isBlank = t => !isObj(t) || typeof t.text !== 'string' || !t.text.trim();
 
-// Rows are keyed by id (reorder, merge, PATCH /api/tasks/:id), so every task
-// needs a unique one. Returns the same array when nothing needed fixing.
-function withIds(tasks, makeId) {
+// Rows are keyed by id (reorder, merge, PATCH /api/tasks/:id, /focus), so every
+// task needs an id no other task has. A task given a fresh id loses `importId`
+// and `focusOrder`, which belong to the task that kept the old one. Pass the
+// same `seen` set across lists to make ids unique across cards. Returns the same
+// array when nothing needed fixing.
+function withIds(tasks, makeId, seen = new Set()) {
   if (!Array.isArray(tasks)) return [];
-  const seen = new Set();
   let changed = false;
   const out = tasks.filter(isObj).map(t => {
     if (t.id && !seen.has(t.id)) {
@@ -58,12 +60,16 @@ function withIds(tasks, makeId) {
       return t;
     }
     changed = true;
-    const fresh = { ...t, id: makeId() };
+    const { importId, focusOrder, ...rest } = t; // oxlint-disable-line no-unused-vars -- dropped on purpose
+    const fresh = { ...rest, id: makeId() };
     seen.add(fresh.id);
     return fresh;
   });
   return changed || out.length !== tasks.length ? out : tasks;
 }
+
+// The tasks of a copied card: every task gets a fresh id (see withIds).
+const copyTasks = (tasks, makeId) => withIds(tasks, makeId, new Set(tasks.map(t => t && t.id)));
 
 // A new open task with an id and a creation time; `fields` may add anything.
 const newTask = (fields, taskId, now = Date.now()) => ({ id: taskId, done: false, createdAt: now, ...fields });
@@ -79,6 +85,10 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // star, and only fields the client sent count, so one it doesn't know about
 // (e.g. `indent` from an older Quick notes) isn't a deletion.
 function merge(base, server, mine) {
+  // A base with missing or repeated ids comes from a page loaded before ids were
+  // repaired: it can't be matched to the server's tasks, so the client's list wins.
+  const baseIds = base.map(t => isObj(t) && t.id);
+  if (!baseIds.every(Boolean) || new Set(baseIds).size !== baseIds.length) return mine;
   const byId = list => new Map(list.map(t => [t.id, t]));
   const B = byId(base),
     S = byId(server),
@@ -102,4 +112,4 @@ function merge(base, server, mine) {
   return out;
 }
 
-module.exports = { normTask, isBlank, withIds, newTask, merge };
+module.exports = { normTask, isBlank, withIds, copyTasks, newTask, merge };

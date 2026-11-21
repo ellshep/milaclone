@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
-const { withIds } = require('./tasklist');
+const { withIds, copyTasks } = require('./tasklist');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'board.db');
@@ -240,6 +240,7 @@ function copyItemDeep(itemId, canvasId, x, y) {
     if (!isRoot && strandedLine(r, map)) return;
     const data = r.data ? JSON.parse(r.data) : {};
     if (data.childCanvasId) data.childCanvasId = map.get(data.childCanvasId);
+    if (Array.isArray(data.tasks)) data.tasks = copyTasks(data.tasks, () => id('t_'));
     // A shortcut to a board copied alongside it opens the copy, not the original.
     if (map.has(data.targetCanvasId)) data.targetCanvasId = map.get(data.targetCanvasId);
     for (const end of [data.from, data.to]) if (end && map.has(end.id)) end.id = map.get(end.id);
@@ -316,17 +317,20 @@ function migrateRichText() {
 }
 migrateRichText();
 
-// Older rows (imports, early canvas cards) can hold tasks with no id or a
-// duplicated one, which the merge and PATCH /api/tasks/:id can't address. Give
-// them ids once; writes keep them that way (routes.js). Only adds ids, so no backup.
+// Older rows (imports, early canvas cards, copied cards) can hold tasks with no
+// id, or an id another task also has, in the same list or another card. The
+// merge, PATCH /api/tasks/:id and /focus can't address those. Give them fresh
+// ids at boot: the oldest card keeps an id it shares. Writes and copies keep ids
+// unique from then on (routes.js, copyItemDeep).
 function migrateTaskIds() {
   const update = db.prepare('UPDATE items SET data = ? WHERE id = ?');
+  const seen = new Set();
   let fixed = 0;
   db.transaction(() => {
-    for (const r of db.prepare("SELECT id, data FROM items WHERE type = 'todo'").all()) {
+    for (const r of db.prepare("SELECT id, data FROM items WHERE type = 'todo' ORDER BY createdAt, rowid").all()) {
       const data = JSON.parse(r.data || '{}');
       if (!Array.isArray(data.tasks)) continue;
-      const tasks = withIds(data.tasks, () => id('t_'));
+      const tasks = withIds(data.tasks, () => id('t_'), seen);
       if (tasks === data.tasks) continue;
       update.run(JSON.stringify({ ...data, tasks }), r.id);
       fixed++;

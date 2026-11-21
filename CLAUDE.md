@@ -54,7 +54,7 @@ Node backend (`server.js` → `routes.js` → `db.js`, plus `tasks-api.js` and `
 
 **Export/import round-trip:** `export-md.js` writes the Markdown shape `scripts/import-milanote-md.js` reads back — keep them in step (tested in `test/findkeep.api.test.js`).
 
-**Auto-save:** every edit fires a PATCH; data keys merge shallowly, last write wins per key — except todo `tasks`: clients send `baseTasks` and `tasklist.js` `merge` does a three-way merge per task field, comparing with defaults filled in and counting only fields the client sent, so neither a filled-in default nor a missing field erases another device's edit. Every write gives tasks unique ids, and `db.js` `migrateTaskIds` repairs old rows at boot. There's no realtime sync.
+**Auto-save:** every edit fires a PATCH; data keys merge shallowly, last write wins per key — except todo `tasks`: clients send `baseTasks` and `tasklist.js` `merge` does a three-way merge per task field, comparing with defaults filled in and counting only fields the client sent, so neither a filled-in default nor a missing field erases another device's edit. Task ids are unique across all cards: writes fill in missing ones, copies get fresh ones, and `db.js` `migrateTaskIds` repairs old rows at boot. There's no realtime sync.
 
 **Add-ons** (`addons/`) are optional and off by default; the board must work identically without them. Core code never imports from `addons/`; add-ons reach the board only through public HTTP APIs. Each add-on sits behind a Compose profile and has a README stating what it sends to third parties. Keep add-on docs inside the add-on folder, and keep personal setup details out of the repo.
 
