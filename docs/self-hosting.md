@@ -278,6 +278,24 @@ Assistant, make an automation with a **Webhook** trigger (ID
 example `milaclone {{ trigger.json.status }} ({{ trigger.json.commit[:7] }})`.
 A check that finds nothing new sends nothing.
 
+## The focus page on a second screen
+
+`/focus` is a full-screen page with your top three tasks (and, from its hover
+controls, the whole ranked list), made to sit on a screen next to your laptop
+all day. It never polls: it refetches when the window becomes visible again,
+or when you hover and press refresh.
+
+On a Mac:
+
+1. **An app window with no browser chrome.** In Safari, open
+   `https://mila.your-tailnet.ts.net/focus` and choose **File → Add to Dock**.
+   With Chrome instead:
+   `open -na "Google Chrome" --args --app=https://mila.your-tailnet.ts.net/focus`.
+2. **Open at login.** System Settings → General → Login Items → **+**, and pick
+   the web app (Safari puts it in `~/Applications`).
+3. **Leave display sleep on.** The screen can sleep overnight as usual; when it
+   wakes, the page is visible again and loads the current order.
+
 ## Run it as a service (auto-start on boot)
 
 Create `/etc/systemd/system/milaclone.service` (adjust the paths and user):

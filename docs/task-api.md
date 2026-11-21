@@ -96,7 +96,10 @@ The order:
 
 Left out: done, blank and `stale` tasks, to-do lists labelled **Reference**,
 and lists inside the **Templates** board on Home. The board serves the same
-order without a token at `GET /api/focus` for the `/focus` page.
+order without a token at `GET /api/focus` for the `/focus` page, which writes
+back through two more board routes: `POST /api/focus/:taskId/done`, and
+`PUT /api/focus/order` with `{ ids }`, the placed tasks top first (they get
+`focusOrder` 1, 2, …, every other task loses its placement, and `[]` resets).
 
 ```bash
 curl -sS "https://mila.your-tailnet.ts.net/api/tasks?view=focus&limit=3" \

@@ -34,7 +34,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
 
 ## M1 · Backlog import
 
-- [ ] **M1.1 `scripts/import-tasks-json.js`.** Reads a `milaclone-import/1`
+- [x] **M1.1 `scripts/import-tasks-json.js`.** Reads a `milaclone-import/1`
       file: `lists[]`, each with `name`, `target` (`{ new: true, title? }` or
       `{ listId }`) and `tasks[]` (`importId`, `title`, `note?`, `due?`,
       `starred?`, `tags?`).
@@ -51,7 +51,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
 
 ## M2 · Ranking and the focus page
 
-- [ ] **M2.1 Ordering in core.** One function computes the order from the
+- [x] **M2.1 Ordering in core.** One function computes the order from the
       task fields, so the focus page, the task API and the digest never
       disagree.
   - Tiers: overdue (most overdue first) → due today → due within 3 days →
@@ -63,16 +63,14 @@ with every add-on off. A box is ticked when its acceptance test lands.
     Templates board.
   - `GET /api/tasks?view=focus&limit=3` (task API, token) and a board route
     for the page.
-- [ ] **M2.2 `/focus` page.** Full screen, light and dark, large heavy type,
+- [x] **M2.2 `/focus` page.** Full screen, light and dark, large heavy type,
       lots of space, no chrome.
   - **Three** (default): titles only, a small muted line when due or overdue,
     the model's reason on hover. Click → "Done?" ✓ ✕ (✕ or 5 s cancels) →
     strike-through and fade (about a second) → the next task slides in.
   - **List**: every ranked task, scrollable, drag to reorder; overdue and due
     today marked. **Reset** clears placements.
-  - **Stale**: stale tasks with their reason; select several → Keep or Delete
-    (Delete goes to Trash).
-  - **Filed**: the last 7 days of nightly moves, each with Back to Inbox.
+  - The Stale and Filed modes come with the data they show (M2.3, M3.3).
   - Mode switch and refresh appear only on hover. Refetch on
     `visibilitychange` and refresh; no timers.
   - Mac setup in the docs: app-mode browser window, open at login, display
@@ -87,6 +85,8 @@ with every add-on off. A box is ticked when its acceptance test lands.
     first night the ranker saw the task.
   - Writes through the task API. Logs tokens, cost and the top three before and
     after. Failure leaves the fixed order in place.
+  - The focus page gains a **Stale** mode: stale tasks with their reason;
+    select several → Keep or Delete (Delete goes to Trash).
 - [ ] **M2.4 Recording retention.** Audio deleted 7 days after `done`;
       failed ingests keep theirs.
 
@@ -98,8 +98,9 @@ with every add-on off. A box is ticked when its acceptance test lands.
       tags) and files a task only when the speaker names one; ambiguous names
       go to the Inbox.
 - [ ] **M3.3 Nightly.** The ranking pass may move Inbox tasks into exactly one
-      clearly fitting Filing list, with a reason; shown in the Filed mode with
-      Back to Inbox.
+      clearly fitting Filing list, with a reason. The focus page gains a
+      **Filed** mode: the last 7 days of nightly moves, each with Back to
+      Inbox.
 
 ## M4 · Pebble watch app
 

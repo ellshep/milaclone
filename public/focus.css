@@ -1,0 +1,332 @@
+/* The /focus page (focus.html, js/focuspage.js). Its own small token set, like
+   Quick notes' --qn-* in style.css; there is no in-app theme switch (D8). */
+
+:root {
+  --fx-bg: #eceef1;
+  --fx-ink: #1c2230;
+  --fx-muted: #687086;
+  --fx-rule: #c9cdd6;
+  --fx-overdue: #b23a2e;
+  --fx-today: #9a6200;
+  --fx-done: #2f7d5b;
+  --fx-t1: clamp(2.4rem, 6.2vw, 6.5rem);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fx-bg: #151922;
+    --fx-ink: #e6e8ed;
+    --fx-muted: #8990a0;
+    --fx-rule: #2d3341;
+    --fx-overdue: #f0806f;
+    --fx-today: #e2b04f;
+    --fx-done: #5fbf91;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Classes here set display (flex, grid), which would beat the attribute. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--fx-bg);
+  color: var(--fx-ink);
+  font-family: 'Archivo', system-ui, sans-serif;
+  font-weight: 500;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 3px solid var(--fx-muted);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+main {
+  min-height: 100vh;
+  padding: clamp(40px, 9vh, 112px) clamp(16px, 9vw, 168px);
+  display: flex;
+  flex-direction: column;
+}
+
+body[data-mode='three'] main {
+  justify-content: center;
+}
+
+ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ---- Controls: only while the pointer is over the page ---- */
+
+.controls {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  font-size: 0.95rem;
+}
+
+body:hover .controls,
+.controls:focus-within {
+  opacity: 1;
+}
+
+.controls a {
+  color: var(--fx-muted);
+  text-decoration: none;
+}
+
+.controls a[aria-current='true'] {
+  color: var(--fx-ink);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+}
+
+#refresh {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--fx-muted);
+}
+
+#refresh:hover {
+  color: var(--fx-ink);
+}
+
+/* ---- Three: the order reads from size, largest first ---- */
+
+.three {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(28px, 5vh, 64px);
+}
+
+.task {
+  --size: var(--fx-t1);
+  --tone: var(--fx-ink);
+  transition: opacity 0.55s 0.4s;
+}
+
+.task[data-pos='2'] {
+  --size: calc(var(--fx-t1) * 0.68);
+  --tone: color-mix(in srgb, var(--fx-ink) 80%, var(--fx-bg));
+}
+
+.task[data-pos='3'] {
+  --size: calc(var(--fx-t1) * 0.52);
+  --tone: color-mix(in srgb, var(--fx-ink) 64%, var(--fx-bg));
+}
+
+.task .title {
+  display: block;
+  max-width: 20ch;
+  text-align: left;
+  font-size: var(--size);
+  font-weight: 800;
+  font-stretch: 85%;
+  line-height: 1.02;
+  letter-spacing: -0.012em;
+  color: var(--tone);
+  text-wrap: balance;
+  text-decoration: line-through;
+  text-decoration-thickness: 0.08em;
+  text-decoration-color: transparent;
+  transition:
+    font-size 0.45s ease,
+    color 0.45s ease,
+    text-decoration-color 0.35s;
+}
+
+.task.done .title {
+  text-decoration-color: currentColor;
+}
+
+.task.done {
+  opacity: 0;
+}
+
+.task.enter {
+  animation: enter 0.5s ease-out both;
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em 1.2em;
+  margin: 0.55em 0 0;
+  font-size: clamp(0.95rem, 1.15vw, 1.25rem);
+  color: var(--fx-muted);
+}
+
+.meta:empty {
+  display: none;
+}
+
+.task .reason {
+  display: none;
+}
+
+.task:hover .reason,
+.task:focus-within .reason {
+  display: inline;
+}
+
+.due {
+  color: var(--fx-muted);
+}
+
+.due.overdue {
+  color: var(--fx-overdue);
+}
+
+.due.today {
+  color: var(--fx-today);
+}
+
+.confirm {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 0.8em;
+}
+
+.confirm .ask {
+  font-size: clamp(1.1rem, 1.6vw, 1.6rem);
+  font-weight: 800;
+  margin-right: 6px;
+}
+
+.confirm button {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.confirm .yes {
+  background: var(--fx-done);
+  color: var(--fx-bg);
+}
+
+.confirm .no {
+  border: 2px solid var(--fx-rule);
+  color: var(--fx-muted);
+}
+
+/* ---- List ---- */
+
+.list {
+  max-width: 60rem;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em 1em;
+  flex-wrap: wrap;
+  padding: 0.4em 0;
+  font-size: clamp(1.25rem, 2vw, 1.9rem);
+  color: color-mix(in srgb, var(--fx-ink) 64%, var(--fx-bg));
+}
+
+.row:nth-child(-n + 3) {
+  color: var(--fx-ink);
+}
+
+.row.cut {
+  border-bottom: 1px solid var(--fx-rule);
+  padding-bottom: 0.7em;
+  margin-bottom: 0.35em;
+}
+
+.row-title {
+  font-weight: 800;
+  font-stretch: 88%;
+  line-height: 1.1;
+}
+
+.row .due {
+  font-size: 0.55em;
+}
+
+.row[draggable='true'] {
+  cursor: grab;
+}
+
+.row.dragging {
+  opacity: 0.35;
+}
+
+.row.drop-before {
+  box-shadow: 0 -3px 0 var(--fx-ink);
+}
+
+.row.drop-after {
+  box-shadow: 0 3px 0 var(--fx-ink);
+}
+
+.reset {
+  align-self: flex-start;
+  margin-top: 2em;
+  padding: 0.55em 1.1em;
+  border: 2px solid var(--fx-rule);
+  border-radius: 999px;
+  color: var(--fx-muted);
+  font-weight: 800;
+}
+
+.reset:hover {
+  color: var(--fx-ink);
+  border-color: var(--fx-muted);
+}
+
+.empty {
+  max-width: 30ch;
+  font-size: clamp(1.4rem, 2.6vw, 2.4rem);
+  font-weight: 800;
+  font-stretch: 88%;
+  color: var(--fx-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
