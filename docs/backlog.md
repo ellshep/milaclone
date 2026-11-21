@@ -43,9 +43,9 @@ Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-c
 ## Needs a decision
 
 - **DM3** Turn `db.js` into an item store that owns the board/canvas duality (write-through, projection, row serialisation). Conflicts with the documented "routes call prepared statements directly"; worth reopening because `tasks-api.js` is a second caller with the same invariants.
-- **V4** Voice tags: let the model assign them freely (today: only when the speaker names a category), or limit them to an allowlist of existing tags?
 
 ## Closed
 
+- **V4** Voice tags are limited to tags already on the list (an `enum` built from the 100 most used). Done in #63.
 - **AU7** `/ingest/text` blocked the pipeline's event loop during the model call. Fixed in #62.
 - **AU13** `HANDOFF-NOTES.md` working log at the repo root. Deleted; open items moved here (#67).
