@@ -12,15 +12,11 @@ Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-c
 
 ## Now
 
-- **DM1** One server-side task-list module owning task shape, defaults, the blank-task rule and the three-way merge (`routes.js` `mergeTasks`/PATCH/`/api/todos`, `tasks-api.js` `isBlank`/`saveCard`, `quicknotes.js` `normTask`, `export-md.js:37`). Fixes AU3 for good. Interface to be designed with the owner first.
-- **AU3** Quick notes' default values (`starred:false, due:null, tags:[]…`) count as edits against a raw `baseTasks`, so a stale Quick notes save erases stars, due dates and tags set on another device. Reproduced. Quick fix: build `baseTasks` with `normTask` in `quicknotes.js` `load()`/`adoptMerged`; real fix: DM1.
-- **AU1** A failed save is dropped, not retried: the edit leaves the queue before the PATCH is sent (`editing.js:142`, `quicknotes.js:146`, `api.js:14`). Fix: re-queue the patch when `api.patch` returns null, without overwriting a newer edit.
-- **AU2** Background saves over 64 KB always fail, because browsers reject large `keepalive` bodies; a voice Inbox of ~114 tasks hits it (`api.js:56`). Fix: use `keepalive` only for bodies under 60,000 characters.
-- **AU11** Tests for the above: an API test that sends a `normTask`-style list against a raw base and checks the server's `starred` survives; a Playwright test that aborts a PATCH with `page.route` and checks the edit lands once the tab is visible again.
+- **DM1** One server-side task-list module owning task shape, defaults, the blank-task rule and the three-way merge (`routes.js` `mergeTasks`/PATCH/`/api/todos`, `tasks-api.js` `isBlank`/`saveCard`, `quicknotes.js` `normTask`, `export-md.js:37`). Makes the merge safe whatever base a client sends (AU3 was fixed client-side). Interface to be designed with the owner first.
 
 ## Next
 
-- **DM2** One client save queue shared by the canvas and Quick notes (`editing.js:117-170`, `quicknotes.js:132-182`): pending edits, base tracking, flush, retry, adopt. The PATCH is the seam (`api.js` + an in-memory adapter for Vitest). Fixes AU1/AU2 in one place; do after DM1.
+- **DM2** One client save queue shared by the canvas and Quick notes (`editing.js:117-170`, `quicknotes.js:132-182`): pending edits, base tracking, flush, retry, adopt. The PATCH is the seam (`api.js` + an in-memory adapter for Vitest). Puts the AU1/AU2 retry and keepalive logic, now duplicated in both files, in one place; do after DM1.
 - **AU4** Voice `dedupe: true` matches open tasks anywhere, including Templates, so "add milk" is dropped as a duplicate (`tasks-api.js:264`). Fix: check only the target list.
 - **AU5** Copying a to-do card keeps its task ids and `importId`s, so `PATCH /api/tasks/:id` can hit a template copy (`db.js:220` `copyItemDeep`). Fix: fresh task ids, drop `importId`.
 - **AU6** `PATCH /api/item {canvasId}` moves a board without `/move`'s checks, so a board can be moved into itself and vanish (`routes.js:276`). Fix: drop cross-canvas moves from PATCH (`drag.js:139`, test at `test/api.test.js:670`).
@@ -48,6 +44,8 @@ Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-c
 - **V4** Voice tags: let the model assign them freely (today: only when the speaker names a category), or limit them to an allowlist of existing tags?
 
 ## Closed
+
+- **AU1, AU2, AU3, AU11** Failed saves now retry, big background saves skip `keepalive`, Quick notes' base no longer erases stars and due dates; `e2e/saves.spec.js` covers all three.
 
 - **AU7** `/ingest/text` blocked the pipeline's event loop during the model call. Fixed in #62.
 - **AU13** `HANDOFF-NOTES.md` working log at the repo root. Deleted; open items moved here (#67).

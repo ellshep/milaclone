@@ -2,25 +2,35 @@
 
 import { toast } from './util.js';
 
-const json = (method, body, extra) => ({
+const json = (method, body) => ({
   method,
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(body),
-  ...extra,
 });
 
 // Writes must never fail silently: a failed save says so instead of pretending
-// the edit landed. Resolves to the server's item, or null on failure.
+// the edit landed. Resolves to the server's item; null when it may work if
+// retried (offline, timeout, rate limit, server error); false when the server
+// rejected it (any other 4xx, e.g. the card was deleted elsewhere).
+const RETRYABLE = new Set([408, 429]);
 async function write(url, init) {
   try {
     const r = await fetch(url, init);
     if (r.ok) return await r.json();
+    if (r.status < 500 && !RETRYABLE.has(r.status)) {
+      toast('Could not save — the server rejected the change');
+      return false;
+    }
   } catch {
     /* offline or aborted: reported below */
   }
   toast('Could not save — check your connection');
   return null;
 }
+
+// Browsers refuse a keepalive request whose body is over 64 KB, so only small
+// saves ask for it; a big one goes out as a normal request.
+const KEEPALIVE_MAX = 60000;
 
 // Thin wrappers over the JSON endpoints exposed by the Node backend.
 export const api = {
@@ -55,7 +65,9 @@ export const api = {
   },
   // `keepalive` lets a save started while the page is closing still reach the server.
   patch(id, body, keepalive = false) {
-    return write('/api/item/' + id, json('PATCH', body, { keepalive }));
+    const init = json('PATCH', body);
+    init.keepalive = keepalive && init.body.length < KEEPALIVE_MAX;
+    return write('/api/item/' + id, init);
   },
   patchMany(updates) {
     return write('/api/items', json('PATCH', { updates }));
