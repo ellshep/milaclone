@@ -7,7 +7,7 @@ import httpx2
 import pytest
 
 from ingest.config import Settings, StepConfig
-from ingest.extract import SCHEMA, build_prompt, extract_tasks
+from ingest.extract import SCHEMA, build_prompt, build_schema, extract_tasks
 import ingest.llm as llm
 from ingest.llm import LLMError, complete_json, preload
 from ingest.extract import Extraction
@@ -57,12 +57,33 @@ def test_anthropic_structured_output_and_cleanup(capsys):
     tasks = r.data.tasks
     assert [t.title for t in tasks] == ["Buy printer ink", "Call mom", "Pay rent"]
     assert tasks[0].notes == "black"
-    assert tasks[0].tags == ["errands"]
+    assert tasks[0].tags == []  # no existing tags, so none are kept
     assert [t.dueDate for t in tasks] == ["2026-11-19", None, None]
     assert (r.input_tokens, r.output_tokens, r.provider, r.attempts) == (120, 45, "anthropic", 1)
     log = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert log[-1]["event"] == "llm.call"
     assert log[-1]["input_tokens"] == 120
+
+
+def test_tags_are_limited_to_existing_ones():
+    seen = []
+    reply = {"summary": "s", "tasks": [
+        {"title": "Pay the bill", "notes": "", "tags": ["#MONEY", "money", "invented"], "dueDate": None}]}
+
+    def handler(req):
+        seen.append(json.loads(req.content))
+        return httpx2.Response(200, json=anthropic_reply(json.dumps(reply)))
+
+    cfg = StepConfig("extract", "anthropic", "", api_key="sk-test")
+    r = extract_tasks("pay the bill", cfg, "UTC", tags=("money", "taste"), now=NOW, http=amock(handler))
+    schema = seen[0]["output_config"]["format"]["schema"]
+    assert schema == build_schema(("money", "taste"))
+    assert schema["properties"]["tasks"]["items"]["properties"]["tags"]["items"] == {
+        "type": "string", "enum": ["money", "taste"]}
+    assert "Existing tags: money, taste" in seen[0]["messages"][0]["content"]
+    assert r.data.tasks[0].tags == ["money"]  # case folded, repeats and unknown tags dropped
+    assert build_schema(()) is SCHEMA
+    assert "no tags yet" in build_prompt("x", NOW.date())
 
 
 def test_retries_once_then_fails():
