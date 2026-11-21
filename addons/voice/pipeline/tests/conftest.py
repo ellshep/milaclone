@@ -46,6 +46,8 @@ class FakeApp:
         assert request.url.path == "/api/tasks"
         if request.headers.get("authorization") != f"Bearer {TASK_TOKEN}":
             return httpx.Response(401, json={"error": "unauthorized"})
+        if request.method == "GET":
+            return httpx.Response(200, json={"tasks": self.tasks})
         body = json.loads(request.content)
         self.requests.append(body)
         if body["title"] in self.fail_titles:
@@ -67,9 +69,11 @@ class FakeExtractor:
         ])
         self.error = None
         self.calls = []
+        self.tags = []
 
-    def __call__(self, transcript: str) -> LLMResult:
+    def __call__(self, transcript: str, tags: tuple[str, ...] = ()) -> LLMResult:
         self.calls.append(transcript)
+        self.tags.append(tags)
         if self.error:
             raise self.error
         return LLMResult(self.result, "fake", "fake", 10, 20, 5, 1)
