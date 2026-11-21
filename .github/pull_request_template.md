@@ -10,9 +10,9 @@
 
 <!-- Which tool wrote what, if any. See CONTRIBUTING.md. -->
 
-## Roadmap features
+## Backlog and roadmap items
 
-<!-- One row per feature ID from docs/roadmap.md this PR closes. Delete if none. -->
+<!-- One row per ID from docs/backlog.md or docs/roadmap.md this PR closes, and delete those lines from docs/backlog.md. Delete this section if none. -->
 
 | ID  | Acceptance check | Test(s) |
 | --- | ---------------- | ------- |
