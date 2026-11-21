@@ -13,7 +13,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const { db, stmt, id, rootCanvasId, rowToItem } = require('./db');
-const focus = require('./focus');
+const { focusView, parseLimit, LIMIT_MAX } = require('./focus');
 
 const router = express.Router();
 
@@ -280,9 +280,9 @@ router.get(
   handle((req, res) => {
     if (req.query.view !== undefined) {
       if (req.query.view !== 'focus') bad('view must be focus');
-      const limit = focus.parseLimit(req.query.limit);
-      if (limit === null) bad(`limit must be 1 to ${focus.LIMIT_MAX} or all`);
-      return res.json(focus.focusView({ limit }));
+      const limit = parseLimit(req.query.limit);
+      if (limit === null) bad(`limit must be 1 to ${LIMIT_MAX} or all`);
+      return res.json(focusView({ limit }));
     }
     const status = req.query.status || 'open';
     const keep = STATUSES[status];

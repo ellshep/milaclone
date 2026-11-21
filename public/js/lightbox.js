@@ -20,7 +20,7 @@ function show() {
   d.querySelector('.lb-next').hidden = at === images.length - 1;
 }
 
-export function step(delta) {
+function step(delta) {
   const next = at + delta;
   if (next < 0 || next >= images.length) return;
   at = next;

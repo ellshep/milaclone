@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "public/js/main.js",
+    "public/js/editor.js",
+    "public/sw.js",
+    "scripts/*.js",
+    "test/**/*.{js,mjs}",
+    "e2e/**/*.js"
+  ],
+  "project": ["*.js", "public/**/*.js", "scripts/**/*.js", "test/**/*.{js,mjs}", "e2e/**/*.js"],
+  "ignore": ["addons/**"],
+  "ignoreUnresolved": ["^/js/", "^/vendor/"],
+  "ignoreIssues": {
+    "routes.js": ["exports"]
+  }
+}

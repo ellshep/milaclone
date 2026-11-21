@@ -35,7 +35,7 @@ import { labelChips, applyFilter } from './labels.js';
 // Rendering of the canvas and every card type. This module owns the DOM for
 // items; other modules ask it to (re)render when data changes.
 
-export function childrenOf(id) {
+function childrenOf(id) {
   return state.view.items.filter(it => it.parentItemId === id).sort((a, b) => (a.y || 0) - (b.y || 0));
 }
 
@@ -114,7 +114,7 @@ function renameBoard(b) {
   };
 }
 
-export function makeField(tag, cls, value, placeholder) {
+function makeField(tag, cls, value, placeholder) {
   const f = document.createElement(tag === 'area' ? 'textarea' : 'input');
   if (tag === 'area') f.rows = 1;
   f.className = cls;
@@ -129,7 +129,7 @@ export function makeField(tag, cls, value, placeholder) {
   return f;
 }
 
-export function renderItem(it) {
+function renderItem(it) {
   const el = document.createElement('div');
   el.className = 'item type-' + it.type;
   el.dataset.id = it.id;

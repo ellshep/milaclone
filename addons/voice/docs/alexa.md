@@ -19,6 +19,12 @@ The spoken text goes through the same extraction and duplicate check as a
 voice note, so "add call the dentist tomorrow" gets tomorrow's date, and a task
 already on the list isn't added twice.
 
+**If you run Home Assistant, there is a private alternative:** say "Alexa, add
+… to my to-do list" and let Home Assistant move the item from Alexa's own list
+to the pipeline. Nothing faces the internet and there is nothing to deploy. See
+[alexa-home-assistant.md](alexa-home-assistant.md). This page covers the skill,
+which needs no Home Assistant and lets milaclone speak its own reply.
+
 ## Why this route
 
 Alexa only talks to a public HTTPS endpoint, so something has to face the
@@ -26,7 +32,7 @@ internet. The options that were weighed:
 
 | Route                                            | Verdict                                                                                                                                                                                     |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home Assistant's Alexa integration               | No. Without Home Assistant Cloud it needs Home Assistant itself exposed to the internet, a much bigger surface than one path.                                                               |
+| Home Assistant's Alexa integration               | No. Without Home Assistant Cloud it needs Home Assistant itself exposed to the internet, a much bigger surface than one path. (Different from the to-do list route, which exposes nothing.) |
 | AWS Lambda + tunnel                              | Works. Amazon guarantees only the skill can invoke the function, so there is less security code, but it adds a second vendor and still needs a tunnel to reach the server.                  |
 | Lambda + Tailscale Funnel                        | No. The capture path would face the internet with only its token in front of it.                                                                                                            |
 | **Cloudflare Worker + Cloudflare Tunnel** (used) | One vendor, free tier, nothing listens on the server (the tunnel dials out). The cost is that the Worker checks Alexa's signature itself; that code is in `alexa/src/verify.js` and tested. |

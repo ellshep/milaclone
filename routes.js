@@ -23,7 +23,7 @@ const {
   toRich,
 } = require('./db');
 const { exportMarkdown } = require('./export-md');
-const focus = require('./focus');
+const { focusView, parseLimit, LIMIT_MAX } = require('./focus');
 
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -603,9 +603,9 @@ router.post('/api/upload', uploadOne, (req, res) => {
 // The focus order for the /focus page (unauthenticated like the other board
 // routes; the task API serves the same order behind its token).
 router.get('/api/focus', (req, res) => {
-  const limit = focus.parseLimit(req.query.limit);
-  if (limit === null) return res.status(400).json({ error: `limit must be 1 to ${focus.LIMIT_MAX} or all` });
-  res.json(focus.focusView({ limit }));
+  const limit = parseLimit(req.query.limit);
+  if (limit === null) return res.status(400).json({ error: `limit must be 1 to ${LIMIT_MAX} or all` });
+  res.json(focusView({ limit }));
 });
 
 router.use(require('./tasks-api'));

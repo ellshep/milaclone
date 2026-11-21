@@ -127,7 +127,9 @@ test('parseLimit', () => {
 const json = async (method, p, body, token) => {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = 'Bearer ' + token;
-  const r = await fetch(base + p, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const opts = { method, headers };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(base + p, opts);
   return { status: r.status, body: await r.json() };
 };
 const shift = n => {

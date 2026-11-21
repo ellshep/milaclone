@@ -116,4 +116,4 @@ function parseLimit(v) {
   return n >= 1 && n <= LIMIT_MAX ? n : null;
 }
 
-module.exports = { orderTasks, focusView, rankableCards, parseLimit, dayOf, LIMIT_MAX };
+module.exports = { orderTasks, focusView, parseLimit, dayOf, LIMIT_MAX };

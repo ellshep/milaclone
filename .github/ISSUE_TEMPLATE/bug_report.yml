@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in milaclone doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Security problems go through private reporting (Security tab → Report a vulnerability), not here.
+        Please report only something you have seen happen. Speculative findings from an AI scan of the code will be closed (see CONTRIBUTING.md).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a board
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The commit you're running (`git rev-parse --short HEAD`), or the date you last updated.
+    validations:
+      required: true
+  - type: dropdown
+    id: runs
+    attributes:
+      label: How do you run it?
+      options:
+        - npm start
+        - Docker Compose
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Browser and device
+      placeholder: Safari on iPhone 15 (home-screen app), Firefox 133 on Windows, ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Browser console errors, server output, screenshots. Remove anything private (tokens, server names, board content).
+  - type: checkboxes
+    id: ai
+    attributes:
+      label: AI use
+      options:
+        - label: I wrote this report myself about something I saw, or I've said below which parts an AI tool drafted.
+          required: true
