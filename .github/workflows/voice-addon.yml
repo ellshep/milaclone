@@ -1,16 +1,11 @@
 name: Voice add-on
 
-# The optional voice capture add-on (addons/voice/). Not required checks, and
-# only run when the add-on, or the core pieces it relies on, change.
+# The optional voice capture add-on (addons/voice/). Its checks are required on
+# main, so the workflow runs on every PR: `Voice changes` looks at what the PR
+# touches, and the test jobs skip (GitHub counts a skipped job as passing) when
+# none of the add-on, or the core pieces it relies on, changed.
 on:
   pull_request:
-    paths:
-      - 'addons/voice/**'
-      - 'docker-compose.yml'
-      - 'tailscale/**'
-      - 'tasks-api.js'
-      - 'Dockerfile'
-      - '.github/workflows/voice-addon.yml'
   push:
     branches: [main]
     paths:
@@ -26,8 +21,33 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Voice changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      voice: ${{ steps.diff.outputs.voice }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      # A PR is checked out as its merge commit, so HEAD^1..HEAD is exactly what
+      # it changes against main. Pushes to main are already path-filtered above.
+      - id: diff
+        run: |
+          if [ "${{ github.event_name }}" != pull_request ]; then
+            echo voice=true >> "$GITHUB_OUTPUT"
+          elif git diff --name-only HEAD^1 HEAD | tee /dev/stderr \
+            | grep -E '^(addons/voice/|tailscale/|docker-compose\.yml$|tasks-api\.js$|Dockerfile$|\.github/workflows/voice-addon\.yml$)' > /dev/null; then
+            echo voice=true >> "$GITHUB_OUTPUT"
+          else
+            echo voice=false >> "$GITHUB_OUTPUT"
+          fi
+
   pipeline:
     name: Pipeline tests
+    needs: changes
+    if: needs.changes.outputs.voice == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -83,6 +103,8 @@ jobs:
 
   alexa:
     name: Alexa worker tests
+    needs: changes
+    if: needs.changes.outputs.voice == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

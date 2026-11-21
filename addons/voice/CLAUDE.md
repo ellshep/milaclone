@@ -2,7 +2,7 @@
 
 Loaded when you work under `addons/voice/`. Optional and off by default: core code never imports from here, and everything reaches the board through the task API (`docs/task-api.md`). Overview in `README.md`, operation in `docs/voice-capture.md`, Alexa setup in `docs/alexa.md` (Worker) and `docs/alexa-home-assistant.md` (Home Assistant). 1,500-word cap (`npm run check:docs`).
 
-CI: `.github/workflows/voice-addon.yml` (Pipeline tests + Alexa worker tests, not required) runs only when `addons/voice/`, the compose file, `tasks-api.js` or the app `Dockerfile` change.
+CI: `.github/workflows/voice-addon.yml` runs on every PR. `Voice changes` decides from the PR's diff; `Pipeline tests` and `Alexa worker tests` run only when `addons/voice/`, `tailscale/`, the compose file, `tasks-api.js` or the app `Dockerfile` change, and skip (which counts as passing) otherwise. All three are required checks, so keep the job names and the path list in step.
 
 ## Pipeline (`pipeline/`, Python 3.12)
 
