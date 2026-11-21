@@ -1,0 +1,30 @@
+{
+  "format": "milaclone-import/1",
+  "source": "microsoft-todo",
+  "exportedAt": "2026-11-21T15:04:05Z",
+  "lists": [
+    {
+      "name": "Errands",
+      "target": { "new": true },
+      "tasks": [
+        {
+          "importId": "mstodo:a1",
+          "title": "Buy printer ink",
+          "note": "Black only\n\n☐ Check model number",
+          "due": "2026-11-28",
+          "starred": false,
+          "tags": []
+        },
+        { "importId": "mstodo:a2", "title": "Return library books", "starred": true }
+      ]
+    },
+    {
+      "name": "House",
+      "target": { "new": true, "title": "Home repairs" },
+      "tasks": [
+        { "importId": "mstodo:b1", "title": "Fix the squeaky door", "tags": ["house"] },
+        { "importId": "mstodo:b2", "title": "Bad date", "due": "2026-02-30" }
+      ]
+    }
+  ]
+}

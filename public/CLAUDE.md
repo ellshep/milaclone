@@ -56,6 +56,10 @@ Every edit fires a PATCH through **`savequeue.js`**, the one save protocol: `edi
 
 `manifest.webmanifest` + `icons/` (PNGs rendered once from `icon.svg`) make it installable. `sw.js` is network-first: same-origin GETs (and the Lucide/Google Fonts CDNs) go to the network and refresh the cache; the cache answers only when the network fails; writes and `/api/backup` bypass it; no offline editing. `server.js` serves `/sw.js` `no-cache`. Bump `CACHE` only to drop old entries. `playwright.config.js` blocks service workers so they can't cache API reads under other tests; `e2e/pwa.spec.js` opts back in.
 
+## Focus page
+
+`/focus` (`focus.html`, `focus.css`, `js/focuspage.js`) is its own page with its own `--fx-*` tokens and never imports `main.js`. Its order always comes from the server (`focus.js`); the client never sorts, so the page, the task API and the digest can't disagree. Pure helpers live in `js/focusorder.js` (Vitest).
+
 ## Tests
 
 Pure helpers (`util.js`, `viewport.js`) have Vitest tests in `test/ui/`; add a module to the `vitest.config.mjs` thresholds when it gets unit tests. Anything that imports `main.js` boots the whole app, so cover it in Playwright (`e2e/`).

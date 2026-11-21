@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -59,14 +60,29 @@ RULES = """Rules:
 - Titles are short and imperative ("Call the dentist", "Buy printer ink"). Put any extra detail in notes.
 - Resolve relative dates ("tomorrow", "next Friday", "end of the month") to YYYY-MM-DD using today's date
   below. If no date or deadline was said for a task, dueDate is null.
-- Tags: only add a tag if the speaker names a category or project for the task; otherwise use an empty list.
 - If the note contains no action items, return an empty tasks list.
 - summary: one or two sentences describing the whole note."""
 
 
-def build_prompt(transcript: str, today: date) -> str:
+def build_schema(tags: tuple[str, ...] = ()) -> dict:
+    """The output schema. With existing tags, a task's tags can only be those."""
+    if not tags:
+        return SCHEMA
+    schema = copy.deepcopy(SCHEMA)
+    schema["properties"]["tasks"]["items"]["properties"]["tags"]["items"] = {"type": "string", "enum": list(tags)}
+    return schema
+
+
+def _tag_rule(tags: tuple[str, ...]) -> str:
+    if not tags:
+        return "- Tags: the task list has no tags yet, so tags is always an empty list."
+    return ("- Tags: give a task any of these existing tags that clearly fit it, and never invent a new one. "
+            "If none fits, use an empty list.\n  Existing tags: " + ", ".join(tags))
+
+
+def build_prompt(transcript: str, today: date, tags: tuple[str, ...] = ()) -> str:
     return (
-        f"Today is {today.strftime('%A')}, {today.isoformat()}.\n\n{RULES}\n\n"
+        f"Today is {today.strftime('%A')}, {today.isoformat()}.\n\n{RULES}\n{_tag_rule(tags)}\n\n"
         f"<transcript>\n{transcript}\n</transcript>"
     )
 
@@ -84,19 +100,24 @@ def _clean_due(v: str | None) -> str | None:
     return v
 
 
-def extract_tasks(transcript: str, cfg: StepConfig, tz: str, *, now: datetime | None = None,
-                  http: httpx.Client | None = None) -> LLMResult:
-    """Raises LLMError when the model fails twice; the caller keeps the transcript."""
+def extract_tasks(transcript: str, cfg: StepConfig, tz: str, *, tags: tuple[str, ...] = (),
+                  now: datetime | None = None, http: httpx.Client | None = None) -> LLMResult:
+    """Raises LLMError when the model fails twice; the caller keeps the transcript.
+    `tags` are the tags already on the task list; a task only ever gets those."""
     today = (now or datetime.now(ZoneInfo(tz))).astimezone(ZoneInfo(tz)).date()
-    result = complete_json(cfg, SYSTEM, build_prompt(transcript, today), Extraction, SCHEMA, http=http)
+    result = complete_json(cfg, SYSTEM, build_prompt(transcript, today, tags), Extraction, build_schema(tags),
+                           http=http)
+    # Providers without a strict schema (or an old answer) could still name
+    # another tag: keep only existing ones, in the list's own spelling.
+    known = {t.lower(): t for t in tags}
     ext: Extraction = result.data  # type: ignore[assignment]
     cleaned = []
     for t in ext.tasks:
         title = " ".join(t.title.split())
         if not title:
             continue
-        tags = [g.strip().lstrip("#").strip() for g in t.tags]
+        picked = [known.get(g.strip().lstrip("#").strip().lower()) for g in t.tags]
         cleaned.append(ExtractedTask(title=title, notes=t.notes.strip(),
-                                     tags=[g for g in tags if g], dueDate=_clean_due(t.dueDate)))
+                                     tags=list(dict.fromkeys(g for g in picked if g)), dueDate=_clean_due(t.dueDate)))
     result.data = Extraction(summary=ext.summary.strip(), tasks=cleaned)
     return result
