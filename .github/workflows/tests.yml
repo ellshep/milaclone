@@ -41,8 +41,6 @@ jobs:
       - run: npm run format:check
 
   deadcode:
-    # Not a required check yet: make it required in branch protection once it
-    # has stayed green for a while.
     name: Dead code
     runs-on: ubuntu-latest
     timeout-minutes: 5

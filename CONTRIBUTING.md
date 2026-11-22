@@ -26,7 +26,7 @@ Once you have completed those checks, use `git push no-mistakes <branch>` to shi
 
 - **Start with an issue.** Pull requests must reference an issue the maintainer has accepted. Pull requests that don't are closed without review. (Pull requests may also be limited to collaborators in the repository settings; if so, an accepted issue is where it starts.)
 - **Keep it small.** One change per pull request. Prefer the smallest change that works, and say what it removes, or why it removes nothing.
-- **Tests and checks.** New behaviour needs a test. `npm run lint`, `npm run format:check`, `npm test`, `npm run test:ui` and `npm run test:e2e` must pass, and nothing may be skipped or marked `.only`. Fill in the pull request template.
+- **Tests and checks.** New behaviour needs a test. `npm run lint`, `npm run format:check`, `npm run deadcode`, `npm test`, `npm run test:ui` and `npm run test:e2e` must pass, and nothing may be skipped or marked `.only`. Fill in the pull request template.
 - **No drive-by refactors, renames or dependency additions** unless the issue calls for them.
 
 Setup is in the [README](README.md#development). Architecture notes for humans and agents are in [CLAUDE.md](CLAUDE.md).

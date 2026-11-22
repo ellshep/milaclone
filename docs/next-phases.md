@@ -6,7 +6,7 @@ Pebble watch app and an import of the owner's Microsoft To Do backlog. Where
 this plan and the original handoff disagree, this plan is the newer decision.
 
 The ground rules from `docs/roadmap.md` still apply: one PR per item with
-tests, the six required checks green, `gh pr merge --squash`, never `--admin`.
+tests, the required checks green, `gh pr merge --squash`, never `--admin`.
 Core code still never imports from `addons/`, and the board must work the same
 with every add-on off. A box is ticked when its acceptance test lands.
 
