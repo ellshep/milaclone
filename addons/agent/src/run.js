@@ -4,7 +4,7 @@
 // (a comment's thread and neighbours, or the page's selection) and the request.
 // A thread's earlier messages (A8) go before it.
 
-import { memoryCard, rememberTool } from './memory.js';
+import { MEMORY_CHARS, memoryCard, rememberTool } from './memory.js';
 import { proposeTitle, agentTools } from './tools.js';
 import { ORCHESTRATOR_RULE } from './orchestrator.js';
 
@@ -46,7 +46,7 @@ export async function runAgent({ agent, mcp, provider, request, context = '', hi
   const memory = persistent && ((await memoryCard(agent, mcp)) || { data: { text: '(empty)' } });
   const content = [
     `<outline>\n${outline}\n</outline>`,
-    memory && `<memory>\n${memory.data.text}\n</memory>`,
+    memory && `<memory>\n${String(memory.data.text || '').slice(0, MEMORY_CHARS)}\n</memory>`,
     context,
     `<request>\n${request}\n</request>`,
   ]

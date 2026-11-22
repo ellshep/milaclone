@@ -59,3 +59,18 @@ test('select two cards, ask, and the request carries those two ids', async ({ pa
   const pinned = (await stack.items(id)).find(it => String(it.data.text || '').startsWith('From Clerk'));
   expect(pinned.data.text).toContain('Fake reply to:');
 });
+
+test('a receipt the service lost (it restarted) fails instead of waiting forever', async ({ page }) => {
+  await page.route(`${stack.boardUrl}/agent/**`, async route => {
+    const url = route.request().url().replace(stack.boardUrl, pageUrl);
+    if (/\/api\/requests\/r_/.test(url)) return route.fulfill({ status: 404, json: { error: 'no such request' } });
+    await route.fulfill({ response: await route.fetch({ url }) });
+  });
+  const id = await stack.board('Restarted', { agent: { name: 'Clerk', writes: 'chat', memory: 'ephemeral' } });
+  await page.goto(`${stack.boardUrl}/agent/?board=${id}`);
+  await expect(page.locator('#agent option')).toHaveText(['Clerk']);
+  await page.fill('#text', 'hello');
+  await page.click('#ask button[type=submit]');
+  await expect(page.locator('#queue .receipt')).toHaveText('failed');
+  await expect(page.locator('#messages li.error')).toHaveText(/restarted and lost this request: send it again/);
+});

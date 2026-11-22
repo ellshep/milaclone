@@ -58,6 +58,9 @@ export class Threads {
   }
 }
 
+/** How much of the memory card each run sees; the owner may write more, the agent is told to stay under it. */
+export const MEMORY_CHARS = 4000;
+
 /** The agent's memory note on its own board, or null. */
 export async function memoryCard(agent, mcp) {
   const { items } = await mcp.call('get_board', { board_id: agent.boardId });
@@ -67,8 +70,7 @@ export async function memoryCard(agent, mcp) {
 /** The `remember` tool a persistent agent gets: it replaces the memory card's text. */
 export const rememberTool = (agent, mcp) => ({
   name: 'remember',
-  description:
-    'Rewrite your memory card: the whole text, which replaces what it says now. Keep what is worth knowing in a later conversation, briefly.',
+  description: `Rewrite your memory card: the whole text, which replaces what it says now. Keep what is worth knowing in a later conversation, under ${MEMORY_CHARS} characters.`,
   inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
   run: async ({ text }) => {
     const body = `Memory of ${agent.name}\n\n${String(text || '').trim()}`;

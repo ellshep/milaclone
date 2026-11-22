@@ -14,7 +14,7 @@ async function api(path, body) {
     : {};
   const r = await fetch('api/' + path, init);
   const out = await r.json();
-  if (!r.ok) throw new Error(out.error || r.statusText);
+  if (!r.ok) throw Object.assign(new Error(out.error || r.statusText), { status: r.status });
   return out;
 }
 
@@ -87,8 +87,10 @@ async function follow(id, batch) {
     let r;
     try {
       r = await api('requests/' + encodeURIComponent(id));
-    } catch {
-      continue; // the service restarting; keep asking
+    } catch (e) {
+      if (e.status !== 404) continue; // the service restarting; keep asking
+      setStatus(batch, 'failed'); // it restarted, and receipts don't survive that
+      return message('error', 'The agent service restarted and lost this request: send it again.');
     }
     setStatus(batch, r.status);
     if (r.status === 'done') return message('assistant', r.reply);

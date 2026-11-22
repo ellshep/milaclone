@@ -24,7 +24,10 @@ const MAX_BODY = 64 * 1024;
 const MAX_NOTES = 20;
 const MAX_IDS = 50;
 const MAX_TEXT = 4000;
-const MAX_HISTORY = 40; // shortcut: older messages of a long thread are dropped, not summarised; compact if threads grow long
+// shortcut: older messages of a long thread are dropped, not summarised; compact if threads grow long.
+const MAX_HISTORY = 40;
+const MAX_HISTORY_CHARS = 40000;
+const MAX_RECEIPTS = 200;
 const EXCERPT = 300;
 
 const log = (event, fields) => console.error(JSON.stringify({ event, at: new Date().toISOString(), ...fields }));
@@ -78,6 +81,19 @@ function checkNotes(notes) {
 export const requestText = notes =>
   notes.map(n => (n.ids.length ? `On ${n.ids.map(id => `[${id}]`).join(', ')}: ${n.text}` : n.text)).join('\n');
 
+/** The end of a thread that fits the caps, starting on a question. */
+export function recent(messages) {
+  const out = [];
+  let size = 0;
+  for (let i = messages.length - 1; i >= 0 && out.length < MAX_HISTORY; i--) {
+    size += messages[i].text.length;
+    if (size > MAX_HISTORY_CHARS) break;
+    out.unshift(messages[i]);
+  }
+  if (out.length && out[0].role !== 'user') out.shift();
+  return out;
+}
+
 /** The selected cards, with an excerpt each; cards outside the agent's scope are named, not shown. */
 async function selection(agent, mcp, ids) {
   const lines = [];
@@ -117,7 +133,7 @@ export function pageServer(service, threads) {
     try {
       const mcp = await service.mcp(agent.id);
       const ids = [...new Set(notes.flatMap(n => n.ids))];
-      const history = r.thread ? threads.get(r.thread).messages.slice(-MAX_HISTORY) : [];
+      const history = r.thread ? recent(threads.get(r.thread).messages) : [];
       r.reply = await service.ask(agent, r.request, await selection(agent, mcp, ids), history);
       if (r.thread) threads.add(r.thread, r.request, r.reply);
       r.status = 'done';
@@ -153,6 +169,10 @@ export function pageServer(service, threads) {
       }
       const r = { id: 'r_' + randomUUID(), status: 'seen', thread, request: requestText(notes) };
       requests.set(r.id, r);
+      for (const [id, old] of requests) {
+        if (requests.size <= MAX_RECEIPTS) break;
+        if (old.status === 'done' || old.status === 'failed') requests.delete(id); // oldest finished first
+      }
       const receipt = Object.assign({}, r); // as it stands now: the run may start before this is sent
       queue = queue.then(() => run(r, agent, notes));
       return receipt;
@@ -176,11 +196,20 @@ export function pageServer(service, threads) {
 
   return http.createServer(async (req, res) => {
     const send = (status, body, type = 'application/json; charset=utf-8') => {
-      res.writeHead(status, { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' });
+      res.writeHead(status, {
+        'Content-Type': type,
+        'X-Content-Type-Options': 'nosniff',
+        'Cache-Control': 'no-store',
+        'Content-Security-Policy': "frame-ancestors 'self'", // the page itself is never framed elsewhere
+      });
       res.end(type.startsWith('application/json') ? JSON.stringify(body) : body);
     };
     try {
       const url = new URL(req.url, 'http://page');
+      if (url.pathname === '/agent') {
+        res.writeHead(301, { Location: '/agent/' + url.search });
+        return res.end();
+      }
       const file = req.method === 'GET' && STATIC[url.pathname];
       if (file) return send(200, fs.readFileSync(new URL(file[0], PUBLIC)), file[1]);
       const thread = /^\/agent\/api\/threads\/([\w-]+)$/.exec(url.pathname);

@@ -4,7 +4,7 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Threads } from '../src/memory.js';
-import { pageServer, requestText } from '../src/page.js';
+import { pageServer, recent, requestText } from '../src/page.js';
 import { fakeProvider } from '../src/providers.js';
 import { Service } from '../src/service.js';
 import { startStack } from './stack.js';
@@ -130,6 +130,22 @@ test('a thread is kept and replayed; a persistent agent keeps a memory card', as
   const other = await agentOn(desk2);
   const wrong = await post('api/requests', { agent: other.id, thread: first.thread, notes: [{ ids: [], text: 'x' }] });
   assert.equal(wrong.status, 404);
+});
+
+test('the page is never framed elsewhere, and /agent finds it', async () => {
+  const page = await fetch(base);
+  assert.equal(page.headers.get('content-security-policy'), "frame-ancestors 'self'");
+  const bare = await fetch(base.replace(/\/$/, '') + '?board=c_1', { redirect: 'manual' });
+  assert.deepEqual([bare.status, bare.headers.get('location')], [301, '/agent/?board=c_1']);
+});
+
+test('a thread replays only its recent end, starting on a question', () => {
+  const m = (role, text) => ({ role, text });
+  const pairs = n => Array.from({ length: n }, (_, i) => [m('user', 'q' + i), m('assistant', 'a' + i)]).flat();
+  assert.equal(recent(pairs(30)).length, 40);
+  assert.equal(recent(pairs(30))[0].text, 'q10');
+  const long = [m('user', 'old'), m('assistant', 'x'.repeat(40000)), m('user', 'q'), m('assistant', 'a')];
+  assert.deepEqual(recent(long), [m('user', 'q'), m('assistant', 'a')]); // the long answer would break the cap
 });
 
 test('request text', () => {
