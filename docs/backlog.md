@@ -36,6 +36,7 @@ Nothing in progress: pick from Next.
 - **AU19** Deleting a card while its save waits to retry: the retry gets 404 and toasts "rejected", and Undo brings the card back without that edit.
 - **AU20** Quick notes `deleteList` removes the list before flushing its save, so a queued edit goes out empty and Undo restores the list without it.
 - **AU21** `flush(id)` doesn't wait for a save already in flight, so `deleteItems` or closing Quick notes can act before the last save lands.
+- **AU22** Trashed images stay cached on the phone after Trash is emptied; the service worker never evicts /uploads entries (`sw.js`). Fix: evict cached uploads not referenced by any live item, e.g. on the warm message.
 - **U1.1, U1.4, U1.5** Milanote migration: backup and inventory, staged import, reconciliation report. Specs in `docs/next-updates.md`.
 
 ## Needs a decision

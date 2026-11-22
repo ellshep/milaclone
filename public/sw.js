@@ -1,7 +1,7 @@
 // Network-first offline shell (U2.2): every GET goes to the network and refreshes
 // the cache; only when the network fails is the cached copy served. Writes and
 // the database backup always go straight to the network.
-const CACHE = 'mila-v1';
+const CACHE = 'mila-v2';
 const CDN = ['https://unpkg.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'];
 
 // Same-origin query URLs (each search prefix, ?limit=) would pile up unevicted, so they skip the cache.
