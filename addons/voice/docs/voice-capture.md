@@ -153,8 +153,9 @@ failed for good, or the task API refused some tasks; `error` says which).
 
 ## When something fails
 
-Nothing captured is thrown away: a failed note keeps its audio file and every
-transcript stays on the server whatever happens.
+A failed note keeps its audio file until it succeeds, and every transcript stays
+on the server whatever happens. Audio is deleted only 7 days after a note
+finished.
 
 - **Deepgram busy, down or unreachable** (timeouts, network errors, HTTP 408,
   429 and 5xx): the note goes to `retrying` and is tried again after 1, 5

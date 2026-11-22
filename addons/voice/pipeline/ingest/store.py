@@ -142,7 +142,8 @@ class Store:
 
     def old_done_audio(self, before: int) -> list[dict]:
         """Finished ingests last updated before `before` (ms) that still have audio.
-        A done ingest is never updated again, so updated_at is when it finished."""
+        Only this sweep updates a done ingest again, and it skips rows it has
+        marked, so for the rest updated_at is when it finished."""
         with self._lock:
             rows = self._db.execute(
                 "SELECT * FROM ingests WHERE status = 'done' AND audio_filename IS NOT NULL "
