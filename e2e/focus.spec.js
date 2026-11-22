@@ -28,7 +28,16 @@ async function addList(request, title, tasks) {
 const task = (text, extra = {}) =>
   Object.assign({ id: `${text}-${Date.now()}-${Math.random()}`, text, done: false, createdAt: 1 }, extra);
 
-test('Three: three tasks at one size, each with a done tab; Undo keeps a task', async ({ page, request }) => {
+// Hold the pointer down on a task's ring for `ms`.
+async function hold(page, name, ms) {
+  const box = await page.getByRole('button', { name }).boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(ms);
+  await page.mouse.up();
+}
+
+test('Three: three tasks at one size; holding a ring marks one done, a tap does not', async ({ page, request }) => {
   await addList(request, 'Focus three', [
     task('Renew passport', { due: '2000-01-01', rankReason: 'Blocks the trip' }),
     task('Call the plumber', { due: '2000-01-02' }),
@@ -44,26 +53,32 @@ test('Three: three tasks at one size, each with a done tab; Undo keeps a task', 
   await expect(page.locator('#queue')).toHaveText(/^\d+ in queue$/);
 
   // the model's reason shows on hover only
-  const reason = page.locator('#three .task').first().locator('.reason');
-  await expect(reason).toBeHidden();
+  const first = page.locator('#three .task').first();
+  await expect(first.locator('.reason')).toBeHidden();
   await titles.first().hover();
-  await expect(reason).toHaveText('Blocks the trip');
+  await expect(first.locator('.reason')).toHaveText('Blocks the trip');
 
-  // Undo keeps it, and nothing is saved
-  await page.getByRole('button', { name: 'Done: Renew passport' }).click();
-  await expect(page.locator('#three .task.pending')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Undo: Renew passport' }).click();
-  await expect(page.locator('#three .task.pending')).toHaveCount(0);
-  await page.waitForTimeout(4500);
+  // a tap only shows the hint; letting go early drains the ring
+  await page.getByRole('button', { name: 'Hold to finish: Renew passport' }).click();
+  await expect(first.locator('.hint')).toHaveCSS('opacity', '1');
+  await hold(page, 'Hold to finish: Renew passport', 400);
+  await page.waitForTimeout(800);
+  await expect(page.locator('#three .task.charged')).toHaveCount(0);
   await expect(titles.first()).toHaveText('Renew passport');
 
   const saved = page.waitForResponse(r => r.url().endsWith('/done'));
-  await page.getByRole('button', { name: 'Done: Renew passport' }).click();
+  await hold(page, 'Hold to finish: Renew passport', 1100);
   expect((await saved).ok()).toBe(true);
   await expect(titles).toHaveText(['Call the plumber', 'Pay the electric bill', 'Book the dentist']);
   const lists = (await (await request.get('/api/todos')).json()).lists;
-  const done = lists.flatMap(l => l.tasks).find(t => t.id === added[0]);
-  expect(done.done).toBe(true);
+  expect(lists.flatMap(l => l.tasks).find(t => t.id === added[0]).done).toBe(true);
+
+  // holding Space works the same from the keyboard
+  await page.getByRole('button', { name: 'Hold to finish: Call the plumber' }).focus();
+  await page.keyboard.down(' ');
+  await page.waitForTimeout(1100);
+  await page.keyboard.up(' ');
+  await expect(titles.first()).toHaveText('Pay the electric bill');
 });
 
 test('List: drag to reorder saves placements, and Reset clears them', async ({ page, request }) => {
