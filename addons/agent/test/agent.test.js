@@ -110,7 +110,7 @@ test('a propose agent lands its cards in its column; a chat-only agent changes n
       agentTools(chat, await svc.mcp(chat.id))
         .map(t => t.name)
         .sort(),
-      ['export_board_markdown', 'get_board', 'get_board_outline', 'get_item', 'search']
+      ['get_board', 'get_board_outline', 'get_item', 'search']
     );
 
     const run = logs.map(l => JSON.parse(l)).find(l => l.event === 'agent.run' && l.agent === planner.id);
@@ -128,8 +128,13 @@ test('an agent reaches only its own board and listed boards that are open to age
     const home = await board('Mine', {
       agent: { name: 'Me', writes: 'direct', scope: 'boards', scopeBoards: 'shared\nTheirs\nNope' },
     });
+    await board('Twin', { allow: true });
+    await board('Twin', { allow: true });
+    await api('PATCH', '/api/item/' + (await items(home))[0].id, {
+      data: { scopeBoards: 'shared\nTheirs\nNope\ntwin' },
+    });
     const me = await agentOn(svc, home);
-    assert.deepEqual([...me.scope.keys()].sort(), [home, open].sort());
+    assert.deepEqual([...me.scope.keys()].sort(), [home, open].sort()); // two boards called Twin: neither
 
     const tools = Object.fromEntries(agentTools(me, await svc.mcp(me.id)).map(t => [t.name, t]));
     assert.match(await tools.get_board.run({ board_id: other }), /^Error: board .* is outside Me's scope/);
@@ -144,6 +149,56 @@ test('an agent reaches only its own board and listed boards that are open to age
       hits.map(h => h.canvasId),
       [open]
     );
+  } finally {
+    await svc.close();
+  }
+});
+
+test("a board card whose board is another agent's can't be changed, or exported through", async () => {
+  const svc = service();
+  try {
+    const home = await board('Office', { agent: { name: 'Boss', writes: 'direct' } });
+    // a sub-board on Boss's board, opened only by its own agent
+    const sub = (await api('POST', '/api/item', { canvasId: home, type: 'board', x: 600, data: { title: 'Private' } }))
+      .data.childCanvasId;
+    await api('POST', '/api/item', { canvasId: sub, type: 'agent', data: { name: 'Hermit' } });
+    await api('POST', '/api/item', { canvasId: sub, type: 'note', data: { text: 'secret plans' } });
+    const boss = await agentOn(svc, home);
+    assert.deepEqual([...boss.scope.keys()], [home]);
+    const tools = Object.fromEntries(agentTools(boss, await svc.mcp(boss.id)).map(t => [t.name, t]));
+    assert.equal(tools.export_board_markdown, undefined); // it would walk into Private
+    assert.match(await tools.get_board.run({ board_id: sub }), /outside Boss's scope/);
+    const card = (await items(home)).find(it => it.type === 'board');
+    assert.match(await tools.delete_item.run({ item_id: card.id }), /outside Boss's scope/);
+    assert.match(await tools.move_item.run({ item_id: card.id, board_id: home, x: 0 }), /outside Boss's scope/);
+    assert.match(
+      await tools.update_item.run({ item_id: card.id, data: { title: 'Mine now' } }),
+      /outside Boss's scope/
+    );
+    const after = (await api('GET', '/api/canvas/' + home)).items.find(it => it.id === card.id);
+    assert.deepEqual([after.x, after._childTitle], [600, 'Private']);
+    // an ordinary card on its own board is still Boss's to change
+    const note = await api('POST', '/api/item', { canvasId: home, type: 'note', data: { text: 'mine' } });
+    assert.doesNotMatch(await tools.delete_item.run({ item_id: note.id }), /Error/);
+  } finally {
+    await svc.close();
+  }
+});
+
+test("comments an agent writes never ask an agent, so agents can't set each other off", async () => {
+  const svc = service();
+  try {
+    const desk = await board('Loop', { agent: { name: 'Looper', writes: 'direct' } });
+    const looper = await agentOn(svc, desk);
+    const tools = Object.fromEntries(agentTools(looper, await svc.mcp(looper.id)).map(t => [t.name, t]));
+    await tools.create_item.run({ board_id: desk, type: 'comment', data: { text: '@agent do it again' } });
+    await tools.create_items.run({ board_id: desk, items: [{ type: 'comment', data: { text: '@Looper again' } }] });
+    const plain = await api('POST', '/api/item', { canvasId: desk, type: 'comment', data: { text: 'fyi' } });
+    await tools.update_item.run({ item_id: plain.id, data: { text: '@agent and again' } });
+    const comments = (await items(desk)).filter(it => it.type === 'comment');
+    assert.equal(comments.length, 3);
+    assert.ok(comments.every(c => c.data.agent === looper.id));
+    assert.equal(await svc.pollOnce(), 0);
   } finally {
     await svc.close();
   }
@@ -219,9 +274,16 @@ test('who a comment is for', () => {
   assert.equal(addressee(c('@rexy hi'), [b, a]), null);
   assert.equal(addressee(c('hi @agent'), [b]), null);
   const answered = c('@agent q');
-  const items = [answered, c('reply', { replyTo: '@agent q', agent: 'i_x' }), c('@agent open')];
+  const items = [
+    answered,
+    c('reply', { replyTo: '@agent q', agent: 'i_x' }),
+    c('@agent open'),
+    c('@agent person replied'),
+    c('me too', { replyTo: '@agent person replied' }), // a person's reply doesn't answer it
+    c('@agent from a bot', { agent: 'i_y' }),
+  ];
   assert.deepEqual(
     pending(items, [b]).map(p => p.comment.id),
-    ['@agent open']
+    ['@agent open', '@agent person replied']
   );
 });

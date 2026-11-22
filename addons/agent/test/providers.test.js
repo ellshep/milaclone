@@ -53,6 +53,7 @@ test('runs the tool the model asks for and returns the final text', async () => 
   assert.deepEqual(first.output_config, { effort: 'low' });
   assert.equal(first.fallbacks, 'default');
   assert.deepEqual(first.system[0].cache_control, { type: 'ephemeral' });
+  assert.deepEqual(first.cache_control, { type: 'ephemeral' }); // the tool loop reads from cache too
   assert.equal(first.tools[0].name, 'get_board_outline');
   const result = second.messages.at(-1).content[0];
   assert.equal(result.type, 'tool_result');
@@ -75,4 +76,20 @@ test('a refusal is an error', async () => {
     }),
     /declined/
   );
+});
+
+test('a reply cut short says why', async () => {
+  const fetch = async () =>
+    new Response(JSON.stringify(message([{ type: 'text', text: 'Half an ans' }], 'max_tokens')), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  const provider = anthropicProvider('sk-test', { fetch, maxRetries: 0 });
+  const out = await provider({
+    agent: { model: 'claude-haiku-5-5' },
+    system: 's',
+    messages: [{ role: 'user', content: 'x' }],
+    tools: [],
+  });
+  assert.equal(out.text, 'Half an ans\n\n(stopped: the reply reached the 16000-token limit)');
 });

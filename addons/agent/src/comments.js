@@ -3,7 +3,8 @@
 // the thread (comments chained by `data.replyTo`), the cards it overlaps or
 // shares a column with, and the board outline. The answer is a comment card
 // below it with `replyTo` and the agent's card id, so a comment with a reply is
-// never answered again, even after a restart.
+// never answered again, even after a restart. The service posts that reply
+// as a placeholder before the run, so a crash mid-run can't run it twice.
 
 const text = it => String((it.data && it.data.text) || '').trim();
 const CARD_H = 120; // cards that size themselves have no stored height
@@ -23,10 +24,13 @@ export function addressee(comment, agents) {
 /** `[{ comment, agent }]` still waiting for an answer on one board. */
 export function pending(items, agents) {
   const comments = items.filter(it => it.type === 'comment');
-  const answered = new Set(comments.map(c => c.data && c.data.replyTo).filter(Boolean));
+  const byAgent = c => !!(c.data && c.data.agent);
+  // Only an agent's reply answers a comment; a person replying doesn't.
+  const answered = new Set(comments.filter(byAgent).map(c => c.data.replyTo));
   const out = [];
   for (const c of comments) {
-    if (answered.has(c.id) || (c.data && c.data.agent && c.data.replyTo)) continue; // answered, or an agent's answer
+    // Comments an agent wrote never ask an agent (tools.js stamps them), so agents can't loop or run each other.
+    if (answered.has(c.id) || byAgent(c)) continue;
     const agent = addressee(c, agents);
     if (agent) out.push({ comment: c, agent });
   }

@@ -3,6 +3,8 @@
 
 const WRITES = ['chat', 'propose', 'direct'];
 export const DEFAULT_MODEL = 'claude-opus-5-5';
+const key = title => String(title).trim().toLowerCase();
+const log = (event, fields) => console.error(JSON.stringify({ event, at: new Date().toISOString(), ...fields }));
 
 /** Every agent card on a board the MCP may read, with that board's items. */
 export async function findAgents(mcp) {
@@ -22,7 +24,8 @@ export async function findAgents(mcp) {
 /**
  * One agent's settings. Its scope is its own board plus, with scope "boards",
  * the listed boards (titles, one per line) whose agentAccess flag is on: a
- * board opened only by another agent's card is that agent's alone (A3).
+ * board opened only by another agent's card is that agent's alone (A3). A
+ * title two flagged boards share names neither (the card stores titles, not ids).
  */
 export async function agentConfig({ card, board, boards }, mcp) {
   const d = card.data || {};
@@ -31,13 +34,18 @@ export async function agentConfig({ card, board, boards }, mcp) {
     const wanted = new Set(
       String(d.scopeBoards || '')
         .split('\n')
-        .map(s => s.trim().toLowerCase())
+        .map(key)
         .filter(Boolean)
     );
-    for (const b of boards.filter(x => x.readable && wanted.has(x.title.trim().toLowerCase()))) {
+    const flagged = new Map(); // title → flagged boards with it
+    for (const b of boards.filter(x => x.readable && wanted.has(key(x.title)))) {
       if (scope.has(b.id)) continue;
       const { board: other } = await mcp.call('get_board', { board_id: b.id });
-      if (other.agentAccess) scope.set(b.id, b.title);
+      if (other.agentAccess) flagged.set(key(b.title), [...(flagged.get(key(b.title)) || []), b]);
+    }
+    for (const [title, list] of flagged) {
+      if (list.length === 1) scope.set(list[0].id, list[0].title);
+      else log('agent.ambiguous_scope', { agent: card.id, title, boards: list.map(b => b.id) }); // neither: rename one
     }
   }
   return {

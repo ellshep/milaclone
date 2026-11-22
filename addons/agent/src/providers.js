@@ -12,6 +12,11 @@ const MAX_ITERATIONS = 20;
 // Models that take the server-side refusal fallback (the API picks the fallback model).
 const FALLBACK_MODELS = new Set(['claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1', 'claude-sonnet-5-5']);
 const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+// Why a run ended without a finished answer, told to the reader.
+const STOPPED = {
+  max_tokens: `stopped: the reply reached the ${MAX_TOKENS}-token limit`,
+  tool_use: `stopped after ${MAX_ITERATIONS} rounds of tool calls without a final answer`,
+};
 
 /** `clientOptions` go to the SDK client (tests pass a fake `fetch`). */
 export function anthropicProvider(apiKey, clientOptions = {}) {
@@ -25,6 +30,8 @@ export function anthropicProvider(apiKey, clientOptions = {}) {
       max_iterations: MAX_ITERATIONS,
       // Persona and rules first and frozen, so they cache (A12).
       system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      // And the conversation so far, so each tool round re-reads the outline and results from cache.
+      cache_control: { type: 'ephemeral' },
       messages,
       tools: tools.map(t =>
         betaTool({
@@ -53,7 +60,8 @@ export function anthropicProvider(apiKey, clientOptions = {}) {
       .map(b => b.text)
       .join('\n')
       .trim();
-    return { text, usage, toolCalls };
+    const cut = STOPPED[last.stop_reason];
+    return { text: [text, cut && `(${cut})`].filter(Boolean).join('\n\n'), usage, toolCalls };
   };
 }
 

@@ -2,7 +2,7 @@
 // The board agents service (docs/agent-addon.md W3). It finds agent cards
 // through the MCP add-on, and every AGENT_POLL_SECONDS answers new `@agent`
 // comments (A13), one at a time, each with its agent's own settings, tools and
-// scope.
+// scope. Run one instance only: two would both answer a new comment.
 //
 //   MCP_URL             the MCP add-on (default http://mcp:8787/mcp)
 //   MCP_TOKEN           its token
@@ -61,6 +61,10 @@ export class Service {
     let answered = 0;
     for (const { items, agents } of boards.values()) {
       for (const { comment, agent } of pending(items, agents)) {
+        const mcp = await this.mcp(agent.id);
+        // The reply card goes up first: from then on the comment counts as answered,
+        // so a crash mid-run (after direct writes, say) never runs it again.
+        const card = await mcp.call('create_item', replyCard(comment, agent, 'Working on it…'));
         let reply;
         try {
           reply = await this.ask(agent, requestOf(comment, agent), commentContext(comment, items));
@@ -69,7 +73,7 @@ export class Service {
           log('agent.failed', { agent: agent.id, comment: comment.id, error: e.message });
           reply = `Sorry, I couldn't answer that: ${e.message}`;
         }
-        await (await this.mcp(agent.id)).call('create_item', replyCard(comment, agent, reply));
+        await mcp.call('update_item', { item_id: card.id, data: { text: reply } });
         answered++;
       }
     }
