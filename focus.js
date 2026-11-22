@@ -84,6 +84,9 @@ function orderTasks(entries, today) {
   };
 }
 
+// Whether a board's breadcrumb runs through the Templates board on Home.
+const inTemplates = trail => trail.length > 1 && /^templates$/i.test((trail[1].title || '').trim());
+
 /**
  * Every to-do card that counts for the focus order (not Reference, not under
  * Templates) as `{ card, board }`, `board` being the title of its board.
@@ -95,8 +98,7 @@ function rankableCards() {
     if (isReference(card)) continue;
     if (!boards.has(card.canvasId)) {
       const trail = breadcrumb(card.canvasId);
-      const templates = trail.length > 1 && /^templates$/i.test((trail[1].title || '').trim());
-      boards.set(card.canvasId, templates ? null : trail.at(-1)?.title || 'Board');
+      boards.set(card.canvasId, inTemplates(trail) ? null : trail.at(-1)?.title || 'Board');
     }
     if (boards.get(card.canvasId) !== null) out.push({ card, board: boards.get(card.canvasId) });
   }
@@ -170,4 +172,4 @@ function parseLimit(v) {
   return n >= 1 && n <= LIMIT_MAX ? n : null;
 }
 
-module.exports = { orderTasks, focusView, markDone, setPlacements, parseLimit, dayOf, LIMIT_MAX };
+module.exports = { orderTasks, focusView, markDone, setPlacements, parseLimit, dayOf, inTemplates, LIMIT_MAX };

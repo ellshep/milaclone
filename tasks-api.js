@@ -12,9 +12,9 @@
 
 const crypto = require('crypto');
 const express = require('express');
-const { db, stmt, id, rootCanvasId, rowToItem } = require('./db');
+const { db, stmt, id, rootCanvasId, rowToItem, breadcrumb } = require('./db');
 const { isBlank, newTask } = require('./tasklist');
-const { focusView, parseLimit, LIMIT_MAX } = require('./focus');
+const { focusView, parseLimit, inTemplates, LIMIT_MAX } = require('./focus');
 
 const router = express.Router();
 
@@ -24,6 +24,7 @@ const SOURCE_MAX = 40;
 const TAG_MAX = 60;
 const TAGS_MAX = 30;
 const IMPORT_ID_MAX = 200;
+const REASON_MAX = 500;
 const INBOX_KEY = 'inboxItemId';
 
 // ---- Auth --------------------------------------------------------------------
@@ -313,19 +314,48 @@ router.patch(
     if (b.pinned !== undefined) patch.pinned = cleanBool(b.pinned, 'pinned');
     const star = starFrom(b);
     if (star !== undefined) patch.starred = star;
-    if (!Object.keys(patch).length) bad('nothing to update');
+    // A move (M3.1): `movedBy` names the client, like `source` on create.
+    let move = null;
+    if (b.listId !== undefined) {
+      if (typeof b.listId !== 'string') bad('listId must be a string');
+      if (b.moveReason != null && (typeof b.moveReason !== 'string' || b.moveReason.length > REASON_MAX)) {
+        bad(`moveReason must be a string up to ${REASON_MAX} characters`);
+      }
+      move = { listId: b.listId, movedBy: cleanSource(b.movedBy), moveReason: b.moveReason?.trim() || null };
+    }
+    if (!Object.keys(patch).length && !move) bad('nothing to update');
 
     const out = db.transaction(() => {
+      let dest = null;
+      if (move) {
+        dest = todoCards().find(c => c.id === move.listId);
+        if (!dest || inTemplates(breadcrumb(dest.canvasId))) bad('listId is not a to-do list');
+      }
       const found = findTask(req.params.id);
       if (!found) return null;
       const { card, task } = found;
       Object.assign(task, patch);
+      if (!dest || dest.id === card.id) {
+        saveCard(card);
+        return { task: listView(task, card) };
+      }
+      Object.assign(task, {
+        movedFrom: card.id,
+        movedAt: Date.now(),
+        movedBy: move.movedBy,
+        moveReason: move.moveReason,
+      });
+      card.data.tasks = tasksOf(card).filter(t => t !== task);
+      dest.data.tasks = tasksOf(dest).concat([task]);
       saveCard(card);
-      return listView(task, card);
+      saveCard(dest);
+      return { task: listView(task, dest), moved: true };
     })();
     if (!out) return res.status(404).json({ error: 'not found' });
-    log('task.update', { taskId: out.id, listId: out.listId, fields: Object.keys(patch) });
-    res.json({ task: out });
+    const t = out.task;
+    if (out.moved) log('task.move', { taskId: t.id, from: t.movedFrom, listId: t.listId, by: t.movedBy });
+    if (Object.keys(patch).length) log('task.update', { taskId: t.id, listId: t.listId, fields: Object.keys(patch) });
+    res.json({ task: t });
   })
 );
 
