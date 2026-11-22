@@ -116,6 +116,18 @@ function focusView({ limit = 3, now = new Date() } = {}) {
   return { today, tasks: tasks.slice(0, limit), counts };
 }
 
+/**
+ * The morning digest (M5.1): the focus three plus every other overdue or
+ * due-today task, at most DIGEST_MAX; `more` counts the ones cut off.
+ */
+const DIGEST_MAX = 8;
+function digestView() {
+  const due = focusView({ limit: Infinity }).tasks.filter(
+    (t, i) => i < 3 || t.tier === 'overdue' || t.tier === 'today'
+  );
+  return { tasks: due.slice(0, DIGEST_MAX), more: Math.max(0, due.length - DIGEST_MAX) };
+}
+
 // ---- Writes from the /focus page ----------------------------------------------
 // Board routes (unauthenticated like the rest of the board UI). Each runs in one
 // transaction over the to-do cards, so a placement change spanning several lists
@@ -172,4 +184,14 @@ function parseLimit(v) {
   return n >= 1 && n <= LIMIT_MAX ? n : null;
 }
 
-module.exports = { orderTasks, focusView, markDone, setPlacements, parseLimit, dayOf, inTemplates, LIMIT_MAX };
+module.exports = {
+  orderTasks,
+  focusView,
+  digestView,
+  markDone,
+  setPlacements,
+  parseLimit,
+  dayOf,
+  inTemplates,
+  LIMIT_MAX,
+};

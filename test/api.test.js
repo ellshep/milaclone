@@ -391,6 +391,48 @@ test('move: cut/paste relocates a board with its contents and refuses a cycle', 
   assert.equal(cycle.status, 400);
 });
 
+test('AU9 moving one end of a line away leaves a free point where that card was', async () => {
+  const board = (await send('POST', '/api/item', { canvasId: await root(), type: 'board' })).body;
+  const c = board.data.childCanvasId;
+  const other = (await send('POST', '/api/item', { canvasId: await root(), type: 'board' })).body.data.childCanvasId;
+  const add = async body => (await send('POST', '/api/item', { canvasId: c, ...body })).body;
+  const a = await add({ type: 'note', x: 100, y: 50 });
+  const b = await add({ type: 'note', x: 400, y: 50 });
+  const col = await add({ type: 'column', x: 300, y: 40 });
+  const k = await add({ type: 'note', parentItemId: col.id });
+  const j = await add({ type: 'note', parentItemId: col.id });
+  const line = async (from, to) => (await add({ type: 'line', data: { from: { id: from }, to: { id: to } } })).id;
+  const ab = await line(a.id, b.id);
+  const bk = await line(b.id, k.id);
+  const bj = await line(b.id, j.id);
+  const ends = async id => {
+    const l = (await get('/api/canvas/' + c)).body.items.find(i => i.id === id);
+    return [l.data.from, l.data.to];
+  };
+  const move = id => send('POST', `/api/item/${id}/move`, { canvasId: other, x: 0, y: 0 });
+
+  await move(a.id);
+  assert.deepEqual(await ends(ab), [{ x: 100, y: 50 }, { id: b.id }]);
+  await move(j.id); // a card cut out of a column frees its end at the column
+  assert.deepEqual(await ends(bj), [{ id: b.id }, { x: 300, y: 40 }]);
+  await move(col.id); // and so does a card that leaves inside its column
+  assert.deepEqual(await ends(bk), [{ id: b.id }, { x: 300, y: 40 }]);
+});
+
+test('AU9 a card whose column is gone frees its line end at its own spot', async () => {
+  const { db } = require('../db');
+  const c = (await send('POST', '/api/item', { canvasId: await root(), type: 'board' })).body.data.childCanvasId;
+  const other = (await send('POST', '/api/item', { canvasId: await root(), type: 'board' })).body.data.childCanvasId;
+  const add = async body => (await send('POST', '/api/item', { canvasId: c, ...body })).body;
+  const a = await add({ type: 'note', x: 100, y: 50 });
+  const b = await add({ type: 'note', x: 400, y: 70 });
+  const ab = (await add({ type: 'line', data: { from: { id: a.id }, to: { id: b.id } } })).id;
+  db.prepare("UPDATE items SET parentItemId = 'i_gone' WHERE id = ?").run(b.id); // an old row with an odd parent
+  assert.equal((await send('POST', `/api/item/${b.id}/move`, { canvasId: other, x: 0, y: 0 })).status, 200);
+  const l = (await get('/api/canvas/' + c)).body.items.find(i => i.id === ab);
+  assert.deepEqual(l.data.to, { x: 400, y: 70 });
+});
+
 test('tasks: concurrent edits from two devices merge instead of overwriting', async () => {
   const canvasId = await root();
   const base = [

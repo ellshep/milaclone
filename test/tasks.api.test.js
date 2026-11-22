@@ -400,3 +400,48 @@ test('a client edit from a stale copy keeps the nightly ranking written since', 
   assert.deepEqual([kept.text, kept.rankScore, kept.rankReason, kept.rankNudge], ['Renamed', 77, 'Matters', 1]);
   assert.equal(typeof kept.rankedAt, 'number');
 });
+
+test('view=digest: the focus three plus overdue and due today, at most 8 lines', async () => {
+  const digest = async () => (await list('?view=digest')).body;
+  const three = (await list('?view=focus&limit=3')).body.tasks.map(t => t.id);
+  const before = await digest();
+  assert.deepEqual(
+    before.tasks.slice(0, 3).map(t => t.id),
+    three
+  );
+  assert.ok(before.tasks.slice(3).every(t => t.tier === 'overdue' || t.tier === 'today'));
+
+  const root = (await plain('/api/root')).rootCanvasId;
+  const item = async (canvasId, type, data) =>
+    (
+      await fetch(base + '/api/item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canvasId, type, data }),
+      })
+    ).json();
+  const task = (id, due, f = {}) => ({ id, text: id, done: false, createdAt: 1, due, ...f });
+  // Nine tasks more overdue than anything else here; decoys more overdue still, all left out.
+  const late = Array.from({ length: 9 }, (_, i) => task(`dg-${i + 1}`, `2000-01-0${i + 1}`));
+  await item(root, 'todo', {
+    title: 'Late',
+    tasks: [...late, task('dg-stale', '1999-01-01', { stale: true }), task('dg-done', '1999-01-01', { done: true })],
+  });
+  await item(root, 'todo', { title: 'Ref', labels: ['Reference'], tasks: [task('dg-ref', '1999-01-01')] });
+  const tpl = await item(root, 'board', { title: 'Templates' });
+  await item(tpl.data.childCanvasId, 'todo', { title: 'Tpl', tasks: [task('dg-tpl', '1999-01-01')] });
+
+  const d = await digest();
+  assert.deepEqual(
+    d.tasks.map(t => t.id),
+    late.slice(0, 8).map(t => t.id)
+  );
+  assert.ok(d.more >= 1); // dg-9 and any other overdue task
+  const first = d.tasks[0];
+  assert.deepEqual([first.text, first.listTitle, first.due, first.tier], ['dg-1', 'Late', '2000-01-01', 'overdue']);
+
+  // the Done button: PATCH done, and the next one moves up
+  assert.equal((await patch('dg-1', { done: true })).status, 200);
+  assert.equal((await digest()).tasks.at(-1).id, 'dg-9');
+  assert.equal((await call('GET', '/api/tasks?view=digest', undefined, null)).status, 401);
+});
