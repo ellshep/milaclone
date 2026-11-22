@@ -226,19 +226,17 @@ router.post(
           if (hit) return { status: 200, body: { task: listView(hit, card), created: false } };
         }
       }
-      if (b.dedupe) {
-        const key = normTitle(text);
-        for (const card of cards) {
-          const hit = tasksOf(card).find(t => !t.done && normTitle(t.text) === key);
-          if (hit) return { status: 200, body: { task: listView(hit, card), created: false, duplicate: true } };
-        }
-      }
       let card;
       if (b.listId) {
         card = cards.find(c => c.id === b.listId);
         if (!card) bad('listId is not a to-do list');
       } else {
         card = inboxCard();
+      }
+      if (b.dedupe) {
+        const key = normTitle(text);
+        const hit = tasksOf(card).find(t => !t.done && normTitle(t.text) === key);
+        if (hit) return { status: 200, body: { task: listView(hit, card), created: false, duplicate: true } };
       }
       const task = newTask(
         {
