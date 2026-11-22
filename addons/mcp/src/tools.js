@@ -271,6 +271,45 @@ export function registerTools(server, board, agent = null) {
   );
 
   tool(
+    'write_brief',
+    'Write a Claude Code brief (goal, files, acceptance, repo) as a note in the "Briefs" column of a board, for the owner to run.',
+    {
+      board_id: z.string().describe('The board asking for the work'),
+      goal: z.string().min(1).describe('What the change should achieve'),
+      repo: z.string().min(1).describe('The repository, e.g. "owner/name" or a URL'),
+      files: z.array(z.string().min(1)).default([]).describe('Files to read or change'),
+      acceptance: z.array(z.string().min(1)).min(1).describe('How to tell it is done, one check each'),
+    },
+    async a => {
+      const b = await board.readable(a.board_id);
+      // One line per value: the board's Markdown export trims lines and drops blank ones.
+      const one = v => v.replace(/\s+/g, ' ').trim();
+      const lines = ['Goal: ' + one(a.goal), 'Repo: ' + one(a.repo)];
+      if (a.files.length) lines.push('Files:', ...a.files.map(f => '- ' + one(f)));
+      lines.push('Acceptance:', ...a.acceptance.map(c => '- ' + one(c)));
+      let col = b.items.find(
+        it => it.type === 'column' && !it.parentItemId && /^briefs$/i.test(String(it.data?.title || '').trim())
+      );
+      if (!col)
+        col = await board.call('POST', '/api/item', {
+          canvasId: b.canvas.id,
+          type: 'column',
+          data: { title: 'Briefs' },
+        });
+      const below = b.items.filter(it => it.parentItemId === col.id).map(it => it.y || 0);
+      const note = await board.call('POST', '/api/item', {
+        canvasId: b.canvas.id,
+        type: 'note',
+        parentItemId: col.id,
+        y: Math.max(0, ...below) + 1, // a column orders its cards by y: last in the column
+        data: { text: lines.join('\n') },
+      });
+      log('write_brief', { boardId: b.canvas.id, itemId: note.id, columnId: col.id });
+      return slim(note);
+    }
+  );
+
+  tool(
     'add_todo_task',
     'Add a task to a to-do list card.',
     {

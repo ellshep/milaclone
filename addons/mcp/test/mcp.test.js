@@ -4,7 +4,7 @@
 
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
@@ -35,6 +35,7 @@ const TOOLS = [
   'search',
   'set_todo_task_done',
   'update_item',
+  'write_brief',
 ];
 
 const freePort = () =>
@@ -315,6 +316,62 @@ test('update_item never re-points a board card, a shortcut or a line elsewhere; 
   assert.equal(r.isError, true);
   assert.match(r.content[0].text, /agent cards are set up by the owner/);
   assert.ok((await api('GET', '/api/trash')).items.some(t => t.id === agent.id));
+});
+
+test('write_brief files briefs in a Briefs column, and their text round-trips through export.md', async () => {
+  const { rootCanvasId } = await api('GET', '/api/root');
+  const open = await boardOn(rootCanvasId, 'Briefed', { allow: true });
+  const first = await call('write_brief', {
+    board_id: open,
+    goal: 'Add  a digest\nview',
+    repo: 'ellshep/milaclone',
+    files: ['focus.js', 'tasks-api.js'],
+    acceptance: ['Capped at 8 lines', 'Done moves the next one up'],
+  });
+  const text = [
+    'Goal: Add a digest view',
+    'Repo: ellshep/milaclone',
+    'Files:',
+    '- focus.js',
+    '- tasks-api.js',
+    'Acceptance:',
+    '- Capped at 8 lines',
+    '- Done moves the next one up',
+  ].join('\n');
+  assert.equal(first.data.text, text);
+  const second = await call('write_brief', { board_id: open, goal: 'Second', repo: 'r', acceptance: ['ok'] });
+  assert.equal(second.data.text, 'Goal: Second\nRepo: r\nAcceptance:\n- ok');
+  assert.ok(logs.some(l => l.includes('"write_brief"') && l.includes(first.id)));
+
+  const items = (await api('GET', '/api/canvas/' + open)).items;
+  const cols = items.filter(i => i.type === 'column');
+  assert.deepEqual(
+    cols.map(c => c.data.title),
+    ['Briefs']
+  ); // made once, then reused
+  const inCol = items.filter(i => i.parentItemId === cols[0].id).sort((a, b) => a.y - b.y);
+  assert.deepEqual(
+    inCol.map(i => i.id),
+    [first.id, second.id]
+  );
+  await refused('write_brief', {
+    board_id: await boardOn(rootCanvasId, 'No briefs'),
+    goal: 'x',
+    repo: 'r',
+    acceptance: ['y'],
+  });
+
+  // export.md, then the board's own importer reads it back as the same notes
+  const md = await (await fetch(`${boardUrl}/api/canvas/${open}/export.md`)).text();
+  const file = path.join(dataDir, 'briefs.md');
+  fs.writeFileSync(file, md);
+  execFileSync(process.execPath, ['scripts/import-milanote-md.js', '--base', boardUrl, file], {
+    cwd: ROOT,
+    stdio: 'ignore',
+  });
+  const copy = (await api('GET', '/api/canvas/' + rootCanvasId)).items.filter(i => i._childTitle === 'Briefed').at(-1);
+  const notes = (await api('GET', '/api/canvas/' + copy.data.childCanvasId)).items.filter(i => i.type === 'note');
+  assert.deepEqual(notes.map(n => n.data.text).sort(), [text, second.data.text].sort());
 });
 
 test('the HTTP endpoint needs the token and POST', async () => {

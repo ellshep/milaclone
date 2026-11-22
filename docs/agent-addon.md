@@ -107,7 +107,7 @@ to a chat column, plus the agents' threads and receipts.
 
 ## W5 · Claude Code hand-off
 
-- [ ] **W5.1 Brief cards.** `write_brief` makes a note card with goal, files,
+- [x] **W5.1 Brief cards.** `write_brief` makes a note card with goal, files,
       acceptance and the repo, in a "Briefs" column on the asking board.
   - Acceptance: the card's text round-trips through `export.md`.
 
