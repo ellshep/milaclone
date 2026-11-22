@@ -29,8 +29,8 @@ class Transcriber(Protocol):
     def transcribe(self, path: Path) -> Transcript: ...
 
 
-# (transcript, existing tags) -> extraction
-Extractor = Callable[[str, tuple[str, ...]], LLMResult]
+# (transcript, existing tags, Filing list titles) -> extraction
+Extractor = Callable[[str, tuple[str, ...], tuple[str, ...]], LLMResult]
 
 
 @dataclass
@@ -48,7 +48,8 @@ class Deps:
 
 
 def default_extractor(settings: Settings) -> Extractor:
-    return lambda transcript, tags=(): extract_tasks(transcript, settings.extract, settings.tz, tags=tags)
+    return lambda transcript, tags=(), lists=(): extract_tasks(transcript, settings.extract, settings.tz, tags=tags,
+                                                               lists=lists)
 
 
 def default_alert(settings: Settings) -> Alerter:
@@ -79,9 +80,14 @@ def extract_and_create(deps: Deps, ingest_id: str, transcript: str, source: str)
     except TaskAPIError as e:  # tags are a nicety; extract without them
         tags = ()
         log("ingest.tags_unavailable", id=ingest_id, error=str(e))
+    try:
+        filing = deps.tasks.filing_lists()
+    except TaskAPIError as e:  # so are Filing lists: without them every task goes to the Inbox
+        filing = {}
+        log("ingest.lists_unavailable", id=ingest_id, error=str(e))
     start = time.monotonic()
     try:
-        result = deps.extractor(transcript, tags)
+        result = deps.extractor(transcript, tags, tuple(filing))
     except LLMError as e:
         # The raw transcript is already stored; nothing is lost.
         store.update(ingest_id, status="extraction_failed", error=str(e),
@@ -100,8 +106,16 @@ def extract_and_create(deps: Deps, ingest_id: str, transcript: str, source: str)
 
     created, skipped, errors = [], [], []
     for task in ext.tasks:
+        list_id = filing.get(task.listName or "")
         try:
-            r = deps.tasks.create(task, source)
+            try:
+                r = deps.tasks.create(task, source, list_id)
+            except TaskAPIError as e:
+                # The Filing list was trashed or unlabelled since it was read: the Inbox instead.
+                if not (list_id and "listId is not a to-do list" in str(e)):
+                    raise
+                log("ingest.list_gone", id=ingest_id, list_id=list_id)
+                r = deps.tasks.create(task, source)
         except TaskAPIError as e:
             errors.append(f"{task.title}: {e}")
             continue

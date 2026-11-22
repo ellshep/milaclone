@@ -30,7 +30,8 @@ acceptable for you:
   with each recording and do appear in Deepgram's usage records.
 - **Transcripts go to the LLM provider you configure** (Anthropic by default;
   OpenAI, Gemini, or a local model through any OpenAI-compatible endpoint) to
-  pick out the tasks.
+  pick out the tasks, along with your existing tags and the titles of lists
+  labelled Filing.
 - **With the nightly ranking switched on** (`RANK_SCHEDULE=on`), the titles,
   due dates, list names and board titles of your open tasks, and your Home "Focus
   priorities" note, go to the ranking's LLM provider once a night

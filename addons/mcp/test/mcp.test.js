@@ -272,6 +272,51 @@ test('agent cards, and blocked boards below an open one, stay out of reach', asy
   assert.deepEqual(await call('delete_item', { item_id: agent.id }), { trashed: agent.id }); // narrowing is fine
 });
 
+test('update_item never re-points a board card, a shortcut or a line elsewhere; agent cards stay trashed', async () => {
+  const { rootCanvasId } = await api('GET', '/api/root');
+  const open = await boardOn(rootCanvasId, 'Open 3', { allow: true });
+  const other = await boardOn(rootCanvasId, 'Elsewhere');
+  const sub = await api('POST', '/api/item', { canvasId: open, type: 'board', data: { title: 'Sub' } });
+  const short = await api('POST', '/api/item', { canvasId: open, type: 'shortcut', data: { targetCanvasId: open } });
+  const add = data => api('POST', '/api/item', { canvasId: open, type: 'note', data });
+  const [a, b2, far] = [
+    await add({ text: 'a' }),
+    await add({ text: 'b' }),
+    await api('POST', '/api/item', { canvasId: other, type: 'note' }),
+  ];
+  const line = await api('POST', '/api/item', {
+    canvasId: open,
+    type: 'line',
+    data: { from: { id: a.id }, to: { id: a.id } },
+  });
+  const no = async (args, re) => {
+    const r = await raw('update_item', args);
+    assert.equal(r.isError, true, JSON.stringify(args));
+    assert.match(r.content[0].text, re);
+  };
+  await no({ item_id: sub.id, data: { childCanvasId: other } }, /childCanvasId can't be changed/);
+  await no({ item_id: short.id, data: { targetCanvasId: other } }, /targetCanvasId can't be changed/);
+  await no({ item_id: line.id, data: { to: { id: far.id } } }, /line's to must be a card on the same board/);
+  const items = (await api('GET', '/api/canvas/' + open)).items;
+  assert.equal(items.find(i => i.id === sub.id).data.childCanvasId, sub.data.childCanvasId);
+  assert.equal(items.find(i => i.id === short.id).data.targetCanvasId, open);
+  assert.deepEqual((await call('update_item', { item_id: line.id, data: { to: { id: b2.id } } })).data.to, {
+    id: b2.id,
+  });
+  assert.deepEqual((await call('update_item', { item_id: line.id, data: { to: { x: 5, y: 6 } } })).data.to, {
+    x: 5,
+    y: 6,
+  });
+
+  // an agent card the owner trashed stays trashed, even on a board open by its flag
+  const agent = await api('POST', '/api/item', { canvasId: open, type: 'agent', data: { name: 'Gone' } });
+  await api('DELETE', '/api/item/' + agent.id);
+  const r = await raw('restore_item', { item_id: agent.id });
+  assert.equal(r.isError, true);
+  assert.match(r.content[0].text, /agent cards are set up by the owner/);
+  assert.ok((await api('GET', '/api/trash')).items.some(t => t.id === agent.id));
+});
+
 test('the HTTP endpoint needs the token and POST', async () => {
   const post = (headers = {}) =>
     fetch(mcpUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: '{}' });

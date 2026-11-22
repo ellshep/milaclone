@@ -98,6 +98,15 @@ and OpenAI, enforced by the JSON schema; any other tag is dropped. New tags
 only come from you, on the board. With no tags on the list yet, tasks get none.
 If the task API can't be read, extraction runs without tags.
 
+Filing: label a to-do list **Filing** on the board and a voice note can send a
+task straight to it, but only when you name the list for that task ("put
+'post the parcel' on Errands"). The pipeline reads the Filing lists'
+titles (`GET /api/tasks/lists?label=Filing`) and the model may only pick one of
+them, or none; a task with no list named, a name that isn't a Filing list, or
+a title two Filing lists share goes to the Inbox. Lists under the Templates
+board are never offered. If the lists can't be read, every task goes to the
+Inbox.
+
 ## Nightly ranking
 
 The `ranker` service (voice profile, same image) orders the focus page's open
