@@ -391,10 +391,11 @@ body:hover .controls,
 }
 
 .row {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4em 1em;
-  flex-wrap: wrap;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.6em minmax(0, 1fr);
+  align-items: start;
+  gap: 0 0.5em;
   padding: 0.4em 0;
   font-size: clamp(1.25rem, 2vw, 1.9rem);
   color: color-mix(in srgb, var(--fx-ink) 64%, var(--fx-bg));
@@ -416,16 +417,48 @@ body:hover .controls,
   line-height: 1.1;
 }
 
-.row .due {
+.row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2em 1.1em;
+  margin: 0.3em 0 0;
   font-size: 0.55em;
+  color: var(--fx-muted);
 }
 
-.row[draggable='true'] {
+/* The grip is the drag handle: tall enough for a thumb, and it never scrolls
+   the page (touch-action), so a drag can start on a phone. */
+.grip {
+  display: grid;
+  place-items: center;
+  height: 1.6em;
+  margin-top: -0.25em;
+  color: color-mix(in srgb, var(--fx-muted) 60%, var(--fx-bg));
   cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.grip svg {
+  width: 0.42em;
+}
+
+.row.movable:hover .grip,
+.row.movable:focus-visible .grip {
+  color: var(--fx-muted);
 }
 
 .row.dragging {
-  opacity: 0.35;
+  z-index: 2;
+  pointer-events: none;
+  background: var(--fx-bg);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--fx-ink) 18%, transparent);
+}
+
+.row.dragging .grip {
+  color: var(--fx-ink);
+  cursor: grabbing;
 }
 
 .row.drop-before {

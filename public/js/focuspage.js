@@ -7,7 +7,8 @@
 //                    task is saved as done, fades, and the next one slides in.
 //                    A quick tap only shows a hint. "N in queue" sits in the
 //                    controls.
-//   List (#list)     every ranked task. Drag (or Alt+↑/↓) to reorder; that
+//   List (#list)     every ranked task with its list and board. Drag a row by
+//                    its grip (mouse or touch), or Alt+↑/↓, to reorder; that
 //                    saves placements (focusOrder). Reset clears them.
 //
 // The order itself comes from the server (focus.js), so the page, the task API
@@ -209,21 +210,30 @@ async function finish(li) {
 
 // ---- List ----------------------------------------------------------------------
 
-let dragId = null;
+const GRIP =
+  '<svg viewBox="0 0 10 16" aria-hidden="true"><g fill="currentColor"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></g></svg>';
+
+const where = task => (task.boardTitle ? `${task.listTitle} in ${task.boardTitle}` : task.listTitle);
 
 function renderList() {
   const rows = tasks.map((task, i) => {
     const li = el('li', 'row ' + task.tier);
     li.dataset.id = task.id;
     if (i === 2) li.classList.add('cut');
-    li.append(el('span', 'row-title', task.text));
-    const due = dueLabel(task);
-    if (due) li.append(el('span', 'due ' + task.tier, due));
+    const grip = el('span', 'grip');
     if (!isFixed(task)) {
-      li.draggable = true;
+      li.classList.add('movable');
       li.tabIndex = 0;
-      li.setAttribute('aria-label', `${task.text}. Drag, or Alt and an arrow key, to move it.`);
+      li.setAttribute('aria-label', `${task.text}. Drag the grip, or Alt and an arrow key, to move it.`);
+      grip.innerHTML = GRIP;
     }
+    const sub = el('p', 'row-meta');
+    const due = dueLabel(task);
+    if (due) sub.append(el('span', 'due ' + task.tier, due));
+    sub.append(el('span', 'where', where(task)));
+    const text = el('div', 'row-text');
+    text.append(el('span', 'row-title', task.text), sub);
+    li.append(grip, text);
     return li;
   });
   listEl.replaceChildren(...rows);
@@ -246,51 +256,78 @@ async function saveOrder(ids) {
   }
 }
 
-function dropTarget(e) {
-  const li = e.target.closest('.row');
-  if (!li || !li.draggable || li.dataset.id === dragId) return null;
-  const box = li.getBoundingClientRect();
-  return { li, after: e.clientY > box.top + box.height / 2 };
-}
+// Dragging, with pointer events so a finger works as well as a mouse. The row
+// follows the pointer; the movable row beneath it shows where it will land; near
+// the top or bottom of the window the page scrolls.
+const EDGE = 64;
+let drag = null; // { li, id, x, y, startY, target, raf }
 
 function clearMarks() {
-  for (const n of listEl.querySelectorAll('.drop-before, .drop-after, .dragging')) {
-    n.classList.remove('drop-before', 'drop-after', 'dragging');
-  }
+  for (const n of listEl.querySelectorAll('.drop-before, .drop-after')) n.classList.remove('drop-before', 'drop-after');
 }
 
-listEl.addEventListener('dragstart', e => {
-  const li = e.target.closest('.row');
-  if (!li || !li.draggable) return;
-  dragId = li.dataset.id;
-  li.classList.add('dragging');
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', dragId);
-});
-listEl.addEventListener('dragover', e => {
-  const t = dragId && dropTarget(e);
-  for (const n of listEl.querySelectorAll('.drop-before, .drop-after')) n.classList.remove('drop-before', 'drop-after');
-  if (!t) return;
-  e.preventDefault();
-  t.li.classList.add(t.after ? 'drop-after' : 'drop-before');
-});
-listEl.addEventListener('drop', e => {
-  const t = dragId && dropTarget(e);
-  const from = dragId;
-  dragId = null;
+function trackDrag() {
+  const { li, x, y } = drag;
+  li.style.transform = `translateY(${y + scrollY - drag.startY}px)`;
+  // the dragged row ignores the pointer (focus.css .dragging), so this finds the row beneath it
+  const over = document.elementFromPoint(x, y)?.closest('.row.movable');
   clearMarks();
-  if (!t) return;
-  e.preventDefault();
-  const ids = placementAfterDrop(tasks, from, t.li.dataset.id, t.after);
+  drag.target = null;
+  if (!over || over === li || !listEl.contains(over)) return;
+  const box = over.getBoundingClientRect();
+  drag.target = { li: over, after: y > box.top + box.height / 2 };
+  over.classList.add(drag.target.after ? 'drop-after' : 'drop-before');
+}
+
+function scrollFrame() {
+  if (!drag) return;
+  const { y } = drag;
+  const step = y < EDGE ? -(EDGE - y) / 4 : y > innerHeight - EDGE ? (y - innerHeight + EDGE) / 4 : 0;
+  if (step) {
+    scrollBy(0, Math.round(step));
+    trackDrag();
+  }
+  drag.raf = requestAnimationFrame(scrollFrame);
+}
+
+function endDrag(drop) {
+  if (!drag) return;
+  const { li, id, target, raf } = drag;
+  cancelAnimationFrame(raf);
+  drag = null;
+  li.classList.remove('dragging');
+  li.style.transform = '';
+  clearMarks();
+  if (!drop || !target) return;
+  const ids = placementAfterDrop(tasks, id, target.li.dataset.id, target.after);
   if (ids) saveOrder(ids);
+}
+
+listEl.addEventListener('pointerdown', e => {
+  const grip = e.target.closest('.grip');
+  const li = grip?.closest('.row.movable');
+  if (!li || e.button !== 0 || drag) return;
+  e.preventDefault();
+  grip.setPointerCapture(e.pointerId);
+  li.classList.add('dragging');
+  drag = { li, id: li.dataset.id, x: e.clientX, y: e.clientY, startY: e.clientY + scrollY, target: null };
+  drag.raf = requestAnimationFrame(scrollFrame);
 });
-listEl.addEventListener('dragend', () => {
-  dragId = null;
-  clearMarks();
+listEl.addEventListener('pointermove', e => {
+  if (!drag) return;
+  drag.x = e.clientX;
+  drag.y = e.clientY;
+  trackDrag();
 });
+listEl.addEventListener('pointerup', () => endDrag(true));
+listEl.addEventListener('pointercancel', () => endDrag(false));
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') endDrag(false);
+});
+
 listEl.addEventListener('keydown', async e => {
-  const li = e.target.closest('.row');
-  if (!li || !li.draggable || !e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  const li = e.target.closest('.row.movable');
+  if (!li || !e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
   e.preventDefault();
   const movable = tasks.filter(t => !isFixed(t));
   const i = movable.findIndex(t => t.id === li.dataset.id);
