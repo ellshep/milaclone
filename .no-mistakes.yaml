@@ -10,10 +10,10 @@ review:
   path_instructions:
     - path: 'db.js'
       instructions: |
-        Deleting never removes rows: every new query must filter `trashedBy IS NULL`. Routes call the prepared statements directly; there is no repository layer to add. `items.data` is a JSON string in SQLite and an object at the API boundary.
+        Ordinary item and canvas reads filter `trashedBy IS NULL`. Deleting an item tags it and its subtree. Trash queries can read tagged rows, restore clears the tags, and emptying Trash permanently deletes tagged rows and unlinks uploads only when no surviving item references them. Keep routes calling the prepared statements directly. `items.data` is a JSON string in SQLite and an object at the API boundary.
     - path: 'routes.js'
       instructions: |
-        A `board` item owns a child canvas; its title, color and icon live on the child canvas row and come back as `_childTitle`/`_childColor`/`_childIcon`. Every query must filter `trashedBy IS NULL`. Board UI routes are unauthenticated on purpose (the tailnet is trusted); only the task API uses the bearer token.
+        A `board` item owns a child canvas. Its title, color and icon live on the child canvas row and come back as `_childTitle`/`_childColor`/`_childIcon`. Ordinary item and canvas reads filter `trashedBy IS NULL`. Item deletion moves the subtree to Trash. Trash routes list and restore trashed items, and `DELETE /api/trash` permanently purges them. Restore returns 409 when the item's board is still trashed. Board UI routes are unauthenticated on purpose (the tailnet is trusted). Only the task API uses the bearer token.
     - path: 'tasklist.js'
       instructions: |
         This module defines what a task is. Tasks stay entries in todo cards' `data.tasks`; do not propose a tasks table. Server code that touches tasks goes through this module, and a field a client reads needs a default in `normTask`.
@@ -48,4 +48,6 @@ protected_paths:
   - '.github/**'
 test:
   instructions: |
-    Start the app with `DATA_DIR=$(mktemp -d) PORT=4323 node server.js` from the repo root after `npm ci`; it is ready when GET http://127.0.0.1:4323/api/health answers. The board UI is at / (Home canvas, with Quick notes inside it), Focus at /focus, and the Markdown export at /api/export.md. The task API (docs/task-api.md) needs TASK_API_TOKEN set in the server's environment and a matching bearer token. SQLite data lives under DATA_DIR, so a fresh DATA_DIR is an empty board with one Home canvas. Playwright e2e (`npm run test:e2e`) starts its own server on port 4322 and needs browsers installed; run it only when the change touches public/.
+    From the repo root, run `npm ci`, then start the app with `DATA_DIR=$(mktemp -d) HOST=127.0.0.1 PORT=4323 node server.js`. The app is ready when `GET http://127.0.0.1:4323/api/health` answers. A fresh `DATA_DIR` gives SQLite an empty board with one Home canvas.
+    The board UI is at `/` (Home canvas, with Quick notes inside it) and Focus is at `/focus`. To export Home as Markdown, read `rootCanvasId` from `GET /api/root` and pass it as `:id` in `GET /api/canvas/:id/export.md`. The task API (`docs/task-api.md`) needs `TASK_API_TOKEN` set in the server's environment and a matching bearer token.
+    Run `HOST=127.0.0.1 npm run test:e2e` only when the change touches `public/`. Playwright needs browsers installed and starts its own server on port 4322.
