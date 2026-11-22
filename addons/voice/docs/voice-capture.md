@@ -23,11 +23,14 @@ transcript into tasks:
 - **Where your data goes.** Each recording is sent to Deepgram for
   transcription, and the transcript text to the LLM provider you configure.
   With `DEEPGRAM_MIP_OPT_OUT=true` (the default) Deepgram keeps no audio or
-  transcript after replying; it logs only request metadata and usage. The audio
-  file and transcript are also kept on the server in `ingest.db`.
+  transcript after replying; it logs only request metadata and usage. The
+  transcript is also kept on the server in `ingest.db`, and the audio file
+  until 7 days after the note is processed.
 - **Nothing is lost.** Every transcript, extraction result and outcome is
-  stored in `ingest.db`, and the audio files are kept. If extraction fails
-  twice, the transcript is kept and marked `extraction_failed`.
+  stored in `ingest.db`. A note's audio file is deleted 7 days after it is
+  processed (the record shows `audioDeletedAt`); a failed note keeps its audio
+  for a retry. If extraction fails twice, the transcript is kept and marked
+  `extraction_failed`.
 - **Audio uploads return at once** (`202`) and are processed one at a time in
   the background, in the order they arrived. Text ingests are
   answered straight away with the tasks they created, for a voice assistant to
@@ -209,8 +212,9 @@ failed for good, or the task API refused some tasks; `error` says which).
 
 ## When something fails
 
-Nothing captured is thrown away: the audio file and every transcript stay on
-the server whatever happens.
+A failed note keeps its audio file until it succeeds, and every transcript stays
+on the server whatever happens. Audio is deleted only 7 days after a note
+finished.
 
 - **Deepgram busy, down or unreachable** (timeouts, network errors, HTTP 408,
   429 and 5xx): the note goes to `retrying` and is tried again after 1, 5
@@ -308,7 +312,9 @@ docker compose exec -T pipeline python -c "import sqlite3; d = sqlite3.connect('
 docker compose cp pipeline:/tmp/i.db backups/ingest-manual.db
 ```
 
-The audio files are in the same volume under `/data/audio` and are not pruned.
+The audio files are in the same volume under `/data/audio`. The worker checks
+hourly and deletes each one 7 days after its note finished (`audio.deleted` in
+the logs); failed notes keep theirs.
 
 ## Logs and troubleshooting
 

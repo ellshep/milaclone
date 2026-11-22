@@ -89,7 +89,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
     after. Failure leaves the fixed order in place.
   - The stale rule and where stale tasks show are F6 of
     `docs/focus-redesign.md` (N22).
-- [ ] **M2.4 Recording retention.** Audio deleted 7 days after `done`;
+- [x] **M2.4 Recording retention.** Audio deleted 7 days after `done`;
       failed ingests keep theirs.
 
 ## M3 · Filing into lists

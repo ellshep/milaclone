@@ -17,7 +17,7 @@ Nothing in progress: pick from Next.
 ## Next
 
 - **V1** Next phases, planned with the owner on 2026-11-20 (decisions N1–N22, work items M1–M5 in `docs/next-phases.md`): Microsoft To Do import (M1, waits for the owner's file), focus order, `/focus` page, nightly ranking and retention (M2), filing into lists (M3), then AG1, then Pebble watch app (M4), morning digest at 7:30 on weekdays, which settles V3 (M5). Replaces V2.
-- **AG1** Board agents, planned with the owner on 2026-11-22 (decisions A1–A22, work items W1–W6 in `docs/agent-addon.md`): `agent` card, board access flag and selection hook (W1; the API key was dropped), the MCP server (W2), the agent service and page (W3), the Home orchestrator (W4), Claude Code briefs (W5). Comes after M3, before M4. W1 shipped; next is W2.
+- **AG1** Board agents, planned with the owner on 2026-11-22 (decisions A1–A22, work items W1–W6 in `docs/agent-addon.md`): `agent` card, board access flag and selection hook (W1; the API key was dropped), the MCP server (W2), the agent service and page (W3), the Home orchestrator (W4), Claude Code briefs (W5). Comes after M3, before M4. W1 and W2 shipped, and W3.1–W3.2 (the service and the comment loop); W4.1 (the Home orchestrator) shipped too; next is W3.3–W3.4 (the page, Compose and README).
 - **V5** Focus redesign, planned with the owner on 2026-11-22 (decisions R1–R26, work items F1–F8 in `docs/focus-redesign.md`, mockups in `docs/screenshots/focus-redesign/`): one task `status` field (F1), four-band focus order with `place` and `rank` (F2), one `moved` group (F3), then the focus page stack, Queue and row menu (F4), done history (F5), the stale rule (F6), canvas filter by type (F7), Quick notes additions (F8). F1–F3 come after AG1 and before M4; F4–F8 after M5. Settles N22 and replaces N2.
 
 ## Later
@@ -36,6 +36,7 @@ Nothing in progress: pick from Next.
 - **AU22** Trashed images stay cached on the phone after Trash is emptied; the service worker never evicts /uploads entries (`sw.js`). Fix: evict cached uploads not referenced by any live item, e.g. on the warm message.
 - **AU23** Cutting two connected cards together leaves their line behind with two free ends: clipboard.js sends one /move per card, so the first move frees the end before the second card follows (`clipboard.js:52`, `db.js` moveItemDeep). Fix: one /move with all ids and a shared inside set.
 - **AU24** A line trashed with one card comes back invisible if its other card was moved away before the restore (`db.js` restore). Fix: run the same free-the-end step on restore.
+- **AU26** The mobile-webkit test "board selection footer offers color icon rename and delete" (`e2e/mobile-board.spec.js:68`) times out or hits "Page closed" under full-suite load, and blocked CI on #83, #89, #94 and #98 until re-run. Fix: find what it waits on under load (tap targets, footer animation) and make it deterministic; never skip it.
 - **U1.1, U1.4, U1.5** Milanote migration: backup and inventory, staged import, reconciliation report. Specs in `docs/next-updates.md`.
 
 ## Needs a decision

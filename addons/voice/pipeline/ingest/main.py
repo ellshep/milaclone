@@ -51,6 +51,7 @@ def _public(record: dict) -> dict:
         "extractMs": record.get("extract_ms"),
         "attempts": record.get("attempts") or 0,
         "nextAttemptAt": record.get("next_attempt_at"),
+        "audioDeletedAt": record.get("audio_deleted_at"),
     }
 
 

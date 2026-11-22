@@ -1,0 +1,17 @@
+{
+  "name": "milaclone-agent",
+  "private": true,
+  "type": "module",
+  "description": "Board agents for milaclone: one agent per agent card, reached by @agent comments (docs/agent-addon.md W3)",
+  "scripts": {
+    "start": "node src/service.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.6.0",
+    "@modelcontextprotocol/sdk": "1.32.2"
+  }
+}
