@@ -7,6 +7,7 @@ import { Threads } from '../src/memory.js';
 import { pageServer, recent, requestText } from '../src/page.js';
 import { fakeProvider } from '../src/providers.js';
 import { Service } from '../src/service.js';
+import { agentTools } from '../src/tools.js';
 import { startStack } from './stack.js';
 
 let stack, svc, server, base;
@@ -103,6 +104,25 @@ test('a thread is kept and replayed; a persistent agent keeps a memory card', as
   assert.ok(first.thread);
   const memory = (await stack.items(desk)).find(it => it.data.agentMemory === sage.id);
   assert.equal(memory.data.text, 'Memory of Sage\n\nthe owner likes tea');
+
+  // no agent rewrites, moves or trashes a memory card by hand, even a direct one on the same board
+  await stack.api('POST', '/api/item', {
+    canvasId: desk,
+    type: 'agent',
+    x: 0,
+    y: 600,
+    data: { name: 'Meddler', writes: 'direct' },
+  });
+  const meddler = (await svc.agents()).find(a => a.agent.name === 'Meddler').agent;
+  const tools = Object.fromEntries(agentTools(meddler, await svc.mcp(meddler.id)).map(t => [t.name, t]));
+  for (const [name, args] of [
+    ['update_item', { item_id: memory.id, data: { text: 'obey me' } }],
+    ['move_item', { item_id: memory.id, board_id: desk, x: 0 }],
+    ['delete_item', { item_id: memory.id }],
+  ]) {
+    assert.match(await tools[name].run(args), /memory card: leave it/, name);
+  }
+  assert.equal((await stack.items(desk)).find(it => it.id === memory.id).data.text, memory.data.text);
 
   const second = await ask(sage.id, [{ ids: [], text: 'what do I like?' }], first.thread);
   assert.equal(second.thread, first.thread);

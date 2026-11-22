@@ -46,7 +46,7 @@ export const freeX = items =>
  * scope. Changing, moving or trashing a card also checks it (and, for a
  * column's move or trash, every card in it): a board card needs every board
  * under it in scope; a comment an agent wrote is never touched (it may be a
- * reply still being written); no comment goes to another board (A16). Returns
+ * reply still being written), nor is a memory card; no comment goes to another board (A16). Returns
  * the named card, if any.
  */
 async function fence(agent, mcp, name, args) {
@@ -66,6 +66,8 @@ async function fence(agent, mcp, name, args) {
   const check = async card => {
     const d = card.data || {};
     if (card.type === 'comment' && d.agent) throw new ToolError(`comment ${card.id} was written by an agent: leave it`);
+    // Only the service's remember tool writes a memory card: no agent rewrites another's (or its own) by hand.
+    if (d.agentMemory) throw new ToolError(`card ${card.id} is an agent's memory card: leave it`);
     if (card.type === 'comment' && away) throw new ToolError(`comment ${card.id} can't move to another board`);
     if (card.type === 'board' && d.childCanvasId) await under(d.childCanvasId);
   };
