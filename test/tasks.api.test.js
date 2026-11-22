@@ -206,7 +206,7 @@ test('importId makes re-posting idempotent', async () => {
   assert.equal(hits.length, 1);
 });
 
-test('dedupe skips an open task with the same title', async () => {
+test('dedupe skips an open task with the same title', async t => {
   const a = await post({ title: 'Call the dentist' });
   const b = await post({ title: '  call THE   dentist ', dedupe: true });
   assert.equal(b.status, 200);
@@ -222,9 +222,14 @@ test('dedupe skips an open task with the same title', async () => {
   await patch(c.body.task.id, { status: 'done' });
   assert.equal((await post({ title: 'Renew passport', dedupe: true })).status, 201);
 
-  const stale = (await post({ title: 'Book a train' })).body.task;
+  const canvasId = (await plain('/api/root')).rootCanvasId;
+  const card = await call('POST', '/api/item', { canvasId, type: 'todo', data: { title: 'Dedupe fixture' } });
+  assert.equal(card.status, 200);
+  const listId = card.body.id;
+  t.after(async () => assert.equal((await call('DELETE', '/api/item/' + listId)).status, 200));
+  const stale = (await post({ title: 'Book a train', listId })).body.task;
   assert.equal((await patch(stale.id, { status: 'stale' })).body.task.status, 'stale');
-  const repeat = await post({ title: 'Book a train', dedupe: true });
+  const repeat = await post({ title: 'Book a train', listId, dedupe: true });
   assert.equal(repeat.status, 201);
   assert.notEqual(repeat.body.task.id, stale.id);
 });
@@ -279,19 +284,22 @@ test('GET skips the canvas editor’s blank placeholder rows', async () => {
   assert.equal(fromCanvas.listTitle, 'To-do');
 });
 
-test('PATCH marks done, pins and edits fields', async () => {
+test('PATCH marks done, pins and edits fields', async testContext => {
   const t = (await post({ title: 'Patch me', tags: ['a'] })).body.task;
-  const before = Date.now();
+  const doneAt = 1800000000000;
+  let now = doneAt;
+  testContext.mock.method(Date, 'now', () => now);
   let r = await patch(t.id, { status: 'done', pinned: true });
   assert.equal(r.status, 200);
   assert.equal(r.body.task.status, 'done');
-  const doneAt = r.body.task.statusAt;
-  assert.ok(doneAt >= before && doneAt <= Date.now(), 'statusAt is the server clock');
+  assert.equal(r.body.task.statusAt, doneAt);
   // the same status again changes nothing; an edit or a star doesn't move statusAt
+  now += 1000;
   r = await patch(t.id, { status: 'done', statusAt: 1, starred: true });
   assert.equal(r.body.task.statusAt, doneAt);
   assert.equal(r.body.task.pinned, true);
   assert.equal(r.body.task.text, 'Patch me');
+  now += 1000;
   r = await patch(t.id, {
     title: 'Patched',
     notes: 'more',
@@ -306,13 +314,19 @@ test('PATCH marks done, pins and edits fields', async () => {
   assert.equal(r.body.task.due, '2027-01-01');
   assert.equal(r.body.task.starred, true);
   assert.equal(r.body.task.status, 'open');
-  assert.ok(r.body.task.statusAt >= doneAt);
+  assert.equal(r.body.task.statusAt, now);
   assert.ok(logs.some(l => l.includes('"task.update"') && l.includes('"status"')));
   // `done` is shorthand: true for done, false for open; `status` wins over it
-  assert.equal((await patch(t.id, { done: true })).body.task.status, 'done');
-  assert.equal((await patch(t.id, { done: false })).body.task.status, 'open');
-  assert.equal((await patch(t.id, { done: true, status: 'stale' })).body.task.status, 'stale');
-  await patch(t.id, { status: 'open' });
+  for (const [fields, expected] of [
+    [{ done: true }, 'done'],
+    [{ done: false }, 'open'],
+    [{ done: true, status: 'stale' }, 'stale'],
+    [{ status: 'open' }, 'open'],
+  ]) {
+    now += 1000;
+    const { task: updated } = (await patch(t.id, fields)).body;
+    assert.deepEqual([updated.status, updated.statusAt], [expected, now]);
+  }
 
   const { lists } = await plain('/api/todos');
   const stored = lists.flatMap(l => l.tasks).find(x => x.id === t.id);

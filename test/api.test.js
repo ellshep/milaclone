@@ -527,9 +527,8 @@ test('tasks: a stale client that fills in defaults keeps fields set elsewhere', 
   assert.deepEqual(milk.tags, ['shop']);
 });
 
-test('tasks: the server stamps statusAt on a status change, and old tabs and importers still work', async () => {
+test('tasks: the server stamps status changes and imports completed tasks without a timestamp', async () => {
   const canvasId = await root();
-  // an importer or an old tab still sends `done`: true becomes status done, no time known
   const seeded = [
     { id: 'a', text: 'Milk', done: true },
     { id: 'b', text: 'Eggs', done: false },
@@ -576,96 +575,50 @@ test('tasks: the server stamps statusAt on a status change, and old tabs and imp
       ['done', null],
     ]
   );
-  // (c) an old tab loaded after the deploy sends done: false on every task (its
-  // normTask filled it in) next to the status it got: nothing reopens
-  const oldTab = r.body.data.tasks.map(t => ({ ...t, done: false }));
-  r = await send('PATCH', '/api/item/' + list.id, { baseTasks: oldTab, data: { tasks: oldTab } });
-  assert.deepEqual(
-    r.body.data.tasks.map(t => [t.status, 'done' in t]),
-    [
-      ['done', false],
-      ['done', false],
-      ['done', false],
-    ]
-  );
 });
 
-test('tasks: legacy tabs can keep ticking and unticking across saves', async () => {
-  const { db } = require('../db');
+test('tasks: board edits ignore legacy flags and preserve status metadata', async t => {
   const canvasId = await root();
-  // tasks as an old tab holds them: `done` flags, no `status`
   const old = [
     { id: 'o1', text: 'Milk', done: true },
     { id: 'o2', text: 'Eggs', done: false },
     { id: 'o3', text: 'Bread', done: false },
   ];
-  db.prepare(
-    "INSERT INTO items (id, canvasId, type, x, y, w, z, data, createdAt) VALUES ('old-tab', ?, 'todo', 0, 0, 240, 0, ?, 1)"
-  ).run(canvasId, JSON.stringify({ tasks: old }));
-  require('../db').migrateTaskStatus(); // the deploy restarts the server; the tab keeps `old`
-  // another device, loaded after the deploy, completes Bread
-  const fresh = (await get('/api/todos')).body.lists.find(l => l.id === 'old-tab').tasks;
-  await send('PATCH', '/api/item/old-tab', {
-    baseTasks: fresh,
-    data: { tasks: fresh.map(t => (t.id === 'o3' ? { ...t, status: 'done' } : t)) },
+  const created = await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: old } });
+  const url = '/api/item/' + created.body.id;
+  const doneAt = 1800000000000;
+  let now = doneAt;
+  t.mock.method(Date, 'now', () => now);
+  const current = [
+    { id: 'o1', text: 'Milk', status: 'done', statusAt: null },
+    { id: 'o2', text: 'Eggs', status: 'done', statusAt: doneAt },
+    { id: 'o3', text: 'Bread', status: 'open' },
+  ];
+  const completed = await send('PATCH', url, {
+    baseTasks: created.body.data.tasks,
+    data: { tasks: current.map(({ id, text, status }) => ({ id, text, status })) },
   });
-  // (a) the old tab unticks Milk and (b) saves Bread untouched, still `done: false` in its copy
-  const r = await send('PATCH', '/api/item/old-tab', {
-    baseTasks: old,
-    data: { tasks: [{ ...old[0], done: false }, old[1], old[2]] },
-  });
-  assert.deepEqual(
-    r.body.data.tasks.map(t => [t.id, t.status, 'done' in t]),
-    [
-      ['o1', 'open', false],
-      ['o2', 'open', false],
-      ['o3', 'done', false],
-    ]
-  );
-  assert.ok(Math.abs(r.body.data.tasks[0].statusAt - Date.now()) < 5000, 'the untick is stamped');
+  assert.deepEqual(completed.body.data.tasks, current);
+  now += 1000;
 
-  const edit = await send('PATCH', '/api/item/old-tab', {
-    baseTasks: r.body.data.tasks,
-    data: { tasks: r.body.data.tasks.map(t => (t.id === 'o1' ? { ...t, text: 'Oat milk' } : t)) },
-  });
-  const base = edit.body.data.tasks;
-  await send('PATCH', '/api/item/old-tab', {
-    baseTasks: base,
-    data: { tasks: base.map(t => (t.id === 'o2' ? { ...t, status: 'done' } : t)) },
-  });
-  const tasks = [{ ...base[0], done: true }, { ...base[1], done: false }, base[2]];
-  const ticked = await send('PATCH', '/api/item/old-tab', {
-    baseTasks: base,
-    data: { tasks },
-  });
-  assert.deepEqual(
-    ticked.body.data.tasks.map(t => [t.text, t.status, 'done' in t]),
-    [
-      ['Oat milk', 'done', false],
-      ['Eggs', 'done', false],
-      ['Bread', 'done', false],
-    ]
-  );
+  const tasks = old.map(task => ({ ...task, done: false, stale: true }));
+  for (const baseTasks of [old, current, undefined]) {
+    const saved = await send('PATCH', url, { baseTasks, data: { tasks } });
+    assert.equal(saved.status, 200);
+    assert.deepEqual(saved.body.data.tasks, current);
+  }
 
-  const unticked = await send('PATCH', '/api/item/old-tab', {
-    baseTasks: ticked.body.data.tasks,
-    data: { tasks: ticked.body.data.tasks.map(t => (t.id === 'o1' ? { ...t, done: false } : t)) },
+  const edited = await send('PATCH', url, {
+    baseTasks: current,
+    data: {
+      tasks: [
+        { ...current[0], done: false },
+        { ...current[1], text: 'Free-range eggs', done: false },
+        { ...current[2], done: true },
+      ],
+    },
   });
-  assert.deepEqual(
-    unticked.body.data.tasks.map(t => t.status),
-    ['open', 'done', 'done']
-  );
-
-  const queuedBase = unticked.body.data.tasks.map(t => (t.id === 'o1' ? { ...t, done: true } : t));
-  await send('PATCH', '/api/item/old-tab', { baseTasks: unticked.body.data.tasks, data: { tasks: queuedBase } });
-  const queuedUntick = await send('PATCH', '/api/item/old-tab', {
-    baseTasks: queuedBase,
-    data: { tasks: queuedBase.map(t => (t.id === 'o1' ? { ...t, done: false } : t)) },
-  });
-  assert.deepEqual(
-    queuedUntick.body.data.tasks.map(t => t.status),
-    ['open', 'done', 'done']
-  );
+  assert.deepEqual(edited.body.data.tasks, [current[0], { ...current[1], text: 'Free-range eggs' }, current[2]]);
 });
 
 test('tasks: item create and edit reject invalid statuses before writing', async () => {

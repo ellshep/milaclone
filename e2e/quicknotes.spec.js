@@ -141,6 +141,7 @@ test('the add bar appends tasks and stays open for the next one', async ({ page 
   await seedList(page, title, []);
   await openQuickNotes(page);
   await listRow(page, title).click();
+  await expect(page.locator('#qnTasks .qn-empty')).toHaveText('No tasks yet — add the first one below.');
 
   await page.click('#qnAddTask');
   await page.fill('#qnNewTask', 'Oat milk');
@@ -242,16 +243,20 @@ test('the note bullet button rewrites the note lines', async ({ page }) => {
   await expect(page.locator('#qnNote')).toHaveValue('flights\nhotel');
 });
 
-test('search matches task text and opens the task', async ({ page }) => {
+test('search shows a stale task with its due date and can open it', async ({ page }) => {
   const title = uniq('Search');
   const needle = uniq('quokka');
-  await seedList(page, title, [{ id: 'a', text: needle, status: 'open' }]);
+  await seedList(page, title, [{ id: 'a', text: needle, status: 'stale', due: '2020-01-01' }]);
   await openQuickNotes(page);
+  await listRow(page, title).click();
+  await expect(page.locator('#qnTasks .qn-empty')).toHaveText('No tasks to show.');
+  await page.click('#qnListBack');
 
   await page.click('#qnSearchBtn');
   await expect(page.locator('.qn-blank')).toContainText('Type to search');
   await page.fill('#qnQuery', needle);
   await expect(page.locator('#qnResults .qn-count')).toHaveText('1 result');
+  await expect(page.locator('#qnResults .qn-task-due')).toBeVisible();
 
   await page.locator('#qnResults .qn-task').click();
   await expect(page.locator('#qnTaskTitle')).toHaveText(needle);

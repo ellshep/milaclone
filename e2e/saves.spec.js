@@ -31,6 +31,68 @@ const serverTasks = (page, id) =>
     return r.lists.find(l => l.id === id).tasks;
   }, id);
 
+for (const surface of ['Canvas', 'Quick notes']) {
+  test(`${surface} normalizes cached tasks and keeps focus after a status save`, async ({ page }) => {
+    const quickNotes = surface === 'Quick notes';
+    if (quickNotes) await page.setViewportSize({ width: 390, height: 844 });
+    const canvasId = await freshCanvas(page);
+    const title = uniq('Cached');
+    const legacy = [
+      { id: 'a', text: 'Buy milk', done: false },
+      { id: 'b', text: 'Buy eggs', done: true },
+    ];
+    const id = await createTodo(page, canvasId, title, legacy);
+    await page.route(quickNotes ? '**/api/todos' : '**/api/canvas/' + canvasId, async route => {
+      const response = await route.fetch();
+      const json = await response.json();
+      const tasks = quickNotes ? json.lists.find(list => list.id === id) : json.items.find(item => item.id === id).data;
+      tasks.tasks = legacy;
+      await route.fulfill({ response, json });
+    });
+    await page.reload();
+
+    let release;
+    const held = new Promise(resolve => (release = resolve));
+    const url = '/api/item/' + id;
+    await page.route('**' + url, async route => {
+      if (route.request().method() === 'PATCH') await held;
+      await route.continue();
+    });
+    const reply = page.waitForResponse(r => r.url().endsWith(url) && r.request().method() === 'PATCH');
+    let field;
+    if (quickNotes) {
+      await page.click('#mNotes');
+      await page.locator('.qn-row-btn', { hasText: title }).click();
+      await expect(page.locator('.qn-task', { hasText: 'Buy eggs' })).toHaveClass(/done/);
+      await page.locator('.qn-task-text', { hasText: 'Buy milk' }).click();
+      await page.click('#qnTaskBox');
+      field = page.locator('#qnDetails .qn-dateinput');
+    } else {
+      const card = page.locator(`[data-id="${id}"]`);
+      const boxes = card.getByRole('checkbox');
+      await expect(boxes.nth(1)).toBeChecked();
+      await boxes.first().check();
+      field = card.locator('textarea').first();
+    }
+    await field.focus();
+    await expect(field).toBeFocused();
+    release();
+
+    const response = await reply;
+    expect(response.request().postDataJSON().baseTasks).toEqual([
+      { id: 'a', text: 'Buy milk', status: 'open' },
+      { id: 'b', text: 'Buy eggs', status: 'done', statusAt: null },
+    ]);
+    const { data } = await response.json();
+    expect(data.tasks.map(t => [t.status, t.statusAt])).toEqual([
+      ['done', expect.any(Number)],
+      ['done', null],
+    ]);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(field).toBeFocused();
+  });
+}
+
 // Fail the first PATCH to this item as if the network dropped.
 async function dropFirstSave(page, id) {
   let dropped = false;

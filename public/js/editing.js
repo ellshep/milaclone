@@ -2,7 +2,7 @@
 
 import { state, elMap } from './state.js';
 import { api, retryDelay } from './api.js';
-import { createSaveQueue } from './savequeue.js';
+import { adoptTaskMetadata, createSaveQueue } from './savequeue.js';
 import { toast, hexColor } from './util.js';
 import { render, renderCrumbs, refreshItem } from './cards.js';
 import { closePalette, closeCtx } from './menus.js';
@@ -128,7 +128,12 @@ const saves = createSaveQueue({
     if (it.type === 'board' && patch.title != null) renderCrumbs();
     // Another device changed this list meanwhile: show the merged result
     // (unless more local edits are already queued; they'll merge on their save).
-    if (patch.tasks && !saves.pending(id) && JSON.stringify(saved.data.tasks) !== JSON.stringify(it.data.tasks)) {
+    if (
+      patch.tasks &&
+      !saves.pending(id) &&
+      Array.isArray(saved.data.tasks) &&
+      !adoptTaskMetadata(it.data.tasks, saved.data.tasks)
+    ) {
       it.data.tasks = saved.data.tasks;
       refreshItem(it);
     }

@@ -2,7 +2,7 @@
 
 import { state } from './state.js';
 import { api, retryDelay } from './api.js';
-import { createSaveQueue } from './savequeue.js';
+import { adoptTaskMetadata, createSaveQueue } from './savequeue.js';
 import { autoGrow, colorVar, lucideEl, refreshIcons, toast, rid, daysUntil, dueInfo } from './util.js';
 import { screenToWorld } from './viewport.js';
 import { createAt, defaultsFor } from './create.js';
@@ -160,7 +160,7 @@ const saves = createSaveQueue({
     const list = listById(id);
     if (!list || !patch.tasks || !Array.isArray(saved.data.tasks)) return;
     const merged = saved.data.tasks.map(normTask);
-    if (saves.pending(id) || JSON.stringify(merged) === JSON.stringify(list.tasks)) return;
+    if (saves.pending(id) || adoptTaskMetadata(list.tasks, merged)) return;
     list.tasks = merged;
     render();
   },
@@ -492,7 +492,11 @@ function renderListScreen() {
   for (const tag of list.tags) meta.appendChild(h('span', 'qn-tag', '#' + tag));
 
   for (const task of open) tasksEl.appendChild(taskRow(list, task));
-  if (!listed) tasksEl.appendChild(h('div', 'qn-empty', 'No tasks to show.'));
+  if (!listed) {
+    tasksEl.appendChild(
+      h('div', 'qn-empty', all.length ? 'No tasks to show.' : 'No tasks yet — add the first one below.')
+    );
+  }
 
   if (done.length) {
     const head = h('button', 'qn-comphead' + (qn.compOpen ? '' : ' closed'));
@@ -531,7 +535,7 @@ function taskRow(list, task, sub) {
   mid.appendChild(h('span', 'qn-task-text', task.text));
   if (sub) mid.appendChild(h('span', 'qn-task-sub', sub));
   const due = dueInfo(task.due);
-  if (due && isOpen(task)) {
+  if (due && !isDone(task)) {
     const line = h('span', 'qn-task-due');
     line.style.color = due.color;
     line.appendChild(lucideEl('calendar'));

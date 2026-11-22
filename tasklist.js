@@ -73,12 +73,6 @@ function upgradeTask(t) {
   return { ...rest, status: done ? 'done' : 'open' };
 }
 
-function legacyClick(t, base) {
-  if (!('done' in t && 'status' in t) || t.status !== base.status) return false;
-  const wasDone = 'done' in base ? !!base.done : base.status === 'done';
-  return !!t.done !== wasDone;
-}
-
 // `statusAt` and `statusReason` belong to the server: a write that changes a
 // task's status stamps `statusAt` with now and drops the reason; any other
 // write keeps the stored ones, whatever the client sent. `before` is the list
@@ -88,10 +82,14 @@ function stampStatus(tasks, before, now) {
   return tasks.map(t => {
     const stored = prev.get(t.id);
     const p = normTask(stored);
-    const { status } = normTask(t);
-    const { statusAt, statusReason, ...out } = t; // oxlint-disable-line no-unused-vars -- the client's never count
-    if (status !== p.status) return { ...out, statusAt: now };
-    if (p.statusAt !== null || stored?.statusAt === null || status === 'done') out.statusAt = p.statusAt;
+    const out = { ...t };
+    delete out.done;
+    delete out.stale;
+    delete out.statusAt;
+    delete out.statusReason;
+    if ('status' in out && normTask(out).status !== p.status) return { ...out, statusAt: now };
+    if (!('status' in out) && stored && 'status' in stored) out.status = stored.status;
+    if (p.statusAt !== null || stored?.statusAt === null || p.status === 'done') out.statusAt = p.statusAt;
     if (p.statusReason !== null) out.statusReason = p.statusReason;
     return out;
   });
@@ -160,17 +158,14 @@ function merge(base, server, mine, todo = true) {
   // A base with missing or repeated ids comes from a page loaded before ids were
   // repaired: it can't be matched to the server's tasks, so the client's list wins.
   const baseIds = base.map(t => isObj(t) && t.id);
-  if (!baseIds.every(Boolean) || new Set(baseIds).size !== baseIds.length) {
-    return todo ? mine.map(upgradeTask) : mine;
-  }
+  if (!baseIds.every(Boolean) || new Set(baseIds).size !== baseIds.length) return mine;
   const normalize = todo ? normTask : normChecklistTask;
   const byId = list => new Map(list.map(t => [t.id, t]));
   const B = byId(base),
     S = byId(server),
     M = byId(mine);
   const out = [];
-  for (const raw of mine) {
-    const t = todo ? upgradeTask(raw) : raw;
+  for (const t of mine) {
     const b = B.get(t.id),
       s = S.get(t.id);
     if (b && !s) continue; // deleted elsewhere
@@ -179,10 +174,12 @@ function merge(base, server, mine, todo = true) {
       continue;
     }
     const nt = normalize(t),
-      nb = normalize(todo ? upgradeTask(b) : b);
+      nb = normalize(b);
     const merged = { ...s };
-    for (const k of Object.keys(t)) if (!same(nt[k], nb[k])) merged[k] = t[k];
-    if (todo && legacyClick(raw, b)) merged.status = raw.done ? 'done' : 'open';
+    for (const k of Object.keys(t)) {
+      if (todo && (k === 'done' || k === 'stale')) continue;
+      if (!same(nt[k], nb[k])) merged[k] = t[k];
+    }
     out.push(merged);
   }
   for (const t of server) if (!B.has(t.id) && !M.has(t.id)) out.push(t); // added elsewhere

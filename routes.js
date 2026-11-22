@@ -263,11 +263,7 @@ router.patch('/api/item/:id', (req, res) => {
       const mine = tasklist.withIds(b.data.tasks, () => id('t_'));
       if (todo && invalidTaskStatus(mine)) return badTaskStatus(res);
       const tasks =
-        Array.isArray(b.baseTasks) && Array.isArray(stored)
-          ? tasklist.merge(b.baseTasks, stored, mine, todo)
-          : todo
-            ? mine.map(tasklist.upgradeTask)
-            : mine;
+        Array.isArray(b.baseTasks) && Array.isArray(stored) ? tasklist.merge(b.baseTasks, stored, mine, todo) : mine;
       it.data.tasks = todo ? tasklist.stampStatus(tasks, Array.isArray(stored) ? stored : [], Date.now()) : tasks;
     }
   }
