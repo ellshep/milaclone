@@ -36,6 +36,10 @@ with every add-on off. A box is ticked when its acceptance test lands.
 | N20 | Ranker settings            | Each unset `RANK_*` setting falls back to its `EXTRACT_*` one, so ranking reuses the voice key                                                                                                              |
 | N21 | First run                  | The ranker has a dry run; the owner sees its output once before the 03:00 schedule is turned on                                                                                                             |
 | N22 | Stale                      | Settled by `docs/focus-redesign.md` (R15–R17): no Stale mode; stale tasks show in the done history. Built as F6                                                                                             |
+| N23 | Watch audio                | Waits for the M4.2 device spike: M4.1 is held until it shows what the Pebble Time 2 can send                                                                                                                |
+| N24 | Watch resends              | A `clientId` the watch sends makes a resend return the original recording, even when the first failed                                                                                                       |
+| N25 | Watch token                | One `WATCH_TOKEN`, only for: uploading audio, reading the focus three, setting a task done or open, dictated text, the connection test. Home Assistant gets its own token later the same way                |
+| N26 | Watch connection test      | One voice-pipeline endpoint that checks the watch token against both the pipeline and the board                                                                                                             |
 
 ## M1 · Backlog import
 
@@ -115,8 +119,9 @@ with every add-on off. A box is ticked when its acceptance test lands.
 
 ## M4 · Pebble watch app
 
-- [ ] **M4.1 Server side.** Narrow tokens (watch, later Home Assistant);
-      `/ingest/audio` also takes JSON base64 PCM; a client capture id makes a
+- [ ] **M4.1 Server side** (N23–N26). Held until the M4.2 device spike shows
+      the watch's audio format. Narrow tokens (watch, later Home Assistant);
+      `/ingest/audio` also takes the watch's audio; a client capture id makes a
       resend a no-op; an authenticated connection test.
 - [ ] **M4.2 Watch app** in `addons/pebble/`, in the watch handoff's order:
       the device spikes first (tailnet reachability from the phone, microphone
