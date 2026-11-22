@@ -79,5 +79,12 @@ export async function fakeProvider({ system, messages, tools }) {
     await create.run({ board_id: boardId, type: 'note', data: { text: request.slice(4) } });
     toolCalls++;
   }
+  // "delegate <kind> <agent>: <message>" calls the orchestrator's delegate tool (W4.1)
+  const delegate = tools.find(t => t.name === 'delegate');
+  const d = /^delegate (\w+) ([^:]+): ([\s\S]+)$/i.exec(request);
+  if (delegate && d) {
+    const result = await delegate.run({ kind: d[1], agent: d[2], message: d[3] });
+    return { text: `Fake reply to: ${request} | ${result}`, usage: { input: 0, output: 0 }, toolCalls: toolCalls + 1 };
+  }
   return { text: `Fake reply to: ${request}`, usage: { input: 0, output: 0 }, toolCalls };
 }
