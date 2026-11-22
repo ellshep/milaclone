@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS ingests (
   audio_seconds REAL,
   extract_ms INTEGER,
   attempts INTEGER NOT NULL DEFAULT 0,  -- transcription attempts made
-  next_attempt_at INTEGER               -- when a 'retrying' job is due (ms)
+  next_attempt_at INTEGER,              -- when a 'retrying' job is due (ms)
+  audio_deleted_at INTEGER              -- when retention deleted the audio file (ms)
 );
 CREATE INDEX IF NOT EXISTS idx_ingests_status ON ingests(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_ingests_created ON ingests(created_at);
@@ -50,12 +51,14 @@ FIELDS = (
     "audio_filename",
     "attempts",
     "next_attempt_at",
+    "audio_deleted_at",
 )
 
 # Columns added after the first release, for databases created before them.
 ADDED_COLUMNS = {
     "attempts": "INTEGER NOT NULL DEFAULT 0",
     "next_attempt_at": "INTEGER",
+    "audio_deleted_at": "INTEGER",
 }
 
 
@@ -136,6 +139,17 @@ class Store:
                 (now,),
             ).fetchone()
         return _row(row) if row else None
+
+    def old_done_audio(self, before: int) -> list[dict]:
+        """Finished ingests last updated before `before` (ms) that still have audio.
+        A done ingest is never updated again, so updated_at is when it finished."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT * FROM ingests WHERE status = 'done' AND audio_filename IS NOT NULL "
+                "AND audio_deleted_at IS NULL AND updated_at < ?",
+                (before,),
+            ).fetchall()
+        return [_row(r) for r in rows]
 
     def count(self, *statuses: str) -> int:
         marks = ",".join("?" * len(statuses))

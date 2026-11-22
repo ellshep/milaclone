@@ -317,7 +317,7 @@ def test_store_adds_new_columns_to_an_old_database(tmp_path):
     db.close()
     store = Store(path)
     rec = store.get("g_old")
-    assert rec["attempts"] == 0 and rec["next_attempt_at"] is None
+    assert rec["attempts"] == 0 and rec["next_attempt_at"] is None and rec["audio_deleted_at"] is None
     assert store.next_queued()["id"] == "g_old"
     Store(path)  # opening again is a no-op
 

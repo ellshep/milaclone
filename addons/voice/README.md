@@ -38,8 +38,9 @@ acceptable for you:
   Home Assistant route ([docs/alexa-home-assistant.md](docs/alexa-home-assistant.md))
   exposes nothing: Home Assistant picks the item up from Alexa's to-do list.
 
-Everything else stays on your server: the audio files, every transcript and
-result (in the pipeline's own database), and your boards.
+Everything else stays on your server: the audio files (deleted 7 days after
+each note is processed; failed notes keep theirs), every transcript and result
+(in the pipeline's own database), and your boards.
 
 ## Turn it on
 

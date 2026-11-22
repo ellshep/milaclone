@@ -91,7 +91,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
   - The stale rule and its focus page view wait for V5 (N22). The rule as
     planned: more than 30 days old with no upcoming due date and not starred,
     or more than 14 days overdue, with the reason saved.
-- [ ] **M2.4 Recording retention.** Audio deleted 7 days after `done`;
+- [x] **M2.4 Recording retention.** Audio deleted 7 days after `done`;
       failed ingests keep theirs.
 
 ## M3 · Filing into lists
