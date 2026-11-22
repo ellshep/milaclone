@@ -4,8 +4,9 @@
 const CACHE = 'mila-v1';
 const CDN = ['https://unpkg.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'];
 
+// Same-origin query URLs (each search prefix, ?limit=) would pile up unevicted, so they skip the cache.
 const cacheable = url =>
-  (url.origin === self.location.origin && url.pathname !== '/api/backup') || CDN.includes(url.origin);
+  (url.origin === self.location.origin && url.pathname !== '/api/backup' && !url.search) || CDN.includes(url.origin);
 
 // 206 (a media range) can't be stored; opaque is a no-cors CDN script or stylesheet.
 const storable = res => res.status === 200 || res.type === 'opaque';
