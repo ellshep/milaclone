@@ -81,11 +81,11 @@ to a chat column, plus the agents' threads and receipts.
 
 ## W3 · `addons/agent/`: one agent on one board
 
-- [ ] **W3.1 Service.** Finds agent cards through the MCP, builds each agent's
+- [x] **W3.1 Service.** Finds agent cards through the MCP, builds each agent's
       loop from its card (A5, A11, A12), writes under A7, logs under A21.
   - Acceptance: with a fake provider, a request on a `propose` agent lands in
     its column; on `chat only`, the board is unchanged.
-- [ ] **W3.2 Comment loop.** Polls for `@agent` comments (A13), replies with a
+- [x] **W3.2 Comment loop.** Polls for `@agent` comments (A13), replies with a
       comment card, threads by `replyTo`.
   - Acceptance: a comment with `@agent` gets exactly one reply card below it.
 - [ ] **W3.3 Page.** `/agent/?board=<id>`: the board framed on the left, chat
