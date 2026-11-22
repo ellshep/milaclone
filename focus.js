@@ -18,7 +18,7 @@
 // The /focus page writes back through `markDone` and `setPlacements` (its List
 // mode drag and Reset).
 
-const { db, stmt, rowToItem, breadcrumb } = require('./db');
+const { db, stmt, rowToItem, breadcrumb, INBOX_KEY } = require('./db');
 const { isBlank } = require('./tasklist');
 
 const SOON_DAYS = 3;
@@ -115,6 +115,8 @@ function focusView({ limit = 3, now = new Date() } = {}) {
     for (const task of Array.isArray(card.data.tasks) ? card.data.tasks : []) entries.push({ task, card, board });
   }
   const { tasks, counts } = orderTasks(entries, today);
+  const inbox = stmt.getMeta.get(INBOX_KEY)?.value; // the ranker files only Inbox tasks (M3.3)
+  for (const t of tasks) if (t.listId === inbox) t.inbox = true;
   return { today, tasks: tasks.slice(0, limit), counts };
 }
 

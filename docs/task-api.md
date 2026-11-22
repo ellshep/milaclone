@@ -83,8 +83,8 @@ curl -sS "https://mila.your-tailnet.ts.net/api/tasks?status=open" \
 The ranked open tasks the focus page, the watch and the morning digest share
 (`focus.js`). `limit` is 1–1000 or `all` (default 3). Returns
 `{ today, tasks, counts }`: `today` is the date in `TASK_TZ`; each task carries
-`listId`, `listTitle`, `boardTitle` (the board the list sits on), `tier` and
-`dueIn` (days, negative when overdue);
+`listId`, `listTitle`, `boardTitle` (the board the list sits on), `tier`,
+`dueIn` (days, negative when overdue) and, on Inbox tasks, `inbox: true`;
 `counts` is `{ overdue, dueToday, open }`.
 
 The order:
@@ -138,9 +138,19 @@ is a number or `null`, `rankReason` a string up to 300 characters or `null`,
 listed task gets its fields and `rankedAt` (ms), and **every task not listed
 loses its `rankNudge`** (its score and reason stay), so moves never pile up
 night after night. Tasks placed by hand (`focusOrder`) are never ranked: their
-ids are skipped, and they lose any nudge. Returns `{ ranked, skipped }`,
-`skipped` being the placed ids and ids no list has. A bad body is a `400` and
-changes nothing.
+ids are skipped, and they lose any nudge.
+
+Optional `moves: [{ id, listId, reason }]` file tasks in the same transaction
+(M3.3): each task goes to the end of `listId` with `movedBy: "ranker"` and the
+reason as `moveReason`. A `listId` that isn't a live to-do list outside
+Templates refuses the whole write. A move is skipped, not refused, when its
+task is gone, is no longer in the Inbox, or was last moved by anyone but the
+ranker (a task sent back to the Inbox stays there). The ranker sends at most 10
+a night.
+
+Returns `{ ranked, skipped, moved, movesSkipped }`: `skipped` is the placed ids
+and ids no list has, `movesSkipped` is `[{ id, reason }]` for the skipped moves.
+A bad body is a `400` and changes nothing.
 
 ### `PATCH /api/tasks/:id` — mark done, pin, edit, move
 
@@ -179,10 +189,10 @@ Stored on each task next to the fields the app already uses (`id`, `text`,
 | `rankReason` | `PUT /api/tasks/rank`     | One-line reason for the score                  |
 | `rankedAt`   | `PUT /api/tasks/rank`     | When it was last scored (ms)                   |
 | `importId`   | create (e.g. a migration) | Unique id from another system, for idempotency |
-| `movedFrom`  | `PATCH` with `listId`     | The list the task was last moved out of        |
-| `movedAt`    | `PATCH` with `listId`     | When it was last moved (ms)                    |
-| `movedBy`    | `PATCH` with `listId`     | Who moved it                                   |
-| `moveReason` | `PATCH` with `listId`     | Why, if the mover said                         |
+| `movedFrom`  | a move (`PATCH`, ranking) | The list the task was last moved out of        |
+| `movedAt`    | a move (`PATCH`, ranking) | When it was last moved (ms)                    |
+| `movedBy`    | a move (`PATCH`, ranking) | Who moved it                                   |
+| `moveReason` | a move (`PATCH`, ranking) | Why, if the mover said                         |
 
 They were added now so the later phases need no data migration. Tasks made in
 the app don't have them until something sets them, and readers treat a missing

@@ -33,8 +33,9 @@ acceptable for you:
   pick out the tasks, along with your existing tags and the titles of lists
   labelled Filing.
 - **With the nightly ranking switched on** (`RANK_SCHEDULE=on`), the titles,
-  due dates, list names and board titles of your open tasks, and your Home "Focus
-  priorities" note, go to the ranking's LLM provider once a night
+  due dates, list names and board titles of your open tasks, your Home "Focus
+  priorities" note and the titles of lists labelled Filing go to the ranking's
+  LLM provider once a night
   ([details](docs/voice-capture.md#nightly-ranking)).
 - **With Alexa,** Amazon hears what you say to the Echo. With the skill, the
   text also passes through Cloudflare, and one path of the pipeline is on the

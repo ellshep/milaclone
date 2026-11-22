@@ -12,8 +12,8 @@
 
 const crypto = require('crypto');
 const express = require('express');
-const { db, stmt, id, rootCanvasId, rowToItem, breadcrumb } = require('./db');
-const { isBlank, newTask, applyRanks } = require('./tasklist');
+const { db, stmt, id, rootCanvasId, rowToItem, breadcrumb, inboxCard, INBOX_KEY } = require('./db');
+const { isBlank, newTask, moveTask, applyRanks } = require('./tasklist');
 const { focusView, digestView, parseLimit, inTemplates, hasLabel, LIMIT_MAX } = require('./focus');
 
 const router = express.Router();
@@ -26,7 +26,6 @@ const TAGS_MAX = 30;
 const IMPORT_ID_MAX = 200;
 const RANK_REASON_MAX = 300;
 const MOVE_REASON_MAX = 500;
-const INBOX_KEY = 'inboxItemId';
 
 // ---- Auth --------------------------------------------------------------------
 // Read on every request so an unset token always disables the API rather than
@@ -150,6 +149,27 @@ function cleanRanks(v) {
   return out;
 }
 
+// The ranking's moves (M3.3): `[{ id, listId, reason }]`, filed with movedBy "ranker".
+function cleanMoves(v) {
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || v.length > LIMIT_MAX) bad(`moves must be an array of at most ${LIMIT_MAX}`);
+  return v.map(m => {
+    if (!m || typeof m.id !== 'string' || !m.id || typeof m.listId !== 'string')
+      bad('each move needs an id and a listId');
+    if (m.reason != null && (typeof m.reason !== 'string' || m.reason.length > MOVE_REASON_MAX)) {
+      bad(`a move's reason must be a string up to ${MOVE_REASON_MAX} characters`);
+    }
+    return { id: m.id, listId: m.listId, reason: m.reason?.trim() || null };
+  });
+}
+
+// A live to-do card outside Templates, or a 400.
+function targetList(cards, listId) {
+  const dest = cards.find(c => c.id === listId);
+  if (!dest || inTemplates(breadcrumb(dest.canvasId))) bad('listId is not a to-do list');
+  return dest;
+}
+
 const normTitle = s =>
   String(s || '')
     .trim()
@@ -174,31 +194,6 @@ function saveCard(card) {
     color: card.color ?? null,
     data: JSON.stringify(card.data),
   });
-}
-
-// The Inbox card, made on Home if it doesn't exist or was trashed. Call inside
-// a transaction.
-function inboxCard() {
-  const known = stmt.getMeta.get(INBOX_KEY)?.value;
-  const row = known && stmt.getItem.get(known);
-  if (row && row.type === 'todo') return rowToItem(row);
-  const card = {
-    id: id('i_'),
-    canvasId: rootCanvasId(),
-    parentItemId: null,
-    type: 'todo',
-    x: 60,
-    y: 60,
-    w: 240,
-    h: null,
-    z: Math.max(0, stmt.maxZ.get().m || 0) + 1,
-    color: null,
-    data: { title: 'Inbox', tasks: [] },
-    createdAt: Date.now(),
-  };
-  stmt.insertItem.run(Object.assign({}, card, { data: JSON.stringify(card.data) }));
-  stmt.setMeta.run(INBOX_KEY, card.id);
-  return card;
 }
 
 const listView = (task, card) => Object.assign({}, task, { listId: card.id, listTitle: card.data.title || 'To-do' });
@@ -361,25 +356,57 @@ router.get('/api/tasks/priorities', (req, res) => {
 
 // The nightly ranking's write, in one transaction so it lands whole or not at
 // all. Listed tasks get their score, reason and nudge; every other task loses
-// its nudge. Placed tasks and ids no list has are skipped and returned.
+// its nudge. Placed tasks and ids no list has are skipped and returned. Then the
+// moves are filed; a move to a list that isn't one refuses the whole write. A
+// move whose task has since left the Inbox, or was last moved by anyone but the
+// ranker, is skipped with its reason: the read it was planned on is stale.
 router.put(
   '/api/tasks/rank',
   handle((req, res) => {
     const b = req.body && typeof req.body === 'object' ? req.body : {};
     const ranks = cleanRanks(b.ranks);
+    const moves = cleanMoves(b.moves);
     const now = Date.now();
-    const written = db.transaction(() => {
+    const { written, moved, movesSkipped } = db.transaction(() => {
       const out = new Set();
       for (const card of todoCards()) {
         const r = applyRanks(tasksOf(card), ranks, now);
         if (r.changed) saveCard(card);
         for (const taskId of r.written) out.add(taskId);
       }
-      return out;
+      const cards = todoCards();
+      for (const m of moves) targetList(cards, m.listId); // every target checked before anything moves
+      let filed = 0;
+      const missed = [];
+      const inbox = stmt.getMeta.get(INBOX_KEY)?.value;
+      for (const m of moves) {
+        const dest = targetList(cards, m.listId);
+        const card = cards.find(c => tasksOf(c).some(t => t.id === m.id));
+        const task = card && tasksOf(card).find(t => t.id === m.id);
+        const why = !card
+          ? 'no list has it any more'
+          : card.id !== inbox
+            ? 'it left the Inbox before the move'
+            : task.movedBy && task.movedBy !== 'ranker'
+              ? `it was moved back by ${task.movedBy}`
+              : card === dest
+                ? 'it is in that list already'
+                : null;
+        if (why) {
+          missed.push({ id: m.id, reason: why });
+          continue;
+        }
+        moveTask(card, dest, task, 'ranker', m.reason, now);
+        saveCard(card);
+        saveCard(dest);
+        filed++;
+        log('task.move', { taskId: m.id, from: card.id, listId: dest.id, by: 'ranker' });
+      }
+      return { written: out, moved: filed, movesSkipped: missed };
     })();
     const skipped = [...ranks.keys()].filter(taskId => !written.has(taskId));
-    log('task.rank', { ranked: written.size, skipped: skipped.length });
-    res.json({ ranked: written.size, skipped });
+    log('task.rank', { ranked: written.size, skipped: skipped.length, moved });
+    res.json({ ranked: written.size, skipped, moved, movesSkipped });
   })
 );
 
@@ -409,10 +436,7 @@ router.patch(
 
     const out = db.transaction(() => {
       let dest = null;
-      if (move) {
-        dest = todoCards().find(c => c.id === move.listId);
-        if (!dest || inTemplates(breadcrumb(dest.canvasId))) bad('listId is not a to-do list');
-      }
+      if (move) dest = targetList(todoCards(), move.listId);
       const found = findTask(req.params.id);
       if (!found) return null;
       const { card, task } = found;
@@ -421,14 +445,7 @@ router.patch(
         saveCard(card);
         return { task: listView(task, card) };
       }
-      Object.assign(task, {
-        movedFrom: card.id,
-        movedAt: Date.now(),
-        movedBy: move.movedBy,
-        moveReason: move.moveReason,
-      });
-      card.data.tasks = tasksOf(card).filter(t => t !== task);
-      dest.data.tasks = tasksOf(dest).concat([task]);
+      moveTask(card, dest, task, move.movedBy, move.moveReason);
       saveCard(card);
       saveCard(dest);
       return { task: listView(task, dest), moved: true };

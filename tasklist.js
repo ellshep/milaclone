@@ -20,6 +20,10 @@ const DEFAULTS = {
   noteStyle: {},
   createdAt: null,
   indent: 0,
+  movedFrom: null,
+  movedAt: null,
+  movedBy: null,
+  moveReason: null,
 };
 
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -39,6 +43,10 @@ function normTask(t) {
     noteStyle: isObj(src.noteStyle) ? src.noteStyle : DEFAULTS.noteStyle,
     createdAt: src.createdAt || null,
     indent: Number.isInteger(src.indent) ? src.indent : DEFAULTS.indent,
+    movedFrom: src.movedFrom || null,
+    movedAt: src.movedAt || null,
+    movedBy: src.movedBy || null,
+    moveReason: src.moveReason || null,
   };
 }
 
@@ -73,6 +81,14 @@ const copyTasks = (tasks, makeId) => withIds(tasks, makeId, new Set(tasks.map(t 
 
 // A new open task with an id and a creation time; `fields` may add anything.
 const newTask = (fields, taskId, now = Date.now()) => ({ id: taskId, done: false, createdAt: now, ...fields });
+
+// Moves `task` from list card `from` to the end of list card `to` and records
+// the move on it (M3.1). Callers save both cards.
+function moveTask(from, to, task, movedBy, moveReason = null, now = Date.now()) {
+  Object.assign(task, { movedFrom: from.id, movedAt: now, movedBy, moveReason });
+  from.data.tasks = from.data.tasks.filter(t => t !== task);
+  to.data.tasks = (Array.isArray(to.data.tasks) ? to.data.tasks : []).concat([task]);
+}
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -139,4 +155,4 @@ function applyRanks(tasks, ranks, now) {
   return { written, changed };
 }
 
-module.exports = { normTask, isBlank, withIds, copyTasks, newTask, merge, applyRanks };
+module.exports = { normTask, isBlank, withIds, copyTasks, newTask, moveTask, merge, applyRanks };
