@@ -42,6 +42,7 @@ class FakeApp:
         self.requests = []
         self.fail_titles = set()
         self.lists = []  # what GET /api/tasks/lists?label=Filing answers
+        self.gone_lists = set()  # list ids a POST is refused for (trashed since they were read)
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         if request.headers.get("authorization") != f"Bearer {TASK_TOKEN}":
@@ -58,6 +59,8 @@ class FakeApp:
         self.requests.append(body)
         if body["title"] in self.fail_titles:
             return httpx.Response(500, text="boom")
+        if body.get("listId") in self.gone_lists:
+            return httpx.Response(400, json={"error": "listId is not a to-do list"})
         key = " ".join(body["title"].lower().split())
         for t in self.tasks:
             if body.get("dedupe") and " ".join(t["text"].lower().split()) == key:

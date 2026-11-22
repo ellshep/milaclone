@@ -92,6 +92,17 @@ def test_a_task_naming_a_filing_list_is_filed_there(client, env):
     assert "listId" not in sent[1]  # no list named: the Inbox
 
 
+def test_a_filing_list_gone_since_it_was_read_sends_the_task_to_the_inbox(client, env, capsys):
+    env.app_api.lists = [{"id": "i_err", "title": "Errands", "boardTitle": "Home"}]
+    env.app_api.gone_lists = {"i_err"}
+    env.deps.extractor.result = Extraction(summary="s", tasks=[ExtractedTask(title="Post it", listName="Errands")])
+    body = client.post("/ingest/text", headers=env.auth, json={"text": "x"}).json()
+    assert body["status"] == "done"
+    assert [c["title"] for c in body["created"]] == ["Post it"]
+    assert [r.get("listId") for r in env.app_api.requests] == ["i_err", None]
+    assert '"ingest.list_gone"' in capsys.readouterr().out
+
+
 def test_extraction_runs_without_filing_lists_when_they_cannot_be_read(client, env):
     env.app_api.lists = None  # the app answers 500
     assert client.post("/ingest/text", headers=env.auth, json={"text": "Buy milk"}).status_code == 200

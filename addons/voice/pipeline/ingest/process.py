@@ -106,8 +106,16 @@ def extract_and_create(deps: Deps, ingest_id: str, transcript: str, source: str)
 
     created, skipped, errors = [], [], []
     for task in ext.tasks:
+        list_id = filing.get(task.listName or "")
         try:
-            r = deps.tasks.create(task, source, filing.get(task.listName or ""))
+            try:
+                r = deps.tasks.create(task, source, list_id)
+            except TaskAPIError as e:
+                # The Filing list was trashed or unlabelled since it was read: the Inbox instead.
+                if not (list_id and "listId is not a to-do list" in str(e)):
+                    raise
+                log("ingest.list_gone", id=ingest_id, list_id=list_id)
+                r = deps.tasks.create(task, source)
         except TaskAPIError as e:
             errors.append(f"{task.title}: {e}")
             continue

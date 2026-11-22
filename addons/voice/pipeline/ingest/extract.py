@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -92,7 +93,7 @@ def _list_rule(lists: tuple[str, ...]) -> str:
         return ""
     return ("\n- List: set a task's listName only when the speaker names one of these lists for it "
             "(\"put X on Errands\", \"for the garden list\"); otherwise null. Never guess from the topic.\n"
-            "  Lists: " + ", ".join(lists))
+            "  Lists: " + ", ".join(json.dumps(name) for name in lists))
 
 
 def build_prompt(transcript: str, today: date, tags: tuple[str, ...] = (), lists: tuple[str, ...] = ()) -> str:

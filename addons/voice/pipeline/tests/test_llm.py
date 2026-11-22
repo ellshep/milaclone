@@ -99,7 +99,7 @@ def test_a_task_gets_a_filing_list_only_when_named(monkeypatch):
     item = schema["properties"]["tasks"]["items"]
     assert item["properties"]["listName"] == {"type": ["string", "null"], "enum": ["Errands", "Garden", None]}
     assert "listName" in item["required"] and "listName" not in SCHEMA["properties"]["tasks"]["items"]["properties"]
-    assert "Lists: Errands, Garden" in build_prompt("x", NOW.date(), (), ("Errands", "Garden"))
+    assert 'Lists: "Errands", "Garden"' in build_prompt("x", NOW.date(), (), ("Errands", "Garden"))
     assert "Lists:" not in build_prompt("x", NOW.date())
 
 
