@@ -121,8 +121,9 @@ with every add-on off. A box is ticked when its acceptance test lands.
 
 - [ ] **M4.1 Server side** (N23–N26). Held until the M4.2 device spike shows
       the watch's audio format. Narrow tokens (watch, later Home Assistant);
-      `/ingest/audio` also takes the watch's audio; a client capture id makes a
-      resend a no-op; an authenticated connection test.
+      `/ingest/audio` also takes the watch's audio; a `clientId` makes a
+      resend return the original recording (N24); an authenticated connection
+      test.
 - [ ] **M4.2 Watch app** in `addons/pebble/`, in the watch handoff's order:
       the device spikes first (tailnet reachability from the phone, microphone
       on iOS, a 3-minute recording, quick launch timing, hold-to-speak), then
