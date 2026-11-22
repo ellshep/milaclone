@@ -266,9 +266,26 @@ function moveItemDeep(itemId, canvasId, x, y) {
   if (canvases.some(c => c.id === canvasId)) return false;
   const nested = new Set(canvases.map(c => c.id));
   const inside = new Set(items.map(r => r.id));
+  const before = new Map(items.map(r => [r.id, r])); // rows as they were, before this loop updates them
+  // Where a card sat on the old board: its own spot, or its live column's if it's in one.
+  const oldPos = cardId => {
+    let r = before.get(cardId);
+    while (r.parentItemId) {
+      const p = before.get(r.parentItemId) || stmt.getItem.get(r.parentItemId);
+      if (!p) break; // an old row whose column is gone: use the card's own spot
+      r = p;
+    }
+    return { x: r.x, y: r.y };
+  };
   for (const r of items) {
     if (nested.has(r.canvasId)) continue; // lives on a nested canvas: unchanged
-    if (r.id !== itemId && strandedLine(r, inside)) continue; // stays with its other card
+    if (r.id !== itemId && strandedLine(r, inside)) {
+      // Stays with its other card; its end on a moved card becomes a free point, or it couldn't be drawn.
+      const data = JSON.parse(r.data);
+      for (const k of ['from', 'to']) if (data[k]?.id && inside.has(data[k].id)) data[k] = oldPos(data[k].id);
+      stmt.updateItem.run({ ...r, data: JSON.stringify(data) });
+      continue;
+    }
     const it = rowToItem(r);
     if (r.id === itemId) Object.assign(it, { x, y, parentItemId: null, z: Math.max(0, stmt.maxZ.get().m || 0) + 1 });
     it.canvasId = canvasId;
