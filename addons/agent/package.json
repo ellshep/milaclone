@@ -2,13 +2,14 @@
   "name": "milaclone-agent",
   "private": true,
   "type": "module",
-  "description": "Board agents for milaclone: one agent per agent card, reached by @agent comments (docs/agent-addon.md W3)",
+  "description": "Board agents for milaclone: one agent per agent card, reached by @agent comments and the /agent/ page (docs/agent-addon.md W3)",
   "scripts": {
     "start": "node src/service.js",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test \"test/*.test.js\"",
+    "test:e2e": "../../node_modules/.bin/playwright test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.6.0",

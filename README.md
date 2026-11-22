@@ -161,6 +161,12 @@ board works the same without them.
   third-party services (Deepgram for speech-to-text, an LLM provider, and
   Cloudflare for the Alexa skill, or Home Assistant for the private Alexa
   route), so read its page before turning it on.
+- **Board agents** ([addons/agent](addons/agent/README.md), with
+  [addons/mcp](addons/mcp/README.md)): an agent card on a board answers
+  `@agent` comments and chats on a page next to the board, reading and, if you
+  let it, writing cards. Sends that board's content to the model provider on
+  the card, so read its page before turning it on. The MCP server alone also
+  lets Claude Code and Claude Desktop use your boards.
 
 ## Your data
 

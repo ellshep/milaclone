@@ -88,12 +88,12 @@ to a chat column, plus the agents' threads and receipts.
 - [x] **W3.2 Comment loop.** Polls for `@agent` comments (A13), replies with a
       comment card, threads by `replyTo`.
   - Acceptance: a comment with `@agent` gets exactly one reply card below it.
-- [ ] **W3.3 Page.** `/agent/?board=<id>`: the board framed on the left, chat
+- [x] **W3.3 Page.** `/agent/?board=<id>`: the board framed on the left, chat
       on the right, selection as context (A14), queue and receipts (A15), pin
       a reply to the board, thread list for agents with `memory: thread`.
   - Acceptance (Playwright, against the fake provider): select two cards, ask,
     and the request carries those two ids.
-- [ ] **W3.4 Compose and docs.** Profile `agent`, Tailscale Serve route,
+- [x] **W3.4 Compose and docs.** Profile `agent`, Tailscale Serve route,
       `addons/agent/README.md` and a `CLAUDE.md` under the 1,500-word cap.
 
 ## W4 · The orchestrator
