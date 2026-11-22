@@ -135,10 +135,19 @@ ids are skipped, and they lose any nudge. Returns `{ ranked, skipped }`,
 `skipped` being the placed ids and ids no list has. A bad body is a `400` and
 changes nothing.
 
-### `PATCH /api/tasks/:id` — mark done, pin, edit
+### `PATCH /api/tasks/:id` — mark done, pin, edit, move
 
 Any of `title`, `notes`, `tags`, `dueDate`, `done`, `starred`, `priority`,
 `pinned`. Returns `{ task }`, or `404` if no list has that task.
+
+`listId` moves the task to the end of another to-do list (`400` if it isn't a
+live to-do card, or sits under the Templates board). The move is recorded on the
+task as `movedFrom` (the old list id), `movedAt` (ms), `movedBy` (from the body,
+1–40 characters such as `ranker`, `voice` or `owner`; default `api`, like
+`source`) and `moveReason` (optional, up to 500 characters). Naming the list the
+task is already in moves nothing and leaves the record as it was. A device still holding the
+old list loses any edit it saves to a moved task, by the same rule as a task
+deleted elsewhere (the three-way merge).
 
 ```bash
 curl -sS -X PATCH https://mila.your-tailnet.ts.net/api/tasks/t_abc123 \
@@ -163,6 +172,10 @@ Stored on each task next to the fields the app already uses (`id`, `text`,
 | `rankReason` | `PUT /api/tasks/rank`     | One-line reason for the score                  |
 | `rankedAt`   | `PUT /api/tasks/rank`     | When it was last scored (ms)                   |
 | `importId`   | create (e.g. a migration) | Unique id from another system, for idempotency |
+| `movedFrom`  | `PATCH` with `listId`     | The list the task was last moved out of        |
+| `movedAt`    | `PATCH` with `listId`     | When it was last moved (ms)                    |
+| `movedBy`    | `PATCH` with `listId`     | Who moved it                                   |
+| `moveReason` | `PATCH` with `listId`     | Why, if the mover said                         |
 
 They were added now so the later phases need no data migration. Tasks made in
 the app don't have them until something sets them, and readers treat a missing
@@ -170,7 +183,7 @@ field as its default.
 
 ## Logging
 
-Each create, skip, update and ranking writes one JSON line to the server log, for
+Each create, skip, update, ranking and move writes one JSON line to the server log, for
 example `{"event":"task.create","source":"voice-note","taskId":"t_…","listId":"i_…"}`.
 With Docker: `docker compose logs app | grep task.`
 

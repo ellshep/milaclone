@@ -299,6 +299,69 @@ test('PATCH marks done, pins and edits fields', async () => {
   assert.equal((await patch(t.id, { title: '' })).status, 400);
 });
 
+test('M3.1 PATCH listId moves a task to another list and records the move', async () => {
+  const canvasId = (await plain('/api/root')).rootCanvasId;
+  const item = b =>
+    fetch(base + '/api/item', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(b),
+    }).then(r => r.json());
+  const dest = await item({ canvasId, type: 'todo', data: { title: 'Errands', tasks: [] } });
+  const t = (await post({ title: 'Post the parcel' })).body.task;
+  const from = t.listId;
+  const stale = (await plain('/api/todos')).lists.find(l => l.id === from).tasks;
+
+  const r = await patch(t.id, { listId: dest.id, movedBy: 'ranker', moveReason: 'an errand', starred: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.task.listId, dest.id);
+  assert.equal(r.body.task.listTitle, 'Errands');
+  assert.equal(r.body.task.movedFrom, from);
+  assert.equal(r.body.task.movedBy, 'ranker');
+  assert.equal(r.body.task.moveReason, 'an errand');
+  assert.ok(Date.now() - r.body.task.movedAt < 5000);
+  assert.equal(r.body.task.starred, true); // other fields patch in the same call
+  const lists = (await plain('/api/todos')).lists;
+  assert.ok(!lists.find(l => l.id === from).tasks.some(x => x.id === t.id), 'gone from the old list');
+  assert.deepEqual(
+    lists.find(l => l.id === dest.id).tasks.map(x => x.id),
+    [t.id]
+  );
+  assert.ok(logs.some(l => l.includes('"task.move"')));
+
+  // a client saving its stale copy of the old list doesn't bring the task back there
+  const saved = await fetch(base + '/api/item/' + from, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { tasks: stale }, baseTasks: stale }),
+  }).then(r => r.json());
+  assert.ok(!saved.data.tasks.some(x => x.id === t.id));
+
+  // moving back defaults movedBy to "api"; the same list is a no-op that keeps the record
+  const back = (await patch(t.id, { listId: from })).body.task;
+  assert.equal(back.movedFrom, dest.id);
+  assert.equal(back.movedBy, 'api');
+  assert.equal(back.moveReason, null);
+  const same = await patch(t.id, { listId: from, movedBy: 'owner' });
+  assert.equal(same.status, 200);
+  assert.equal(same.body.task.movedBy, 'api');
+
+  // the target must be a live to-do list outside Templates
+  const tpl = await item({ canvasId, type: 'board', data: { title: 'Templates' } });
+  const inner = await item({ canvasId: tpl.data.childCanvasId, type: 'board', data: { title: 'Trip' } });
+  const tplList = await item({ canvasId: inner.data.childCanvasId, type: 'todo', data: { title: 'Pack', tasks: [] } });
+  const note = await item({ canvasId, type: 'note', data: { title: 'not a list' } });
+  for (const listId of [tplList.id, note.id, 'i_missing', 42]) {
+    assert.equal((await patch(t.id, { listId })).status, 400, String(listId));
+  }
+  assert.equal((await patch(t.id, { listId: dest.id, moveReason: 7 })).status, 400);
+  assert.equal((await patch(t.id, { listId: dest.id, movedBy: '' })).status, 200); // blank = "api", like source
+  const longBy = await patch(t.id, { listId: from, movedBy: 'x'.repeat(41) });
+  assert.equal(longBy.status, 400);
+  assert.match(longBy.body.error, /^movedBy /);
+  assert.equal((await patch('t_missing', { listId: dest.id })).status, 404);
+});
+
 test('a client edit from a stale copy keeps tasks the API added', async () => {
   const t = (await post({ title: 'Merge base' })).body.task;
   const cardRow = (await plain('/api/todos')).lists.find(l => l.id === t.listId);
