@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createSaveQueue } from '../../public/js/savequeue.js';
+import tasklist from '../../tasklist.js';
 
 // The save protocol through its interface, against an in-memory server.
 
@@ -215,5 +216,30 @@ describe('save queue', () => {
     q.edit('a', { tasks: [{ id: 't1', text: 'Milk', done: true }] });
     await q.flush('a');
     expect(sent[1].body.baseTasks).toEqual([{ id: 't1', text: 'Milk' }]); // so Eggs isn't read as deleted
+  });
+
+  it('keeps the base while edits are queued, so a task added elsewhere survives the next save', async () => {
+    // The server merges like routes.js: tasklist.merge(baseTasks, stored, mine).
+    let stored = [{ id: 't1', text: 'M' }];
+    let land;
+    const send = vi.fn(async (id, body) => {
+      if (!land) await new Promise(r => (land = r)); // hold the first save in flight
+      stored = tasklist.merge(body.baseTasks, stored, body.data.tasks);
+      return { id, data: { tasks: stored } };
+    });
+    const q = createSaveQueue({ send, delay: 400, current: () => undefined });
+    q.track('a', stored);
+    q.edit('a', { tasks: [{ id: 't1', text: 'Mi' }] });
+    const first = q.flush('a');
+    await vi.waitFor(() => expect(land).toBeTypeOf('function'));
+    stored = [...stored, { id: 'v1', text: 'Call mum' }]; // POST /api/tasks from voice meanwhile
+    q.edit('a', { tasks: [{ id: 't1', text: 'Mil' }] }); // still typing: the screen won't show the merge
+    land();
+    await first;
+    await q.flush('a');
+    expect(stored).toEqual([
+      { id: 't1', text: 'Mil' },
+      { id: 'v1', text: 'Call mum' },
+    ]);
   });
 });
