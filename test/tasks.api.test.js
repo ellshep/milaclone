@@ -356,7 +356,9 @@ test('M3.1 PATCH listId moves a task to another list and records the move', asyn
   }
   assert.equal((await patch(t.id, { listId: dest.id, moveReason: 7 })).status, 400);
   assert.equal((await patch(t.id, { listId: dest.id, movedBy: '' })).status, 200); // blank = "api", like source
-  assert.equal((await patch(t.id, { listId: from, movedBy: 'x'.repeat(41) })).status, 400);
+  const longBy = await patch(t.id, { listId: from, movedBy: 'x'.repeat(41) });
+  assert.equal(longBy.status, 400);
+  assert.match(longBy.body.error, /^movedBy /);
   assert.equal((await patch('t_missing', { listId: dest.id })).status, 404);
 });
 
@@ -378,4 +380,23 @@ test('a client edit from a stale copy keeps tasks the API added', async () => {
   const kept = saved.data.tasks.find(x => x.id === t.id);
   assert.equal(kept.done, true);
   assert.equal(kept.source, 'api');
+});
+
+test('a client edit from a stale copy keeps the nightly ranking written since', async () => {
+  const t = (await post({ title: 'Rank base' })).body.task;
+  const baseTasks = (await plain('/api/todos')).lists.find(l => l.id === t.listId).tasks;
+  const ranked = await call('PUT', '/api/tasks/rank', {
+    ranks: [{ id: t.id, rankScore: 77, rankReason: 'Matters', rankNudge: 1 }],
+  });
+  assert.deepEqual(ranked.body, { ranked: 1, skipped: [] });
+  // the client still has the copy from before the ranking (rankScore: null) and renames the task
+  const mine = baseTasks.map(x => (x.id === t.id ? Object.assign({}, x, { text: 'Renamed' }) : x));
+  const saved = await fetch(base + '/api/item/' + t.listId, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { tasks: mine }, baseTasks }),
+  }).then(r => r.json());
+  const kept = saved.data.tasks.find(x => x.id === t.id);
+  assert.deepEqual([kept.text, kept.rankScore, kept.rankReason, kept.rankNudge], ['Renamed', 77, 'Matters', 1]);
+  assert.equal(typeof kept.rankedAt, 'number');
 });

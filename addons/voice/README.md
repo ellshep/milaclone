@@ -31,6 +31,10 @@ acceptable for you:
 - **Transcripts go to the LLM provider you configure** (Anthropic by default;
   OpenAI, Gemini, or a local model through any OpenAI-compatible endpoint) to
   pick out the tasks.
+- **With the nightly ranking switched on** (`RANK_SCHEDULE=on`), the titles,
+  due dates, list names and board titles of your open tasks, and your Home "Focus
+  priorities" note, go to the ranking's LLM provider once a night
+  ([details](docs/voice-capture.md#nightly-ranking)).
 - **With Alexa,** Amazon hears what you say to the Echo. With the skill, the
   text also passes through Cloudflare, and one path of the pipeline is on the
   internet, behind Alexa's request signature, Cloudflare Access and a bearer
@@ -60,7 +64,7 @@ Remove the `COMPOSE_PROFILES` line from `.env`, then stop and remove the
 add-on's containers:
 
 ```bash
-docker compose --profile alexa rm -sf pipeline cloudflared
+docker compose --profile alexa rm -sf pipeline ranker cloudflared
 ```
 
 The task API stays as it was; clear `TASK_API_TOKEN` to switch that off too. The `milaclone_ingest` volume keeps your past recordings

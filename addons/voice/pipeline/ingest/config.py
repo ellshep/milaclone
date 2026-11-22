@@ -41,13 +41,15 @@ def _terms(raw: str) -> tuple[str, ...]:
 @dataclass(frozen=True)
 class StepConfig:
     """Which model one pipeline step uses. Steps are configured separately
-    (EXTRACT_* now, RANK_* for the nightly ranking later)."""
+    (EXTRACT_* for extraction, RANK_* for the nightly ranking)."""
 
     step: str
     provider: str
     model: str
     api_key: str = ""
     base_url: str = ""
+    max_tokens: int = 8000
+    timeout_s: float = 60.0
 
     @classmethod
     def from_env(cls, step: str) -> "StepConfig":

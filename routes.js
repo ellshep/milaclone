@@ -245,11 +245,9 @@ router.patch('/api/item/:id', (req, res) => {
   // The one type change: a note whose text is a hex colour becomes a swatch.
   if (b.type === 'swatch' && it.type === 'note') it.type = 'swatch';
   if (b.parentItemId !== undefined) it.parentItemId = b.parentItemId;
-  if (b.canvasId && stmt.getCanvas.get(b.canvasId)) it.canvasId = b.canvasId;
-  // Checked only when the parent or canvas changes, so an old row with an odd
-  // parent can still be edited.
-  const moved = b.parentItemId !== undefined || it.canvasId !== row.canvasId;
-  if (moved && badParent(it.parentItemId, it.canvasId, it.id, it.type)) {
+  // Checked only when the parent changes, so an old row with an odd parent can
+  // still be edited. Moving to another canvas is POST /move, never PATCH.
+  if (b.parentItemId !== undefined && badParent(it.parentItemId, it.canvasId, it.id, it.type)) {
     return res.status(400).json({ error: 'bad parentItemId' });
   }
   if (b.data && typeof b.data === 'object') {

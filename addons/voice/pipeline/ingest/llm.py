@@ -1,6 +1,6 @@
 """Provider-agnostic JSON completion.
 
-Every model-backed step (task extraction now, nightly ranking later) calls
+Every model-backed step (task extraction, the nightly ranking) calls
 `complete_json` with its own StepConfig, so each step can use a different
 provider and model. The answer is validated against a pydantic model; a bad
 answer is retried once, then LLMError is raised and the caller falls back.
@@ -33,9 +33,6 @@ from .logs import log
 # Anthropic has a default here; the other providers need an explicit model
 # so a stale name never ships silently.
 DEFAULT_MODELS = {"anthropic": "claude-haiku-5-5", "fake": "fake"}
-
-MAX_TOKENS = 8000
-TIMEOUT_S = 60.0
 
 
 class LLMError(Exception):
@@ -73,7 +70,6 @@ def _new_anthropic(api_key, base_url, http=None):
     return anthropic.Anthropic(
         api_key=api_key or None,
         base_url=base_url or None,
-        timeout=TIMEOUT_S,
         max_retries=2,
         # The SDK runs on httpx2; only an httpx2 client (tests pass a mock one) is handed over.
         http_client=http if type(http).__module__.partition(".")[0] == "httpx2" else None,
@@ -111,9 +107,9 @@ def _call_anthropic(cfg, model, system, prompt, schema, http):
 
     client = _new_anthropic(cfg.api_key, cfg.base_url, http) if http else _anthropic_client(cfg.api_key, cfg.base_url)
     try:
-        resp = client.messages.create(
+        resp = client.with_options(timeout=cfg.timeout_s).messages.create(
             model=model,
-            max_tokens=MAX_TOKENS,
+            max_tokens=cfg.max_tokens,
             system=system,
             messages=[{"role": "user", "content": prompt}],
             # Small, well-specified task: low effort keeps it fast and cheap.
@@ -131,9 +127,9 @@ def _call_anthropic(cfg, model, system, prompt, schema, http):
     return _Raw(text, resp.usage.input_tokens, resp.usage.output_tokens)
 
 
-def _post(http, url, headers, body):
+def _post(http, url, headers, body, timeout_s):
     own = http is None
-    client = http or httpx.Client(timeout=TIMEOUT_S)
+    client = http or httpx.Client(timeout=timeout_s)
     try:
         r = client.post(url, headers=headers, json=body)
     except httpx.HTTPError as e:
@@ -159,7 +155,7 @@ def _openai_like(cfg, model, system, prompt, schema, http, *, base_default, resp
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
         "response_format": response_format,
     }
-    data = _post(http, base + "/chat/completions", headers, body)
+    data = _post(http, base + "/chat/completions", headers, body, cfg.timeout_s)
     try:
         msg = data["choices"][0]["message"]
     except (KeyError, IndexError, TypeError) as e:
@@ -190,7 +186,8 @@ def _call_gemini(cfg, model, system, prompt, schema, http):
         "contents": [{"role": "user", "parts": [{"text": prompt + "\n\n" + _schema_hint(schema)}]}],
         "generationConfig": {"responseMimeType": "application/json"},
     }
-    data = _post(http, f"{base}/models/{model}:generateContent", {"x-goog-api-key": cfg.api_key}, body)
+    data = _post(http, f"{base}/models/{model}:generateContent", {"x-goog-api-key": cfg.api_key}, body,
+                 cfg.timeout_s)
     try:
         cand = data["candidates"][0]
         text = "".join(p.get("text", "") for p in cand["content"]["parts"])

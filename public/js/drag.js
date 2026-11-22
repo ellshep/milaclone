@@ -136,7 +136,7 @@ async function finishDrag(ev) {
     it.y = order;
     const sibs = state.view.items.filter(k => k.parentItemId === state.drag.dropCol).sort((a, b) => a.y - b.y);
     sibs.forEach((s, i) => (s.y = i));
-    await api.patch(it.id, { parentItemId: it.parentItemId, canvasId: state.view.canvas.id, z: it.z });
+    await api.patch(it.id, { parentItemId: it.parentItemId, z: it.z });
     await api.patchMany(sibs.map(s => ({ id: s.id, y: s.y })));
     render();
   } else {
