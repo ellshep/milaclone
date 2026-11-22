@@ -50,7 +50,7 @@ gets `401`.
 | `source`   | string                     | Who created it, e.g. `api`, `voice-note`, `alexa`, `migration`. Default `api`            |
 | `listId`   | string                     | A to-do card's id to add to instead of the Inbox                                         |
 | `importId` | string                     | Unique id from another system. Posting the same one again returns the existing task      |
-| `dedupe`   | boolean                    | If an **open** task already has the same title (case and spacing ignored), skip creating |
+| `dedupe`   | boolean                    | If an **open** task in the same list has the same title (case and spacing ignored), skip |
 
 Responses:
 
