@@ -4,7 +4,7 @@
 
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
@@ -35,6 +35,7 @@ const TOOLS = [
   'search',
   'set_todo_task_done',
   'update_item',
+  'write_brief',
 ];
 
 const freePort = () =>
@@ -315,6 +316,79 @@ test('update_item never re-points a board card, a shortcut or a line elsewhere; 
   assert.equal(r.isError, true);
   assert.match(r.content[0].text, /agent cards are set up by the owner/);
   assert.ok((await api('GET', '/api/trash')).items.some(t => t.id === agent.id));
+});
+
+test('write_brief files briefs in a Briefs column, and their text round-trips through export.md', async () => {
+  const { rootCanvasId } = await api('GET', '/api/root');
+  const open = await boardOn(rootCanvasId, 'Briefed', { allow: true });
+  await api('POST', '/api/item', {
+    canvasId: open,
+    type: 'note',
+    x: 100,
+    y: 80,
+    w: 300,
+    data: { text: 'already here' },
+  });
+  const first = await call('write_brief', {
+    board_id: open,
+    goal: 'Add  a digest\nview',
+    repo: 'ellshep/milaclone',
+    files: ['focus.js', 'tasks-api.js'],
+    acceptance: ['Capped at 8 lines', '[ ] Done moves the next one up'],
+  });
+  const text = [
+    'Goal: Add a digest view',
+    'Repo: ellshep/milaclone',
+    'Files:',
+    '- focus.js',
+    '- tasks-api.js',
+    'Acceptance:',
+    '- Capped at 8 lines',
+    '- Done moves the next one up',
+  ].join('\n');
+  assert.equal(first.data.text, text);
+  const second = await call('write_brief', { board_id: open, goal: 'Second', repo: 'r', acceptance: ['ok'] });
+  assert.equal(second.data.text, 'Goal: Second\nRepo: r\nAcceptance:\n- ok');
+  assert.ok(logs.some(l => l.includes('"write_brief"') && l.includes(first.id)));
+
+  const items = (await api('GET', '/api/canvas/' + open)).items;
+  const cols = items.filter(i => i.type === 'column');
+  assert.deepEqual([cols[0].x, cols[0].y], [440, 80]); // to the right of the note, not on it
+  assert.deepEqual(
+    cols.map(c => c.data.title),
+    ['Briefs']
+  ); // made once, then reused
+  const inCol = items.filter(i => i.parentItemId === cols[0].id).sort((a, b) => a.y - b.y);
+  assert.deepEqual(
+    inCol.map(i => i.id),
+    [first.id, second.id]
+  );
+  await refused('write_brief', {
+    board_id: await boardOn(rootCanvasId, 'No briefs'),
+    goal: 'x',
+    repo: 'r',
+    acceptance: ['y'],
+  });
+
+  // export.md, then the board's own importer reads it back as the same notes, into a fresh board
+  const md = await (await fetch(`${boardUrl}/api/canvas/${open}/export.md`)).text();
+  const file = path.join(dataDir, 'briefs.md');
+  fs.writeFileSync(file, md);
+  const target = await boardOn(rootCanvasId, 'Import target');
+  const importer = ['scripts/import-milanote-md.js', '--base', boardUrl, '--parent', target, file];
+  execFileSync(process.execPath, importer, { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' }); // stderr lands in the error
+  const copies = (await api('GET', '/api/canvas/' + target)).items.filter(i => i.type === 'board');
+  assert.deepEqual(
+    copies.map(c => c._childTitle),
+    ['Briefed']
+  );
+  assert.notEqual(copies[0].data.childCanvasId, open);
+  const imported = (await api('GET', '/api/canvas/' + copies[0].data.childCanvasId)).items;
+  assert.deepEqual(
+    imported.map(n => n.type).sort(),
+    ['note', 'note', 'note'] // no to-do card from the checkbox line
+  );
+  assert.deepEqual(imported.map(n => n.data.text).sort(), ['already here', text, second.data.text].sort());
 });
 
 test('the HTTP endpoint needs the token and POST', async () => {

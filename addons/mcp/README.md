@@ -56,6 +56,7 @@ Nothing is deleted for good: anything an agent trashes is in the board's Trash.
 | `delete_item`, `restore_item`         | To the trash and back                                           |
 | `export_board_markdown`               | The board's Markdown export                                     |
 | `add_todo_task`, `set_todo_task_done` | To-do lists, merged like any other edit                         |
+| `write_brief`                         | A Claude Code brief (goal, files, acceptance, repo) in "Briefs" |
 
 ## Turn it on (server, over the tailnet)
 
