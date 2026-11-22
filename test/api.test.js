@@ -769,9 +769,10 @@ test('F1.3 a card can only be parented to a live column on its own canvas', asyn
   assert.equal((await send('PATCH', '/api/items', { updates: [{ id: note.id, parentItemId: col.id }] })).status, 200);
 });
 
-test('F1.3 the parent rule also holds on create, on a canvas move, and for columns', async () => {
+test('F1.3 the parent rule also holds on create and for columns; PATCH never changes canvas', async () => {
   const canvasId = await root();
-  const other = (await send('POST', '/api/item', { canvasId, type: 'board' })).body.data.childCanvasId;
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board' })).body;
+  const other = board.data.childCanvasId;
   const col = (await send('POST', '/api/item', { canvasId, type: 'column' })).body;
   const col2 = (await send('POST', '/api/item', { canvasId, type: 'column' })).body;
 
@@ -780,10 +781,10 @@ test('F1.3 the parent rule also holds on create, on a canvas move, and for colum
   const inCol = (await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: col.id })).body;
   assert.equal(inCol.parentItemId, col.id);
 
-  // moving canvases without clearing the parent would strand the card
-  assert.equal((await send('PATCH', '/api/item/' + inCol.id, { canvasId: other })).status, 400);
-  const moved = await send('PATCH', '/api/item/' + inCol.id, { canvasId: other, parentItemId: null });
-  assert.equal(moved.body.canvasId, other);
+  // canvasId is ignored: moving is POST /move, which refuses a board inside itself
+  const stay = await send('PATCH', '/api/item/' + inCol.id, { canvasId: other, parentItemId: null });
+  assert.equal(stay.body.canvasId, canvasId);
+  assert.equal((await send('PATCH', '/api/item/' + board.id, { canvasId: other })).body.canvasId, canvasId);
 
   const cycle = await send('PATCH', '/api/items', {
     updates: [

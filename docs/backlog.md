@@ -17,7 +17,6 @@ Nothing in progress: pick from Next.
 ## Next
 
 - **AU4** Voice `dedupe: true` matches open tasks anywhere, including Templates, so "add milk" is dropped as a duplicate (`tasks-api.js:264`). Fix: check only the target list.
-- **AU6** `PATCH /api/item {canvasId}` moves a board without `/move`'s checks, so a board can be moved into itself and vanish (`routes.js:276`). Fix: drop cross-canvas moves from PATCH (`drag.js:139`, test at `test/api.test.js:670`).
 - **AU8** The service worker caches every query-string URL (each search prefix) and never evicts; trashed images stay on the phone (`sw.js:7`). Fix: don't cache same-origin URLs with `url.search`.
 - **AU9** Cut-and-paste leaves an invisible, unselectable line on the old board when one end stays behind (`db.js:248`, `lines.js:109`). Fix: in `moveItemDeep`, turn that end into a free point at the card's old position.
 - **AU10** Copy/duplicate within 400 ms of an edit miss the last words (`clipboard.js:42`). Fix: `await flushAllSaves(false)` at the start of `placeAll`.
