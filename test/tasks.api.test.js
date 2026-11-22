@@ -416,7 +416,7 @@ test('a client edit from a stale copy keeps the nightly ranking written since', 
   const ranked = await call('PUT', '/api/tasks/rank', {
     ranks: [{ id: t.id, rankScore: 77, rankReason: 'Matters', rankNudge: 1 }],
   });
-  assert.deepEqual(ranked.body, { ranked: 1, skipped: [] });
+  assert.deepEqual(ranked.body, { ranked: 1, skipped: [], moved: 0, movesSkipped: [] });
   // the client still has the copy from before the ranking (rankScore: null) and renames the task
   const mine = baseTasks.map(x => (x.id === t.id ? Object.assign({}, x, { text: 'Renamed' }) : x));
   const saved = await fetch(base + '/api/item/' + t.listId, {

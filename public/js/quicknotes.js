@@ -108,6 +108,10 @@ function normTask(t) {
     note: typeof t.note === 'string' ? t.note : '',
     noteStyle: t.noteStyle && typeof t.noteStyle === 'object' ? t.noteStyle : {},
     createdAt: t.createdAt || null,
+    movedFrom: t.movedFrom || null,
+    movedAt: t.movedAt || null,
+    movedBy: t.movedBy || null,
+    moveReason: t.moveReason || null,
   };
 }
 

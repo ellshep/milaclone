@@ -19,7 +19,7 @@ Its own Compose service and image behind the `voice` and `alexa` profiles. FastA
 - The Anthropic client is built once per key (`_anthropic_client`), and `llm.preload` builds it in a background thread at startup: importing the SDK takes 7–9 s under the 0.5 CPU cap, longer than the Alexa Worker waits.
 - Tests (`pipeline/tests`, pytest) inject fakes through `Deps`. The `Pipeline tests` job also checks the add-on is off without a profile, creates the compose containers and checks text → task end to end in Docker.
 - `tailscale/serve.json` routes `/ingest/` to `pipeline:8000`.
-- `ingest/rank.py` is the nightly ranking, its own Compose service `ranker` (voice profile, `restart: on-failure`, exits 0 unless `RANK_SCHEDULE=on`). It sends only the soon/starred/rest tiers, so fixed and placed tasks are never touched, and writes nothing unless every step worked: one `PUT /api/tasks/rank`. Each unset `RANK_*` falls back to `EXTRACT_*`, except the model, which defaults to Opus 5.5 with Anthropic.
+- `ingest/rank.py` is the nightly ranking, its own Compose service `ranker` (voice profile, `restart: on-failure`, exits 0 unless `RANK_SCHEDULE=on`). It sends only the soon/starred/rest tiers, so fixed and placed tasks are never touched, and writes nothing unless every step worked: one `PUT /api/tasks/rank`. Each unset `RANK_*` falls back to `EXTRACT_*`, except the model, which defaults to Opus 5.5 with Anthropic. The same call files Inbox tasks (`inbox: true` in the focus view) into one Filing list (`rank.plan_moves`: at most `FILE_CAP` = 10 a night, never a task whose last move was the owner's); the moves ride in that PUT.
 
 ## Alexa (`alexa/`)
 

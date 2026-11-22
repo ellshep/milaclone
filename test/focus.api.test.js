@@ -243,7 +243,7 @@ test('PUT /api/tasks/rank writes scores in one go, clears old nudges and skips p
     ],
   });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { ranked: 1, skipped: ['r-placed', 'gone'] });
+  assert.deepEqual(r.body, { ranked: 1, skipped: ['r-placed', 'gone'], moved: 0, movesSkipped: [] });
   const tasks = (await json('GET', '/api/canvas/' + rootCanvasId)).body.items.find(it => it.id === list.id).data.tasks;
   const [a, b, placed] = tasks;
   assert.deepEqual([a.rankScore, a.rankReason, a.rankNudge], [80, 'Unblocks the rest', 1]);
@@ -293,4 +293,75 @@ test('view=digest stops at the three when the rest are neither overdue nor due t
   );
   assert.deepEqual(digest, { tasks: focus.slice(0, 3), more: 0 });
   await json('PUT', '/api/focus/order', { ids: [] });
+});
+
+test('M3.3 nightly filing: PUT /api/tasks/rank moves, the Filed view and Back to Inbox', async () => {
+  const { rootCanvasId } = (await json('GET', '/api/root')).body;
+  const add = title => json('POST', '/api/tasks', { title }, TOKEN);
+  const a = (await add('Buy seeds')).body.task;
+  const b = (await add('Sharpen the shears')).body.task;
+  const inboxId = a.listId;
+  const errands = await todo(rootCanvasId, 'Garden jobs', [], { labels: ['Filing'] });
+
+  // the focus view marks Inbox rows, so the ranker knows what it may file
+  const view = (await json('GET', '/api/focus?limit=all')).body.tasks;
+  assert.equal(view.find(x => x.id === a.id).inbox, true);
+  assert.equal(
+    view.some(x => x.listId === errands.id && x.inbox),
+    false
+  );
+
+  const put = body => json('PUT', '/api/tasks/rank', body, TOKEN);
+  const r = await put({
+    ranks: [{ id: a.id, rankScore: 50, rankReason: 'Spring', rankNudge: 0 }],
+    moves: [
+      { id: a.id, listId: errands.id, reason: 'Garden shopping' },
+      { id: 't_missing', listId: errands.id, reason: 'x' },
+    ],
+  });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { ranked: 1, skipped: [], moved: 1, movesSkipped: ['t_missing'] });
+  const filed = (await json('GET', '/api/focus?limit=all')).body.tasks.find(x => x.id === a.id);
+  assert.equal(filed.listId, errands.id);
+  assert.deepEqual(
+    [filed.movedFrom, filed.movedBy, filed.moveReason, filed.rankScore],
+    [inboxId, 'ranker', 'Garden shopping', 50]
+  );
+
+  // a bad target refuses the whole write: no score, no move
+  const before = (await json('GET', '/api/focus?limit=all')).body.tasks.find(x => x.id === b.id);
+  const refused = await put({
+    ranks: [{ id: b.id, rankScore: 99, rankReason: 'x', rankNudge: 0 }],
+    moves: [{ id: b.id, listId: 'i_nope', reason: 'x' }],
+  });
+  assert.equal(refused.status, 400);
+  const after = (await json('GET', '/api/focus?limit=all')).body.tasks.find(x => x.id === b.id);
+  assert.deepEqual([after.listId, after.rankScore], [before.listId, before.rankScore]);
+  for (const moves of ['x', [{ id: b.id }], [{ id: b.id, listId: errands.id, reason: 'r'.repeat(501) }]]) {
+    assert.equal((await put({ ranks: [], moves })).status, 400, JSON.stringify(moves));
+  }
+
+  // Filed: the last 7 days of the ranker's moves, newest first
+  const old = await todo(rootCanvasId, 'Old filing', [
+    { id: 'f-old', text: 'Filed long ago', done: false, movedBy: 'ranker', movedAt: Date.now() - 8 * 86400000 },
+    { id: 'f-owner', text: 'Moved by hand', done: false, movedBy: 'owner', movedAt: Date.now() },
+  ]);
+  const list = (await json('GET', '/api/focus/filed')).body.tasks;
+  assert.deepEqual(
+    list.map(x => x.id),
+    [a.id]
+  );
+  assert.deepEqual(
+    [list[0].listTitle, list[0].boardTitle, list[0].moveReason],
+    ['Garden jobs', 'Home', 'Garden shopping']
+  );
+  assert.ok(old.id);
+
+  // Back to Inbox: into the current Inbox, recorded as the owner's move, gone from Filed
+  assert.deepEqual((await json('POST', `/api/focus/${a.id}/unfile`)).body, { ok: true });
+  const back = (await json('GET', '/api/focus?limit=all')).body.tasks.find(x => x.id === a.id);
+  assert.deepEqual([back.listId, back.inbox, back.movedBy, back.movedFrom], [inboxId, true, 'owner', errands.id]);
+  assert.deepEqual((await json('GET', '/api/focus/filed')).body.tasks, []);
+  assert.equal((await json('POST', '/api/focus/nope/unfile')).status, 404);
+  assert.equal((await json('POST', `/api/focus/${a.id}/unfile`)).status, 404); // already in the Inbox
 });

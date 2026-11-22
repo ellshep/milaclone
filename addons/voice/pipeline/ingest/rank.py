@@ -10,11 +10,17 @@ tier (RANK_NUDGE: off, one-tier = at most 3 a night, free = no cap). It reads
 the Home note headed "Focus priorities" too. Everything goes in one
 PUT /api/tasks/rank, written only when every step worked, so any failure
 leaves the fixed order as it was. There is no stale rule yet (N22).
+
+Nightly filing (M3.3): Inbox tasks among those sent may be filed into the one
+list labelled Filing that clearly fits, at most FILE_CAP a night, with a reason.
+The moves ride in the same PUT (movedBy "ranker"). A task the owner sent back
+to the Inbox (its last move was theirs) is never filed again.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from datetime import datetime, timedelta
@@ -36,6 +42,7 @@ NUDGE_CAP = 3
 # the answer fits in max_tokens; the rest keep their last score.
 MAX_TASKS = 200
 REASON_MAX = 300
+FILE_CAP = 10  # Inbox tasks filed a night, at most (M3.3)
 
 
 class RankedTask(BaseModel):
@@ -43,6 +50,8 @@ class RankedTask(BaseModel):
     score: float
     reason: str
     move: Literal["up", "down", "none"]
+    file: str | None = None  # a Filing list's title, for an Inbox task that clearly fits one
+    fileReason: str = ""
 
 
 class Ranking(BaseModel):
@@ -71,6 +80,24 @@ SCHEMA = {
     "additionalProperties": False,
 }
 
+
+def build_schema(lists: tuple[str, ...] = ()) -> dict:
+    """The answer's schema; with Filing lists, each task may name one as `file`."""
+    if not lists:
+        return SCHEMA
+    schema = json.loads(json.dumps(SCHEMA))
+    item = schema["properties"]["tasks"]["items"]
+    item["properties"]["file"] = {"type": ["string", "null"], "enum": [*lists, None]}
+    item["properties"]["fileReason"] = {"type": "string", "description": "Why it fits that list, or empty."}
+    item["required"] = [*item["required"], "file", "fileReason"]
+    return schema
+
+
+def fileable(task: dict) -> bool:
+    """An Inbox task the owner hasn't sent back to the Inbox."""
+    return bool(task.get("inbox")) and task.get("movedBy") != "owner"
+
+
 SYSTEM = "You order one person's open to-do tasks for the focus page that shows them their next three."
 
 MOVE_RULES = {
@@ -98,11 +125,23 @@ def base_tier(task: dict) -> int:
     return 0 if due_in is not None and due_in <= 3 else 1 if task.get("starred") else 2
 
 
-def build_prompt(tasks: list[dict], today: str, priorities: str | None, mode: str) -> str:
+def _file_rule(lists: tuple[str, ...]) -> str:
+    if not lists:
+        return ""
+    return ("Tasks whose list is marked [Inbox] may be filed: set file to the one list below that clearly fits "
+            "from the task's own words, and fileReason to why (under 12 words). If no list clearly fits, or "
+            "more than one might, file is null and fileReason empty. Every other task: file null, fileReason "
+            "empty.\nLists: " + ", ".join(json.dumps(name) for name in lists) + "\n\n")
+
+
+def build_prompt(tasks: list[dict], today: str, priorities: str | None, mode: str,
+                 lists: tuple[str, ...] = ()) -> str:
     lines = []
     for n, t in enumerate(tasks, 1):
         due = t.get("due") or "-"
         where = " / ".join(x for x in (t.get("listTitle"), t.get("boardTitle")) if x)
+        if lists and fileable(t):
+            where += " [Inbox]"
         lines.append(f"{n} | {TIERS[base_tier(t)]} | {due} | {where} | {t.get('text', '')}")
     notes = (f"<priorities>\n{priorities}\n</priorities>\nThe owner's own note on what matters now; "
              "weigh it.\n\n") if priorities else ""
@@ -113,7 +152,7 @@ def build_prompt(tasks: list[dict], today: str, priorities: str | None, mode: st
         "a higher score comes first.\n\n"
         "For every task give its number n, a score from 0 to 100 (how much it matters to do soon), "
         "a reason (one short line, under 15 words) and a move: \"up\" or \"down\" one tier, or \"none\". "
-        f"{MOVE_RULES[mode]}\n\n{notes}"
+        f"{MOVE_RULES[mode]}\n\n{_file_rule(lists)}{notes}"
         "Tasks (n | tier | due | list / board | title):\n" + "\n".join(lines)
     )
 
@@ -137,6 +176,21 @@ def plan(tasks: list[dict], ranking: Ranking, mode: str) -> list[dict]:
         ranks.append({"id": t["id"], "rankScore": round(min(100.0, max(0.0, a.score)), 1),
                       "rankReason": reason, "rankNudge": nudge})
     return ranks
+
+
+def plan_moves(tasks: list[dict], ranking: Ranking, lists: dict[str, str]) -> list[dict]:
+    """The moves to send: fileable tasks only, a Filing list's title only (any
+    case), each task once, at most FILE_CAP."""
+    by_title = {title.lower(): list_id for title, list_id in lists.items()}
+    moves, seen = [], set()
+    for a in ranking.tasks:
+        if len(moves) >= FILE_CAP or not 1 <= a.n <= len(tasks) or a.n in seen:
+            continue
+        seen.add(a.n)
+        t, list_id = tasks[a.n - 1], by_title.get((a.file or "").strip().lower())
+        if list_id and fileable(t) and t.get("listId") != list_id:
+            moves.append({"id": t["id"], "listId": list_id, "reason": " ".join(a.fileReason.split())[:REASON_MAX]})
+    return moves
 
 
 def predict(tasks: list[dict], ranks: list[dict]) -> list[dict]:
@@ -175,19 +229,24 @@ def run(cfg: StepConfig, client: TasksClient, mode: str, *, dry_run: bool = Fals
         if not tasks:
             log("rank.skip", reason="no tasks to rank", before=before)
             return 0
-        prompt = build_prompt(tasks, view.get("today", ""), client.priorities(), mode)
-        result = complete(cfg, SYSTEM, prompt, Ranking, SCHEMA)
+        lists = client.filing_lists() if any(fileable(t) for t in tasks) else {}
+        prompt = build_prompt(tasks, view.get("today", ""), client.priorities(), mode, tuple(lists))
+        result = complete(cfg, SYSTEM, prompt, Ranking, build_schema(tuple(lists)))
         ranks = plan(tasks, result.data, mode)
         if not ranks:
             raise LLMError("the model ranked none of the tasks")
+        moves = plan_moves(tasks, result.data, lists)
         if dry_run:
             after = top3(predict(view["tasks"], ranks))
             titles = {t["id"]: t.get("text", "") for t in tasks}
             for r in ranks:
                 move = {1: " up", -1: " down", 0: ""}[r["rankNudge"]]
                 print(f"{r['rankScore']:5.1f}{move:5} {titles[r['id']]} - {r['rankReason'] or ''}")
+            names = {list_id: title for title, list_id in lists.items()}
+            for m in moves:
+                print(f"\u2192 {names[m['listId']]}: {titles[m['id']]} - {m['reason']}")
         else:
-            client.write_ranks(ranks)
+            client.write_ranks(ranks, moves)
             try:
                 after = top3(client.focus(limit="3").get("tasks", []))
             except (TaskAPIError, ValueError) as e:  # written already: report it as done
@@ -197,7 +256,7 @@ def run(cfg: StepConfig, client: TasksClient, mode: str, *, dry_run: bool = Fals
         log("rank.failed", dry_run=dry_run, error=str(e))
         return 1
     log("rank.done", dry_run=dry_run, provider=result.provider, model=result.model, tasks=len(tasks),
-        ranked=len(ranks), moves=sum(1 for r in ranks if r["rankNudge"]), input_tokens=result.input_tokens,
+        ranked=len(ranks), moves=sum(1 for r in ranks if r["rankNudge"]), filed=len(moves), input_tokens=result.input_tokens,
         output_tokens=result.output_tokens, cost_usd=cost(result.model, result.input_tokens, result.output_tokens),
         before=before, after=after)
     return 0

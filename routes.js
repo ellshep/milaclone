@@ -24,7 +24,7 @@ const {
 } = require('./db');
 const { exportMarkdown } = require('./export-md');
 const tasklist = require('./tasklist');
-const { focusView, markDone, setPlacements, parseLimit, LIMIT_MAX } = require('./focus');
+const { focusView, markDone, setPlacements, filedView, unfile, parseLimit, LIMIT_MAX } = require('./focus');
 
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -578,6 +578,12 @@ router.get('/api/focus', (req, res) => {
 });
 router.post('/api/focus/:taskId/done', (req, res) => {
   if (!markDone(req.params.taskId)) return res.status(404).json({ error: 'no open task with that id' });
+  res.json({ ok: true });
+});
+// Filed mode (M3.3): the ranker's moves of the last 7 days, and Back to Inbox.
+router.get('/api/focus/filed', (req, res) => res.json(filedView()));
+router.post('/api/focus/:taskId/unfile', (req, res) => {
+  if (!unfile(req.params.taskId)) return res.status(404).json({ error: 'no task outside the Inbox with that id' });
   res.json({ ok: true });
 });
 // Body `{ ids }`: the placed tasks, top first; `[]` clears every placement.

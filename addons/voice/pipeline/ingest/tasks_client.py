@@ -80,6 +80,8 @@ class TasksClient:
         """The Home note headed "Focus priorities", or None."""
         return self._call("GET", "/api/tasks/priorities").get("text")
 
-    def write_ranks(self, ranks: list[dict]) -> dict:
-        """One transaction on the app's side: all of it lands or none does."""
-        return self._call("PUT", "/api/tasks/rank", json={"ranks": ranks})
+    def write_ranks(self, ranks: list[dict], moves: list[dict] | None = None) -> dict:
+        """One transaction on the app's side: all of it lands or none does,
+        the Inbox tasks filed by `moves` (M3.3) included."""
+        body = {"ranks": ranks, **({"moves": moves} if moves else {})}
+        return self._call("PUT", "/api/tasks/rank", json=body)

@@ -123,6 +123,14 @@ order stays.
 It sends the model each ranked task's title, due date, list and board titles,
 plus the whole Focus priorities note.
 
+Nightly filing: when there are lists labelled **Filing** (see Filing above), the
+same model call may file Inbox tasks into the one Filing list that clearly
+fits, with a reason, at most 10 a night. The moves are written in the same
+`PUT`, so they land with the ranking or not at all. Each is recorded on the task
+(`movedBy: "ranker"`), and the focus page's **Filed** mode lists the last 7 days
+of them, each with Back to Inbox. A task sent back is never filed again. The
+dry run prints the planned moves as `→ List: task - reason`.
+
 | Variable        | Default                                             | Purpose                                                                 |
 | --------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
 | `RANK_SCHEDULE` | `off`                                               | `on` ranks nightly; off, the service exits at once                      |

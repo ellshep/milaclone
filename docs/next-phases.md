@@ -101,7 +101,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
 - [x] **M3.2 At capture.** Extraction gets the Filing lists as an enum (like
       tags) and files a task only when the speaker names one; ambiguous names
       go to the Inbox.
-- [ ] **M3.3 Nightly.** The ranking pass may move Inbox tasks into exactly one
+- [x] **M3.3 Nightly.** The ranking pass may move Inbox tasks into exactly one
       clearly fitting Filing list, with a reason. The focus page gains a
       **Filed** mode: the last 7 days of nightly moves, each with Back to
       Inbox.

@@ -18,9 +18,14 @@ def task(id, tier, **f):
 
 
 class FakeClient:
-    def __init__(self, tasks, priorities=None):
-        self.tasks, self.prio = tasks, priorities
-        self.writes, self.fail = [], None
+    def __init__(self, tasks, priorities=None, lists=None):
+        self.tasks, self.prio, self.lists = tasks, priorities, lists or {}
+        self.writes, self.moves, self.fail = [], [], None
+        self.list_reads = 0
+
+    def filing_lists(self):
+        self.list_reads += 1
+        return self.lists
 
     def focus(self, limit="all"):
         if self.fail == "focus" or (self.fail == "after" and limit != "all"):
@@ -32,8 +37,9 @@ class FakeClient:
             raise TaskAPIError("task API unreachable")
         return self.prio
 
-    def write_ranks(self, ranks):
+    def write_ranks(self, ranks, moves=None):
         self.writes.append(ranks)
+        self.moves.append(moves)
         return {"ranked": len(ranks), "skipped": []}
 
 
@@ -116,6 +122,62 @@ def test_dry_run_prints_and_writes_nothing(monkeypatch, capsys):
     assert done["before"] == ["Late", "Placed", "Soon"]
     assert done["after"] == ["Late", "Placed", "Big"]  # nudged up into soon, above Soon's score
     assert done["dry_run"] is True
+
+
+def files(monkeypatch, *rows):
+    """A ranking answer where row i (1-based) files into rows[i-1] = (list, reason) or None."""
+    monkeypatch.setenv("FAKE_LLM_RESPONSE", json.dumps({"tasks": [
+        {"n": n, "score": 50, "reason": "r", "move": "none", "file": f[0] if f else None,
+         "fileReason": f[1] if f else ""} for n, f in enumerate(rows, 1)]}))
+
+
+LISTS = {"Garden": "i_garden", "Errands": "i_errands"}
+
+
+def test_files_inbox_tasks_into_one_named_filing_list(monkeypatch):
+    tasks = [task("seeds", "rest", inbox=True), task("shears", "rest", inbox=True, movedBy="owner"),
+             task("ink", "rest", listId="i_work"), task("bins", "rest", inbox=True),
+             task("milk", "rest", inbox=True), task("rake", "rest", inbox=True, listId="i_garden")]
+    client = FakeClient(tasks, lists=LISTS)
+    files(monkeypatch, ("garden", "  Garden  shopping "), ("Garden", "sent back"), ("Errands", "not Inbox"),
+          ("Garage", "no such list"), None, ("Garden", "already there"))
+    prompts, complete = capture()
+    assert rank.run(FAKE, client, "one-tier", complete=complete) == 0
+    assert client.moves == [[{"id": "seeds", "listId": "i_garden", "reason": "Garden shopping"}]]
+    prompt = prompts[0]
+    assert 'Lists: "Garden", "Errands"' in prompt
+    assert "| L [Inbox] | Seeds" in prompt and "| L | Shears" in prompt and "| L | Ink" in prompt
+    item = rank.build_schema(("Garden",))["properties"]["tasks"]["items"]
+    assert item["properties"]["file"] == {"type": ["string", "null"], "enum": ["Garden", None]}
+    assert {"file", "fileReason"} <= set(item["required"])
+
+
+def test_filing_is_capped_per_night(monkeypatch):
+    tasks = [task(f"t{i}", "rest", inbox=True) for i in range(rank.FILE_CAP + 3)]
+    client = FakeClient(tasks, lists=LISTS)
+    files(monkeypatch, *[("Errands", "errand")] * len(tasks))
+    assert rank.run(FAKE, client, "one-tier") == 0
+    assert len(client.moves[0]) == rank.FILE_CAP
+
+
+def test_no_inbox_tasks_means_no_filing(monkeypatch):
+    client = FakeClient(BOARD, lists=LISTS)
+    answer(monkeypatch, (1, 10, "a", "none"), (2, 20, "b", "none"), (3, 30, "c", "none"))
+    prompts, complete = capture()
+    assert rank.run(FAKE, client, "one-tier", complete=complete) == 0
+    assert client.list_reads == 0 and client.moves == [[]]
+    assert "[Inbox]" not in prompts[0] and "Lists:" not in prompts[0]
+    assert rank.build_schema(()) is rank.SCHEMA
+
+
+def test_dry_run_prints_planned_moves(monkeypatch, capsys):
+    client = FakeClient([task("seeds", "rest", inbox=True)], lists=LISTS)
+    files(monkeypatch, ("Garden", "Garden shopping"))
+    assert rank.run(FAKE, client, "one-tier", dry_run=True) == 0
+    assert client.writes == [] and client.moves == []
+    out = capsys.readouterr().out
+    assert "\u2192 Garden: Seeds - Garden shopping" in out
+    assert json.loads([line for line in out.splitlines() if '"rank.done"' in line][0])["filed"] == 1
 
 
 def test_only_the_first_max_tasks_are_sent(monkeypatch):
@@ -209,3 +271,6 @@ def test_tasks_client_ranking_calls():
     assert seen[0][:3] == ("GET", "/api/tasks", "view=focus&limit=all")
     assert seen[2][:2] == ("PUT", "/api/tasks/rank")
     assert json.loads(seen[2][3]) == {"ranks": [{"id": "t1", "rankNudge": 2}]}
+    with pytest.raises(TaskAPIError):
+        client.write_ranks([], [{"id": "t1", "listId": "i_g", "reason": "fits"}])
+    assert json.loads(seen[3][3]) == {"ranks": [], "moves": [{"id": "t1", "listId": "i_g", "reason": "fits"}]}
