@@ -32,8 +32,10 @@ const dayNum = ymd => {
   return Date.UTC(y, m - 1, d) / 86400000;
 };
 
-const isReference = card =>
-  Array.isArray(card.data.labels) && card.data.labels.some(l => String(l).trim().toLowerCase() === 'reference');
+const hasLabel = (card, name) =>
+  Array.isArray(card.data.labels) &&
+  card.data.labels.some(l => String(l).trim().toLowerCase() === name.trim().toLowerCase());
+const isReference = card => hasLabel(card, 'reference');
 const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 /**
@@ -193,5 +195,6 @@ module.exports = {
   parseLimit,
   dayOf,
   inTemplates,
+  hasLabel,
   LIMIT_MAX,
 };

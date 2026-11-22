@@ -86,6 +86,23 @@ def test_tags_are_limited_to_existing_ones():
     assert "no tags yet" in build_prompt("x", NOW.date())
 
 
+def test_a_task_gets_a_filing_list_only_when_named(monkeypatch):
+    reply = {"summary": "s", "tasks": [
+        {"title": "Post the parcel", "notes": "", "tags": [], "dueDate": None, "listName": "errands"},
+        {"title": "Call mum", "notes": "", "tags": [], "dueDate": None, "listName": None},
+        {"title": "Fix the shed", "notes": "", "tags": [], "dueDate": None, "listName": "Garage"},
+    ]}
+    monkeypatch.setenv("FAKE_LLM_RESPONSE", json.dumps(reply))
+    r = extract_tasks("x", StepConfig("extract", "fake", "fake"), "UTC", lists=("Errands", "Garden"), now=NOW)
+    assert [t.listName for t in r.data.tasks] == ["Errands", None, None]  # named; unnamed; not a Filing list
+    schema = build_schema((), ("Errands", "Garden"))
+    item = schema["properties"]["tasks"]["items"]
+    assert item["properties"]["listName"] == {"type": ["string", "null"], "enum": ["Errands", "Garden", None]}
+    assert "listName" in item["required"] and "listName" not in SCHEMA["properties"]["tasks"]["items"]["properties"]
+    assert "Lists: Errands, Garden" in build_prompt("x", NOW.date(), (), ("Errands", "Garden"))
+    assert "Lists:" not in build_prompt("x", NOW.date())
+
+
 def test_retries_once_then_fails():
     calls = []
 

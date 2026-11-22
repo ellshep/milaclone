@@ -362,6 +362,34 @@ test('M3.1 PATCH listId moves a task to another list and records the move', asyn
   assert.equal((await patch('t_missing', { listId: dest.id })).status, 404);
 });
 
+test('M3.2 GET /api/tasks/lists?label= lists the live labelled lists outside Templates', async () => {
+  const canvasId = (await plain('/api/root')).rootCanvasId;
+  const item = b =>
+    fetch(base + '/api/item', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(b),
+    }).then(r => r.json());
+  const board = await item({ canvasId, type: 'board', data: { title: 'Garden' } });
+  const filing = await item({
+    canvasId: board.data.childCanvasId,
+    type: 'todo',
+    data: { title: 'Seeds', labels: [' filing '], tasks: [] },
+  });
+  await item({ canvasId, type: 'todo', data: { title: 'Not filing', labels: ['Reference'], tasks: [] } });
+  const gone = await item({ canvasId, type: 'todo', data: { title: 'Trashed', labels: ['Filing'], tasks: [] } });
+  await fetch(base + '/api/item/' + gone.id, { method: 'DELETE' });
+  const tpl = await item({ canvasId, type: 'board', data: { title: 'Templates' } });
+  await item({ canvasId: tpl.data.childCanvasId, type: 'todo', data: { title: 'Tpl', labels: ['Filing'], tasks: [] } });
+  await item({ canvasId, type: 'note', data: { title: 'A note', labels: ['Filing'] } });
+
+  const r = await call('GET', '/api/tasks/lists?label=Filing');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.lists, [{ id: filing.id, title: 'Seeds', boardTitle: 'Garden' }]);
+  assert.equal((await call('GET', '/api/tasks/lists')).status, 400);
+  assert.equal((await call('GET', '/api/tasks/lists?label=Filing', undefined, null)).status, 401);
+});
+
 test('a client edit from a stale copy keeps tasks the API added', async () => {
   const t = (await post({ title: 'Merge base' })).body.task;
   const cardRow = (await plain('/api/todos')).lists.find(l => l.id === t.listId);

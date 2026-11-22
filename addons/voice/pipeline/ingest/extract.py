@@ -19,6 +19,7 @@ class ExtractedTask(BaseModel):
     notes: str = ""
     tags: list[str] = []
     dueDate: str | None = None
+    listName: str | None = None  # a Filing list's title, only when the speaker named it
 
 
 class Extraction(BaseModel):
@@ -64,12 +65,18 @@ RULES = """Rules:
 - summary: one or two sentences describing the whole note."""
 
 
-def build_schema(tags: tuple[str, ...] = ()) -> dict:
-    """The output schema. With existing tags, a task's tags can only be those."""
-    if not tags:
+def build_schema(tags: tuple[str, ...] = (), lists: tuple[str, ...] = ()) -> dict:
+    """The output schema. With existing tags, a task's tags can only be those;
+    with Filing lists, a task may name one of them (or null) as its list."""
+    if not tags and not lists:
         return SCHEMA
     schema = copy.deepcopy(SCHEMA)
-    schema["properties"]["tasks"]["items"]["properties"]["tags"]["items"] = {"type": "string", "enum": list(tags)}
+    item = schema["properties"]["tasks"]["items"]
+    if tags:
+        item["properties"]["tags"]["items"] = {"type": "string", "enum": list(tags)}
+    if lists:
+        item["properties"]["listName"] = {"type": ["string", "null"], "enum": [*lists, None]}
+        item["required"] = [*item["required"], "listName"]
     return schema
 
 
@@ -80,9 +87,17 @@ def _tag_rule(tags: tuple[str, ...]) -> str:
             "If none fits, use an empty list.\n  Existing tags: " + ", ".join(tags))
 
 
-def build_prompt(transcript: str, today: date, tags: tuple[str, ...] = ()) -> str:
+def _list_rule(lists: tuple[str, ...]) -> str:
+    if not lists:
+        return ""
+    return ("\n- List: set a task's listName only when the speaker names one of these lists for it "
+            "(\"put X on Errands\", \"for the garden list\"); otherwise null. Never guess from the topic.\n"
+            "  Lists: " + ", ".join(lists))
+
+
+def build_prompt(transcript: str, today: date, tags: tuple[str, ...] = (), lists: tuple[str, ...] = ()) -> str:
     return (
-        f"Today is {today.strftime('%A')}, {today.isoformat()}.\n\n{RULES}\n{_tag_rule(tags)}\n\n"
+        f"Today is {today.strftime('%A')}, {today.isoformat()}.\n\n{RULES}\n{_tag_rule(tags)}{_list_rule(lists)}\n\n"
         f"<transcript>\n{transcript}\n</transcript>"
     )
 
@@ -101,15 +116,18 @@ def _clean_due(v: str | None) -> str | None:
 
 
 def extract_tasks(transcript: str, cfg: StepConfig, tz: str, *, tags: tuple[str, ...] = (),
-                  now: datetime | None = None, http: httpx.Client | None = None) -> LLMResult:
+                  lists: tuple[str, ...] = (), now: datetime | None = None,
+                  http: httpx.Client | None = None) -> LLMResult:
     """Raises LLMError when the model fails twice; the caller keeps the transcript.
-    `tags` are the tags already on the task list; a task only ever gets those."""
+    `tags` are the tags already on the task list; a task only ever gets those.
+    `lists` are the Filing lists' titles; a task's `listName` is one of them or None."""
     today = (now or datetime.now(ZoneInfo(tz))).astimezone(ZoneInfo(tz)).date()
-    result = complete_json(cfg, SYSTEM, build_prompt(transcript, today, tags), Extraction, build_schema(tags),
-                           http=http)
+    result = complete_json(cfg, SYSTEM, build_prompt(transcript, today, tags, lists), Extraction,
+                           build_schema(tags, lists), http=http)
     # Providers without a strict schema (or an old answer) could still name
-    # another tag: keep only existing ones, in the list's own spelling.
+    # another tag or list: keep only existing ones, in the board's own spelling.
     known = {t.lower(): t for t in tags}
+    filing = {name.lower(): name for name in lists}
     ext: Extraction = result.data  # type: ignore[assignment]
     cleaned = []
     for t in ext.tasks:
@@ -118,6 +136,7 @@ def extract_tasks(transcript: str, cfg: StepConfig, tz: str, *, tags: tuple[str,
             continue
         picked = [known.get(g.strip().lstrip("#").strip().lower()) for g in t.tags]
         cleaned.append(ExtractedTask(title=title, notes=t.notes.strip(),
-                                     tags=list(dict.fromkeys(g for g in picked if g)), dueDate=_clean_due(t.dueDate)))
+                                     tags=list(dict.fromkeys(g for g in picked if g)), dueDate=_clean_due(t.dueDate),
+                                     listName=filing.get((t.listName or "").strip().lower())))
     result.data = Extraction(summary=ext.summary.strip(), tasks=cleaned)
     return result

@@ -98,7 +98,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
 
 - [x] **M3.1 Move in the task API.** `PATCH /api/tasks/:id` accepts `listId`;
       the move records `movedFrom`, `movedAt`, `movedBy`, `moveReason`.
-- [ ] **M3.2 At capture.** Extraction gets the Filing lists as an enum (like
+- [x] **M3.2 At capture.** Extraction gets the Filing lists as an enum (like
       tags) and files a task only when the speaker names one; ambiguous names
       go to the Inbox.
 - [ ] **M3.3 Nightly.** The ranking pass may move Inbox tasks into exactly one

@@ -41,11 +41,17 @@ class FakeApp:
         self.tasks = []
         self.requests = []
         self.fail_titles = set()
+        self.lists = []  # what GET /api/tasks/lists?label=Filing answers
 
     def handler(self, request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/api/tasks"
         if request.headers.get("authorization") != f"Bearer {TASK_TOKEN}":
             return httpx.Response(401, json={"error": "unauthorized"})
+        if request.url.path == "/api/tasks/lists":
+            assert request.url.params["label"] == "Filing"
+            if self.lists is None:
+                return httpx.Response(500, text="boom")
+            return httpx.Response(200, json={"lists": self.lists})
+        assert request.url.path == "/api/tasks"
         if request.method == "GET":
             return httpx.Response(200, json={"tasks": self.tasks})
         body = json.loads(request.content)
@@ -70,10 +76,12 @@ class FakeExtractor:
         self.error = None
         self.calls = []
         self.tags = []
+        self.lists = []
 
-    def __call__(self, transcript: str, tags: tuple[str, ...] = ()) -> LLMResult:
+    def __call__(self, transcript: str, tags: tuple[str, ...] = (), lists: tuple[str, ...] = ()) -> LLMResult:
         self.calls.append(transcript)
         self.tags.append(tags)
+        self.lists.append(lists)
         if self.error:
             raise self.error
         return LLMResult(self.result, "fake", "fake", 10, 20, 5, 1)

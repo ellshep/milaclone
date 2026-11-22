@@ -47,7 +47,15 @@ class TasksClient:
         ranked = sorted(counts, key=lambda k: (-counts[k], k))[:TAGS_MAX]
         return tuple(spelling[k] for k in ranked)
 
-    def create(self, task: ExtractedTask, source: str) -> dict:
+    def filing_lists(self) -> dict[str, str]:
+        """The lists labelled Filing, title -> id. A title two lists share is
+        left out: naming it can't pick one, so those tasks go to the Inbox."""
+        lists = self._call("GET", "/api/tasks/lists", params={"label": "Filing"}).get("lists", [])
+        titles = [str(lst.get("title") or "").strip() for lst in lists]
+        counts = Counter(t.lower() for t in titles)
+        return {t: lst["id"] for t, lst in zip(titles, lists) if t and counts[t.lower()] == 1}
+
+    def create(self, task: ExtractedTask, source: str, list_id: str | None = None) -> dict:
         """Returns {"task": {...}, "created": bool, "duplicate": bool}. The app
         skips a task whose title matches an open task (dedupe) and says so."""
         body = {
@@ -58,6 +66,8 @@ class TasksClient:
             "source": source,
             "dedupe": True,
         }
+        if list_id:
+            body["listId"] = list_id
         data = self._call("POST", "/api/tasks", json=body)
         return {"task": data["task"], "created": bool(data.get("created")),
                 "duplicate": bool(data.get("duplicate"))}
