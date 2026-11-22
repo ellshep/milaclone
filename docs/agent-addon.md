@@ -113,8 +113,9 @@ to a chat column, plus the agents' threads and receipts.
 
 ## W6 · Later
 
-- Headless runs of a brief through the Claude Agent SDK, posting the PR link
-  back as a comment (A17).
+- Headless runs of a brief through the Claude Agent SDK, shipping through the
+  no-mistakes gate as described in [Shipping a change](../CONTRIBUTING.md#shipping-a-change)
+  and posting the PR link back as a comment (A17).
 - `runtime: managed` for heavy boards (A11).
 - Routines, with M5 (A18). Image generation (A19). A Herdr mod (A22).
 
