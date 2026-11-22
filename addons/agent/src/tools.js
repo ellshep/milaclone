@@ -76,12 +76,13 @@ async function fence(agent, mcp, name, args) {
 }
 
 // The comment protocol's keys are the service's alone: the model can't mark a
-// comment answered (replyTo) or pass for another agent.
+// comment answered (replyTo), pass for another agent or forge a delegation.
 const clean = it => {
   if (!it.data) return it;
   const data = Object.assign({}, it.data);
   delete data.replyTo;
   delete data.agent;
+  delete data.delegatedBy;
   return Object.assign({}, it, { data });
 };
 
@@ -116,6 +117,7 @@ async function call(agent, mcp, name, args) {
 /** `[{ name, description, inputSchema, run }]` for a provider; run returns text, never throws a ToolError. */
 export function agentTools(agent, mcp) {
   const allowed = new Set(ALLOWED[agent.writes]);
+  if (agent.orchestrator) allowed.add('list_boards'); // every board's title (W4.1)
   return mcp.tools
     .filter(t => allowed.has(t.name))
     .map(t => {

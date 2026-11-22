@@ -21,16 +21,21 @@ export function addressee(comment, agents) {
   return /^@agent(?![\w-])/.test(t) ? agents[0] || null : null;
 }
 
-/** `[{ comment, agent }]` still waiting for an answer on one board. */
-export function pending(items, agents) {
+/**
+ * `[{ comment, agent }]` still waiting for an answer on one board. A comment an
+ * agent wrote counts only when an orchestrator signed it as a delegation
+ * (`delegatedBy`, orchestrator.js); `orchestrators` holds their card ids.
+ */
+export function pending(items, agents, orchestrators = new Set()) {
   const comments = items.filter(it => it.type === 'comment');
   const byAgent = c => !!(c.data && c.data.agent);
+  const delegated = c => c.data.delegatedBy === c.data.agent && orchestrators.has(c.data.agent);
   // Only an agent's reply answers a comment; a person replying doesn't.
   const answered = new Set(comments.filter(byAgent).map(c => c.data.replyTo));
   const out = [];
   for (const c of comments) {
     // Comments an agent wrote never ask an agent (tools.js stamps them), so agents can't loop or run each other.
-    if (answered.has(c.id) || byAgent(c)) continue;
+    if (answered.has(c.id) || (byAgent(c) && !delegated(c))) continue;
     const agent = addressee(c, agents);
     if (agent) out.push({ comment: c, agent });
   }
