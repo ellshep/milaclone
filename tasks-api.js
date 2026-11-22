@@ -14,7 +14,7 @@ const crypto = require('crypto');
 const express = require('express');
 const { db, stmt, id, rootCanvasId, rowToItem, breadcrumb } = require('./db');
 const { isBlank, newTask, applyRanks } = require('./tasklist');
-const { focusView, digestView, parseLimit, inTemplates, LIMIT_MAX } = require('./focus');
+const { focusView, digestView, parseLimit, inTemplates, hasLabel, LIMIT_MAX } = require('./focus');
 
 const router = express.Router();
 
@@ -322,6 +322,24 @@ router.get(
         (a.createdAt || 0) - (b.createdAt || 0)
     );
     res.json({ tasks });
+  })
+);
+
+// The to-do lists carrying a label (Filing, for voice capture: M3.2), live and
+// outside Templates, each with its board's title.
+router.get(
+  '/api/tasks/lists',
+  handle((req, res) => {
+    const label = req.query.label;
+    if (typeof label !== 'string' || !label.trim()) bad('label is required');
+    const lists = [];
+    for (const card of todoCards()) {
+      if (!hasLabel(card, label)) continue;
+      const trail = breadcrumb(card.canvasId);
+      if (inTemplates(trail)) continue;
+      lists.push({ id: card.id, title: card.data.title || 'To-do', boardTitle: trail.at(-1)?.title || 'Board' });
+    }
+    res.json({ lists });
   })
 );
 

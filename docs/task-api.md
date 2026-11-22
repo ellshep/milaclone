@@ -123,6 +123,13 @@ Returns `{ text }`: the whole text of the note on Home whose first line is
 count), or `null` when there is none. The nightly ranking sends it to the model
 as written.
 
+### `GET /api/tasks/lists?label=Filing` — lists with a label
+
+Returns `{ lists: [{ id, title, boardTitle }] }`: every live to-do list carrying
+that card label (matched ignoring case and spaces), except lists under the
+Templates board. `label` is required. Voice capture reads the **Filing** lists
+so a task can be posted straight to one with `listId`.
+
 ### `PUT /api/tasks/rank` — write the nightly ranking
 
 `{ ranks: [{ id, rankScore, rankReason, rankNudge }] }`, up to 1000. `rankScore`
