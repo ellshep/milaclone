@@ -16,7 +16,6 @@ Nothing in progress: pick from Next.
 
 ## Next
 
-- **AU8** The service worker caches every query-string URL (each search prefix) and never evicts; trashed images stay on the phone (`sw.js:7`). Fix: don't cache same-origin URLs with `url.search`.
 - **AU9** Cut-and-paste leaves an invisible, unselectable line on the old board when one end stays behind (`db.js:248`, `lines.js:109`). Fix: in `moveItemDeep`, turn that end into a free point at the card's old position.
 - **AU10** Copy/duplicate within 400 ms of an edit miss the last words (`clipboard.js:42`). Fix: `await flushAllSaves(false)` at the start of `placeAll`.
 - **V1** Next phases, planned with the owner on 2026-11-20 (decisions N1–N22, work items M1–M5 in `docs/next-phases.md`): Microsoft To Do import (M1, waits for the owner's file), focus order, `/focus` page, nightly ranking and retention (M2), filing into lists (M3), then AG1, then Pebble watch app (M4), morning digest at 7:30 on weekdays, which settles V3 (M5). Replaces V2.
@@ -35,6 +34,7 @@ Nothing in progress: pick from Next.
 - **AU19** Deleting a card while its save waits to retry: the retry gets 404 and toasts "rejected", and Undo brings the card back without that edit.
 - **AU20** Quick notes `deleteList` removes the list before flushing its save, so a queued edit goes out empty and Undo restores the list without it.
 - **AU21** `flush(id)` doesn't wait for a save already in flight, so `deleteItems` or closing Quick notes can act before the last save lands.
+- **AU22** Trashed images stay cached on the phone after Trash is emptied; the service worker never evicts /uploads entries (`sw.js`). Fix: evict cached uploads not referenced by any live item, e.g. on the warm message.
 - **U1.1, U1.4, U1.5** Milanote migration: backup and inventory, staged import, reconciliation report. Specs in `docs/next-updates.md`.
 
 ## Needs a decision
