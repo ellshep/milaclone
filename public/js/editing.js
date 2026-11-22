@@ -10,6 +10,7 @@ import { updateSelectionChrome } from './boardchrome.js';
 import { reloadView } from './main.js';
 import { startRich, stopRich } from './rich.js';
 import { applyFilter } from './labels.js';
+import { postSelection } from './embed.js';
 
 // Selection, inline-edit mode, debounced saves, and deletion.
 
@@ -28,6 +29,7 @@ export function selectIds(ids, primary = ids[ids.length - 1] ?? null) {
   closePalette();
   closeCtx();
   updateSelectionChrome();
+  postSelection(state.selection);
 }
 
 export function select(id) {
@@ -182,6 +184,7 @@ async function deleteItems(ids) {
   closeCtx();
   render();
   updateSelectionChrome();
+  postSelection(state.selection);
   const msg = ids.length === 1 ? 'Moved to trash' : `Moved ${ids.length} cards to trash`;
   toast(msg, { label: 'Undo', fn: () => undoDelete(entry) });
 }

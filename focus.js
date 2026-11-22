@@ -84,6 +84,9 @@ function orderTasks(entries, today) {
   };
 }
 
+// Whether a board's breadcrumb runs through the Templates board on Home.
+const inTemplates = trail => trail.length > 1 && /^templates$/i.test((trail[1].title || '').trim());
+
 /**
  * Every to-do card that counts for the focus order (not Reference, not under
  * Templates) as `{ card, board }`, `board` being the title of its board.
@@ -95,8 +98,7 @@ function rankableCards() {
     if (isReference(card)) continue;
     if (!boards.has(card.canvasId)) {
       const trail = breadcrumb(card.canvasId);
-      const templates = trail.length > 1 && /^templates$/i.test((trail[1].title || '').trim());
-      boards.set(card.canvasId, templates ? null : trail.at(-1)?.title || 'Board');
+      boards.set(card.canvasId, inTemplates(trail) ? null : trail.at(-1)?.title || 'Board');
     }
     if (boards.get(card.canvasId) !== null) out.push({ card, board: boards.get(card.canvasId) });
   }
@@ -112,6 +114,18 @@ function focusView({ limit = 3, now = new Date() } = {}) {
   }
   const { tasks, counts } = orderTasks(entries, today);
   return { today, tasks: tasks.slice(0, limit), counts };
+}
+
+/**
+ * The morning digest (M5.1): the focus three plus every other overdue or
+ * due-today task, at most DIGEST_MAX; `more` counts the ones cut off.
+ */
+const DIGEST_MAX = 8;
+function digestView() {
+  const due = focusView({ limit: Infinity }).tasks.filter(
+    (t, i) => i < 3 || t.tier === 'overdue' || t.tier === 'today'
+  );
+  return { tasks: due.slice(0, DIGEST_MAX), more: Math.max(0, due.length - DIGEST_MAX) };
 }
 
 // ---- Writes from the /focus page ----------------------------------------------
@@ -170,4 +184,14 @@ function parseLimit(v) {
   return n >= 1 && n <= LIMIT_MAX ? n : null;
 }
 
-module.exports = { orderTasks, focusView, markDone, setPlacements, parseLimit, dayOf, LIMIT_MAX };
+module.exports = {
+  orderTasks,
+  focusView,
+  digestView,
+  markDone,
+  setPlacements,
+  parseLimit,
+  dayOf,
+  inTemplates,
+  LIMIT_MAX,
+};

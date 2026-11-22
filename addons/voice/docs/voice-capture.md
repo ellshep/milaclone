@@ -88,8 +88,8 @@ so leave out anything you would not want stored there.
 
 Extraction uses the cheapest tier by default and asks for strict JSON. For
 OpenAI and Gemini set `EXTRACT_MODEL` to that provider's smallest current
-model. The `RANK_*` variables are reserved for the nightly ranking (later
-phase), so the two steps can use different providers.
+model. The nightly ranking has its own `RANK_*` settings (below), so the two
+steps can use different providers.
 
 Tags: before each extraction the pipeline reads the tags already on your task
 list (`GET /api/tasks?status=all`, the 100 most used), and the model may only
@@ -97,6 +97,45 @@ give a task some of those. They are listed in the prompt and, for Anthropic
 and OpenAI, enforced by the JSON schema; any other tag is dropped. New tags
 only come from you, on the board. With no tags on the list yet, tasks get none.
 If the task API can't be read, extraction runs without tags.
+
+## Nightly ranking
+
+The `ranker` service (voice profile, same image) orders the focus page's open
+tasks once a night at 03:00 in `TASK_TZ`. It reads the focus order and the Home
+note whose first line is "Focus priorities" through the task API, asks the
+model for a score (0–100), a one-line reason and a few one-tier moves for each
+task in the soon, starred and rest tiers, and writes them back in one
+`PUT /api/tasks/rank`. Overdue, due-today and hand-placed tasks are never sent
+or changed. Only the first 200 of those tasks, in the current order, are sent,
+so the answer fits the model's output limit; the rest keep their last score
+(their moves are cleared). If anything fails, nothing is written and the fixed
+order stays.
+
+It sends the model each ranked task's title, due date, list and board titles,
+plus the whole Focus priorities note.
+
+| Variable        | Default                                             | Purpose                                                                 |
+| --------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
+| `RANK_SCHEDULE` | `off`                                               | `on` ranks nightly; off, the service exits at once                      |
+| `RANK_NUDGE`    | `one-tier`                                          | `off` (no moves), `one-tier` (at most 3 a night), `free`                |
+| `RANK_PROVIDER` | `EXTRACT_PROVIDER`                                  | Same choices as extraction                                              |
+| `RANK_MODEL`    | `claude-opus-5-5` (Anthropic), else `EXTRACT_MODEL` | Asked at low effort; roughly $3 a month per 100 ranked tasks (estimate) |
+| `RANK_API_KEY`  | `EXTRACT_API_KEY`                                   | Provider key                                                            |
+| `RANK_BASE_URL` | `EXTRACT_BASE_URL`                                  | For `openai_compatible`                                                 |
+
+See what it would do first. The dry run calls the model once and prints each
+score, reason and move with the top three before and after, and writes nothing:
+
+```bash
+docker compose run --rm ranker python -m ingest.rank --dry-run
+```
+
+If it looks right, add `RANK_SCHEDULE=on` to `.env` and `docker compose up -d`.
+An invalid `TASK_TZ` stops the service with a `rank.bad_tz` log line instead of
+scheduling.
+Each night logs one `rank.done` line (tokens, `cost_usd` for known models, the
+top three before and after) or a `rank.failed` line:
+`docker compose logs ranker | grep rank.`
 
 ## Capture from the iPhone
 

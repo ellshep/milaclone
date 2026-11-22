@@ -23,10 +23,11 @@ const readingOrder = (a, b) => a.y - b.y || a.x - b.x;
 
 function cardLines(it, origin) {
   const d = it.data || {};
-  // Swatches and tables keep their plain text (the hex, `a | b` rows) in data.text too.
-  // ponytail: these three come back from the importer as notes (text kept, card
+  // Swatches, tables and agent cards keep their plain text (the hex, `a | b` rows,
+  // the agent's name and persona) in data.text too.
+  // ponytail: these four come back from the importer as notes (text kept, card
   // type lost); teach scripts/import-milanote-md.js their shapes if that matters.
-  if (['note', 'comment', 'swatch', 'table', 'document'].includes(it.type)) {
+  if (['note', 'comment', 'swatch', 'table', 'document', 'agent'].includes(it.type)) {
     const lines = String(d.text || '')
       .split('\n')
       .map(l => l.trim())

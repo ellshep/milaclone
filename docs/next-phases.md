@@ -82,7 +82,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
     `visibilitychange` and refresh; no timers.
   - Mac setup in the docs: app-mode browser window, open at login, display
     sleep left on overnight.
-- [ ] **M2.3 Ranking service** (add-on). Nightly at 03:00: reads open tasks,
+- [x] **M2.3 Ranking service** (add-on). Nightly at 03:00: reads open tasks,
       the Focus priorities note (N19) if there is one, and asks the `RANK_*`
       model for a score, a one-line reason and at most 3 one-tier moves
       (`RANK_NUDGE=off|one-tier|free`). `--dry-run` prints what it would write.
@@ -96,7 +96,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
 
 ## M3 · Filing into lists
 
-- [ ] **M3.1 Move in the task API.** `PATCH /api/tasks/:id` accepts `listId`;
+- [x] **M3.1 Move in the task API.** `PATCH /api/tasks/:id` accepts `listId`;
       the move records `movedFrom`, `movedAt`, `movedBy`, `moveReason`.
 - [ ] **M3.2 At capture.** Extraction gets the Filing lists as an enum (like
       tags) and files a task only when the speaker names one; ambiguous names
@@ -120,7 +120,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
 
 ## M5 · Morning digest
 
-- [ ] **M5.1 Digest data.** A token-protected read of the focus three plus any
+- [x] **M5.1 Digest data.** A token-protected read of the focus three plus any
       other overdue or due-today tasks, at most 8 lines.
 - [ ] **M5.2 Home Assistant recipe** (add-on docs): weekday notification with
       a Done button per task (default 07:30), an Echo announcement recalculated
