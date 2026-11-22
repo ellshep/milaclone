@@ -33,16 +33,10 @@ const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 // A task is open, done or stale (set aside by the stale rule), never two at once.
 const STATUSES = ['open', 'done', 'stale'];
 
-// The task with every known field present and of the expected type; unknown
-// fields (source, rank*, importId, …) pass through unchanged.
-function normTask(t) {
-  const src = isObj(t) ? t : {};
+function normFields(src) {
   return {
     ...src,
     text: typeof src.text === 'string' ? src.text : DEFAULTS.text,
-    status: STATUSES.includes(src.status) ? src.status : DEFAULTS.status,
-    statusAt: Number.isFinite(src.statusAt) ? src.statusAt : null,
-    statusReason: typeof src.statusReason === 'string' ? src.statusReason : null,
     starred: !!src.starred,
     due: src.due || null,
     tags: Array.isArray(src.tags) ? src.tags : DEFAULTS.tags,
@@ -57,19 +51,32 @@ function normTask(t) {
   };
 }
 
+// The task with every known field present and of the expected type; unknown
+// fields (source, rank*, importId, …) pass through unchanged.
+function normTask(t) {
+  const src = isObj(t) ? t : {};
+  return {
+    ...normFields(src),
+    status: STATUSES.includes(src.status) ? src.status : DEFAULTS.status,
+    statusAt: Number.isFinite(src.statusAt) ? src.statusAt : null,
+    statusReason: typeof src.statusReason === 'string' ? src.statusReason : null,
+  };
+}
+
 const isOpen = t => normTask(t).status === 'open';
 const isDone = t => normTask(t).status === 'done';
 
-// A task written with the flags from before `status` (old rows at boot, a tab
-// still running old code, an importer). With no `status`, `done` decides: done
-// (`statusAt` null when unknown) or open. With a `status` (an old tab that
-// loaded after the deploy fills in `done: false` on every task), `done` is
-// ignored. `stale` is dropped either way.
 function upgradeTask(t) {
   if (!isObj(t) || !('done' in t || 'stale' in t)) return t;
   const { done, stale, ...rest } = t; // oxlint-disable-line no-unused-vars -- dropped on purpose
   if ('status' in rest) return rest;
-  return done ? { ...rest, status: 'done', statusAt: rest.statusAt ?? null } : { ...rest, status: 'open' };
+  return { ...rest, status: done ? 'done' : 'open' };
+}
+
+function legacyClick(t, base) {
+  if (!('done' in t && 'status' in t) || t.status !== base.status) return false;
+  const wasDone = 'done' in base ? !!base.done : base.status === 'done';
+  return !!t.done !== wasDone;
 }
 
 // `statusAt` and `statusReason` belong to the server: a write that changes a
@@ -77,13 +84,15 @@ function upgradeTask(t) {
 // write keeps the stored ones, whatever the client sent. `before` is the list
 // as stored; a task it doesn't have was open. Returns a new array.
 function stampStatus(tasks, before, now) {
-  const prev = new Map(before.filter(isObj).map(t => [t.id, normTask(t)]));
+  const prev = new Map(before.filter(isObj).map(t => [t.id, t]));
   return tasks.map(t => {
-    const p = prev.get(t.id);
+    const stored = prev.get(t.id);
+    const p = normTask(stored);
+    const { status } = normTask(t);
     const { statusAt, statusReason, ...out } = t; // oxlint-disable-line no-unused-vars -- the client's never count
-    if (normTask(t).status !== (p ? p.status : 'open')) return { ...out, statusAt: now };
-    if (p && p.statusAt !== null) out.statusAt = p.statusAt;
-    if (p && p.statusReason !== null) out.statusReason = p.statusReason;
+    if (status !== p.status) return { ...out, statusAt: now };
+    if (p.statusAt !== null || stored?.statusAt === null || status === 'done') out.statusAt = p.statusAt;
+    if (p.statusReason !== null) out.statusReason = p.statusReason;
     return out;
   });
 }
@@ -137,6 +146,7 @@ function moveTask(from, to, task, movedBy, moveReason = null, now = Date.now()) 
 }
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const normChecklistTask = t => ({ ...normFields(t), done: !!t.done });
 
 // Three-way merge of a task list. `base` is the list the client last got from
 // the server, `mine` its edited copy, `server` what is stored now (another
@@ -146,17 +156,21 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // defaults filled in, so a client that adds `starred: false` hasn't edited the
 // star, and only fields the client sent count, so one it doesn't know about
 // (e.g. `indent` from an older Quick notes) isn't a deletion.
-function merge(base, server, mine) {
+function merge(base, server, mine, todo = true) {
   // A base with missing or repeated ids comes from a page loaded before ids were
   // repaired: it can't be matched to the server's tasks, so the client's list wins.
   const baseIds = base.map(t => isObj(t) && t.id);
-  if (!baseIds.every(Boolean) || new Set(baseIds).size !== baseIds.length) return mine;
+  if (!baseIds.every(Boolean) || new Set(baseIds).size !== baseIds.length) {
+    return todo ? mine.map(upgradeTask) : mine;
+  }
+  const normalize = todo ? normTask : normChecklistTask;
   const byId = list => new Map(list.map(t => [t.id, t]));
   const B = byId(base),
     S = byId(server),
     M = byId(mine);
   const out = [];
-  for (const t of mine) {
+  for (const raw of mine) {
+    const t = todo ? upgradeTask(raw) : raw;
     const b = B.get(t.id),
       s = S.get(t.id);
     if (b && !s) continue; // deleted elsewhere
@@ -164,10 +178,11 @@ function merge(base, server, mine) {
       out.push(t); // added here
       continue;
     }
-    const nt = normTask(t),
-      nb = normTask(b);
+    const nt = normalize(t),
+      nb = normalize(todo ? upgradeTask(b) : b);
     const merged = { ...s };
     for (const k of Object.keys(t)) if (!same(nt[k], nb[k])) merged[k] = t[k];
+    if (todo && legacyClick(raw, b)) merged.status = raw.done ? 'done' : 'open';
     out.push(merged);
   }
   for (const t of server) if (!B.has(t.id) && !M.has(t.id)) out.push(t); // added elsewhere

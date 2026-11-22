@@ -221,6 +221,12 @@ test('dedupe skips an open task with the same title', async () => {
   const c = await post({ title: 'Renew passport' });
   await patch(c.body.task.id, { status: 'done' });
   assert.equal((await post({ title: 'Renew passport', dedupe: true })).status, 201);
+
+  const stale = (await post({ title: 'Book a train' })).body.task;
+  assert.equal((await patch(stale.id, { status: 'stale' })).body.task.status, 'stale');
+  const repeat = await post({ title: 'Book a train', dedupe: true });
+  assert.equal(repeat.status, 201);
+  assert.notEqual(repeat.body.task.id, stale.id);
 });
 
 test('GET lists tasks by status, due date first then oldest', async () => {

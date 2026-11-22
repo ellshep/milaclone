@@ -181,6 +181,9 @@ router.patch('/api/canvas/:id', (req, res) => {
 });
 
 // ---- Items -----------------------------------------------------------------
+const invalidTaskStatus = tasks => tasks.some(t => 'status' in t && !tasklist.STATUSES.includes(t.status));
+const badTaskStatus = res => res.status(400).json({ error: 'status must be open, done or stale' });
+
 router.post('/api/item', (req, res) => {
   const b = req.body || {};
   if (!stmt.getCanvas.get(b.canvasId)) return res.status(400).json({ error: 'bad canvasId' });
@@ -206,9 +209,10 @@ router.post('/api/item', (req, res) => {
     createdAt: Date.now(),
   };
   if (RICH_TYPES.has(item.type)) item.data = toRich(item.data);
-  // A new card's tasks keep the status times they come with (a paste, an import).
   if (Array.isArray(item.data.tasks)) {
-    item.data.tasks = tasklist.withIds(item.data.tasks.map(tasklist.upgradeTask), () => id('t_'));
+    const tasks = tasklist.withIds(item.data.tasks, () => id('t_'));
+    if (item.type === 'todo' && invalidTaskStatus(tasks)) return badTaskStatus(res);
+    item.data.tasks = item.type === 'todo' ? tasklist.stampStatus(tasks.map(tasklist.upgradeTask), [], null) : tasks;
   }
 
   db.transaction(() => {
@@ -255,14 +259,16 @@ router.patch('/api/item/:id', (req, res) => {
     const stored = it.data.tasks;
     it.data = Object.assign({}, it.data, b.data);
     if (Array.isArray(b.data.tasks)) {
-      const mine = tasklist.withIds(b.data.tasks.map(tasklist.upgradeTask), () => id('t_'));
-      const base = Array.isArray(b.baseTasks) ? b.baseTasks.map(tasklist.upgradeTask) : null;
-      const before = Array.isArray(stored) ? stored : [];
-      it.data.tasks = tasklist.stampStatus(
-        base && Array.isArray(stored) ? tasklist.merge(base, stored, mine) : mine,
-        before,
-        Date.now()
-      );
+      const todo = it.type === 'todo';
+      const mine = tasklist.withIds(b.data.tasks, () => id('t_'));
+      if (todo && invalidTaskStatus(mine)) return badTaskStatus(res);
+      const tasks =
+        Array.isArray(b.baseTasks) && Array.isArray(stored)
+          ? tasklist.merge(b.baseTasks, stored, mine, todo)
+          : todo
+            ? mine.map(tasklist.upgradeTask)
+            : mine;
+      it.data.tasks = todo ? tasklist.stampStatus(tasks, Array.isArray(stored) ? stored : [], Date.now()) : tasks;
     }
   }
 

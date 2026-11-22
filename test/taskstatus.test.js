@@ -24,11 +24,12 @@ test.after(() => {
 
 const OLD_TASKS = [
   { id: 'a', text: 'Done long ago', done: true, starred: true },
-  { id: 'b', text: 'Still open', done: false },
-  { id: 'h', text: 'Truthy done', done: 1 },
+  { id: 'b', text: 'Still open', done: false, status: 'stale' },
+  { id: 'h', text: 'Truthy done', done: 1, status: 'open', statusAt: 5 },
   { id: 'c', text: 'From the task API', done: false, stale: false, source: 'voice' },
-  { id: 'g', text: 'stale: true (nothing ever wrote it)', stale: true },
+  { id: 'g', text: 'stale: true (nothing ever wrote it)', stale: true, status: 'done' },
   { id: 'd', text: 'Never had flags' },
+  { id: 'j', text: 'Already current', status: 'done', statusAt: 10 },
 ];
 const NEW_TASKS = [
   { id: 'a', text: 'Done long ago', starred: true, status: 'done', statusAt: null },
@@ -37,6 +38,7 @@ const NEW_TASKS = [
   { id: 'c', text: 'From the task API', source: 'voice', status: 'open' },
   { id: 'g', text: 'stale: true (nothing ever wrote it)', status: 'open' },
   { id: 'd', text: 'Never had flags' },
+  { id: 'j', text: 'Already current', status: 'done', statusAt: 10 },
 ];
 
 const insert = (handle, id, type, data, trashedBy = null) =>
@@ -56,6 +58,7 @@ test('migrateTaskStatus backs up first, converts every old task (trashed cards t
   insert(db, 'odd-list', 'todo', { tasks: { done: true } }); // not an array: left alone
   insert(db, 'junk-list', 'todo', { tasks: ['junk', 3, null] }); // no objects: left alone
   insert(db, 'new-list', 'todo', { tasks: [{ id: 'f', text: 'Current', status: 'done', statusAt: 5 }] });
+  insert(db, 'document', 'document', { tasks: OLD_TASKS });
 
   const backup = migrateTaskStatus();
   assert.match(path.basename(backup), /^board\.pre-status-\d+\.db$/);
@@ -68,6 +71,7 @@ test('migrateTaskStatus backs up first, converts every old task (trashed cards t
   assert.deepEqual(dataOf(db, 'odd-list').tasks, { done: true });
   assert.deepEqual(dataOf(db, 'junk-list').tasks, ['junk', 3, null]);
   assert.deepEqual(dataOf(db, 'new-list').tasks, [{ id: 'f', text: 'Current', status: 'done', statusAt: 5 }]);
+  assert.deepEqual(dataOf(db, 'document').tasks, OLD_TASKS);
   assert.equal(migrateTaskStatus(), null, 'a second run has nothing to do and takes no backup');
   assert.ok(stmt.getItem.get('old-list'));
 });

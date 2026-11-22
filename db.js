@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
-const { withIds, copyTasks, upgradeTask } = require('./tasklist');
+const { withIds, copyTasks } = require('./tasklist');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'board.db');
@@ -356,7 +356,17 @@ function migrateTaskStatus() {
           AND (json_type(t.value, '$.done') IS NOT NULL OR json_type(t.value, '$.stale') IS NOT NULL))`
     )
     .all();
-  return migrateRows('status', rows, data => ({ ...data, tasks: data.tasks.map(upgradeTask) }));
+  return migrateRows('status', rows, data => ({
+    ...data,
+    tasks: data.tasks.map(t => {
+      if (!t || typeof t !== 'object' || Array.isArray(t) || !('done' in t || 'stale' in t)) return t;
+      const out = { ...t, status: t.done ? 'done' : 'open' };
+      delete out.done;
+      delete out.stale;
+      if (t.done) out.statusAt = null;
+      return out;
+    }),
+  }));
 }
 migrateTaskStatus();
 

@@ -237,6 +237,31 @@ test('every tool works on readable boards and refuses a blocked one', async () =
   ]);
 });
 
+test('todo creation tools respect server-owned status metadata and count only open tasks', async () => {
+  const { rootCanvasId } = await api('GET', '/api/root');
+  const board_id = await boardOn(rootCanvasId, 'Status tools', { allow: true });
+  const data = {
+    title: 'Jobs',
+    tasks: [
+      { text: 'Finished', status: 'done', statusAt: 1, statusReason: 'client' },
+      { text: 'Set aside', status: 'stale' },
+      { text: 'To do' },
+    ],
+  };
+  const card = { type: 'todo', data };
+  const one = await call('create_item', { board_id, ...card });
+  const [many] = await call('create_items', { board_id, items: [card] });
+  const outline = await call('get_board_outline', { board_id });
+  for (const list of [one, many]) {
+    const finished = list.data.tasks.find(t => t.text === 'Finished');
+    assert.deepEqual([finished.status, finished.statusAt, finished.statusReason], ['done', null, undefined]);
+    assert.ok(outline.includes(`[todo ${list.id}] Jobs (1 open)`));
+  }
+  const invalid = { type: 'todo', data: { tasks: [{ text: 'Invalid', status: 'complete' }] } };
+  assert.equal((await raw('create_item', { board_id, ...invalid })).isError, true);
+  assert.equal((await raw('create_items', { board_id, items: [invalid] })).isError, true);
+});
+
 test('agent cards, and blocked boards below an open one, stay out of reach', async () => {
   const { rootCanvasId } = await api('GET', '/api/root');
   const open = await boardOn(rootCanvasId, 'Open 2', { allow: true });

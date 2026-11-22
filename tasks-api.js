@@ -13,7 +13,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const { db, stmt, id, rootCanvasId, rowToItem, breadcrumb, inboxCard, INBOX_KEY } = require('./db');
-const { STATUSES, normTask, isBlank, isDone, newTask, moveTask, setStatus, applyRanks } = require('./tasklist');
+const { STATUSES, normTask, isBlank, isOpen, newTask, moveTask, setStatus, applyRanks } = require('./tasklist');
 const { focusView, digestView, parseLimit, inTemplates, hasLabel, LIMIT_MAX } = require('./focus');
 
 const router = express.Router();
@@ -257,7 +257,7 @@ router.post(
       }
       if (b.dedupe) {
         const key = normTitle(text);
-        const hit = tasksOf(card).find(t => !isDone(t) && normTitle(t.text) === key);
+        const hit = tasksOf(card).find(t => isOpen(t) && normTitle(t.text) === key);
         if (hit) return { status: 200, body: { task: listView(hit, card), created: false, duplicate: true } };
       }
       const task = newTask(

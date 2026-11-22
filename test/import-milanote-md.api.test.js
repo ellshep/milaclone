@@ -85,7 +85,7 @@ Intro paragraph.
     todo.data.tasks.map(t => [t.text, t.status, t.statusAt]),
     [
       ['first', 'open', undefined],
-      ['done', 'done', undefined], // imported: when it was done is unknown
+      ['done', 'done', null], // imported: when it was done is unknown
     ]
   );
   const image = nested.items.find(i => i.type === 'image');

@@ -44,6 +44,7 @@ test('the Quick notes tab opens the overview with every todo list', async ({ pag
   await seedList(page, title, [
     { id: 'a', text: 'Floss', status: 'open' },
     { id: 'b', text: 'Shower', status: 'done' },
+    { id: 'c', text: 'Set aside', status: 'stale' },
   ]);
   await openQuickNotes(page);
 
@@ -57,6 +58,7 @@ test('drilling into a list shows open tasks and a collapsible completed group', 
   await seedList(page, title, [
     { id: 'a', text: 'Wash face', status: 'open' },
     { id: 'b', text: 'Shower', status: 'done' },
+    { id: 'c', text: 'Set aside', status: 'stale' },
   ]);
   await openQuickNotes(page);
   await listRow(page, title).click();
@@ -64,6 +66,7 @@ test('drilling into a list shows open tasks and a collapsible completed group', 
   await expect(page.locator('#qnListTitle')).toHaveText(title);
   await expect(page.locator('#qnListMeta')).toContainText('1 of 2');
   await expect(taskRow(page, 'Wash face')).toBeVisible();
+  await expect(taskRow(page, 'Set aside')).toHaveCount(0);
   await expect(taskRow(page, 'Shower')).toHaveClass(/done/);
 
   await page.locator('.qn-comphead').click();
@@ -112,10 +115,12 @@ test('the All smart view lists the newest task first', async ({ page }) => {
   const old = uniq('Older task');
   const mid = uniq('Undated task'); // made on the canvas: no createdAt, so it takes its list's
   const fresh = uniq('Newer task');
+  const stale = uniq('Set aside');
   await seedList(page, title, [
     { id: 'a', text: old, status: 'open', createdAt: 1000 },
     { id: 'b', text: mid, status: 'open' },
     { id: 'c', text: fresh, status: 'open', createdAt: Date.now() + 60000 },
+    { id: 'd', text: stale, status: 'stale', starred: true },
   ]);
   await openQuickNotes(page);
   await page.locator('.qn-tile[data-smart="all"]').click();
@@ -125,6 +130,10 @@ test('the All smart view lists the newest task first', async ({ page }) => {
   expect(pos(fresh)).toBeGreaterThanOrEqual(0);
   expect(pos(fresh)).toBeLessThan(pos(mid));
   expect(pos(mid)).toBeLessThan(pos(old));
+  expect(pos(stale)).toBe(-1);
+  await page.click('#qnListBack');
+  await page.locator('.qn-tile[data-smart="starred"]').click();
+  await expect(taskRow(page, stale)).toHaveCount(0);
 });
 
 test('the add bar appends tasks and stays open for the next one', async ({ page }) => {

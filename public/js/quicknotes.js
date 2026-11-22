@@ -31,11 +31,13 @@ const h = (tag, cls, text) => {
   return n;
 };
 
+const isOpen = t => t.status === 'open';
+const isDone = t => t.status === 'done';
 const SMART = {
-  today: { label: 'Today', color: '#4C7CBE', icon: 'calendar', f: t => t.due && daysUntil(t.due) === 0 && !isDone(t) },
-  starred: { label: 'Starred', color: '#E8B94A', icon: 'star', f: t => t.starred && !isDone(t) },
-  all: { label: 'All', color: '#3D4A5C', icon: 'inbox', f: t => !isDone(t) },
-  completed: { label: 'Completed', color: '#6E8B74', icon: 'check', f: t => isDone(t) },
+  today: { label: 'Today', color: '#4C7CBE', icon: 'calendar', f: t => isOpen(t) && t.due && daysUntil(t.due) === 0 },
+  starred: { label: 'Starred', color: '#E8B94A', icon: 'star', f: t => isOpen(t) && t.starred },
+  all: { label: 'All', color: '#3D4A5C', icon: 'inbox', f: isOpen },
+  completed: { label: 'Completed', color: '#6E8B74', icon: 'check', f: isDone },
 };
 const SMART_KEYS = ['today', 'starred', 'all', 'completed'];
 
@@ -95,7 +97,6 @@ function saveSettings() {
 
 // A task is open, done or stale (set aside by the stale rule); the checkbox
 // completes it or puts it back to open.
-const isDone = t => t.status === 'done';
 const toggleDone = t => {
   t.status = isDone(t) ? 'open' : 'done';
 };
@@ -184,7 +185,7 @@ const saveMeta = list => save(list, { title: list.title, tags: list.tags });
 
 const listById = id => qn.lists.find(l => l.id === id) || null;
 const tasksOf = list => list.tasks.filter(t => t.text.trim());
-const openCount = list => tasksOf(list).filter(t => !isDone(t)).length;
+const openCount = list => tasksOf(list).filter(isOpen).length;
 const listHasTag = (list, tag) => list.tags.includes(tag) || tasksOf(list).some(t => t.tags.includes(tag));
 
 // Smart views are computed filters over every list, so their rows carry the
@@ -484,13 +485,14 @@ function renderListScreen() {
   }
 
   const all = tasksOf(list);
-  const open = all.filter(t => !isDone(t));
+  const open = all.filter(isOpen);
   const done = all.filter(isDone);
-  meta.appendChild(h('span', null, done.length + ' of ' + all.length));
+  const listed = open.length + done.length;
+  meta.appendChild(h('span', null, done.length + ' of ' + listed));
   for (const tag of list.tags) meta.appendChild(h('span', 'qn-tag', '#' + tag));
 
   for (const task of open) tasksEl.appendChild(taskRow(list, task));
-  if (!all.length) tasksEl.appendChild(h('div', 'qn-empty', 'No tasks yet — add the first one below.'));
+  if (!listed) tasksEl.appendChild(h('div', 'qn-empty', 'No tasks to show.'));
 
   if (done.length) {
     const head = h('button', 'qn-comphead' + (qn.compOpen ? '' : ' closed'));
@@ -529,7 +531,7 @@ function taskRow(list, task, sub) {
   mid.appendChild(h('span', 'qn-task-text', task.text));
   if (sub) mid.appendChild(h('span', 'qn-task-sub', sub));
   const due = dueInfo(task.due);
-  if (due && !isDone(task)) {
+  if (due && isOpen(task)) {
     const line = h('span', 'qn-task-due');
     line.style.color = due.color;
     line.appendChild(lucideEl('calendar'));
