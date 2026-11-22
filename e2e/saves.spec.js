@@ -82,8 +82,8 @@ test.describe('Quick notes', () => {
     await page.goto('/');
     const title = uniq('Shop');
     const seeded = [
-      { id: 'a', text: 'Milk', done: false },
-      { id: 'b', text: 'Eggs', done: false },
+      { id: 'a', text: 'Milk', status: 'open' },
+      { id: 'b', text: 'Eggs', status: 'open' },
     ];
     const id = await createTodo(page, null, title, seeded);
     await openList(page, title);
@@ -107,7 +107,7 @@ test.describe('Quick notes', () => {
     await saved;
 
     const [milk, eggs] = await serverTasks(page, id);
-    expect(eggs.done).toBe(true);
+    expect(eggs.status).toBe('done');
     expect(milk).toMatchObject({ starred: true, due: '2026-12-01', tags: ['shop'] });
   });
 
@@ -115,8 +115,8 @@ test.describe('Quick notes', () => {
     await page.goto('/');
     const title = uniq('Busy');
     const seeded = [
-      { id: 'a', text: 'Floss', done: false },
-      { id: 'b', text: 'Stretch', done: false },
+      { id: 'a', text: 'Floss', status: 'open' },
+      { id: 'b', text: 'Stretch', status: 'open' },
     ];
     const id = await createTodo(page, null, title, seeded);
     await openList(page, title);
@@ -135,13 +135,13 @@ test.describe('Quick notes', () => {
     await expect.poll(() => !first).toBe(true);
     // voice adds a task to this list meanwhile
     await page.request.patch('/api/item/' + id, {
-      data: { data: { tasks: [...seeded, { id: 'v', text: 'Call mum', done: false }] }, baseTasks: seeded },
+      data: { data: { tasks: [...seeded, { id: 'v', text: 'Call mum', status: 'open' }] }, baseTasks: seeded },
     });
     await taskRow(page, 'Stretch').locator('.qn-box').click(); // queued behind the save in flight
     release();
 
     await expect
-      .poll(async () => (await serverTasks(page, id)).map(t => [t.id, !!t.done]))
+      .poll(async () => (await serverTasks(page, id)).map(t => [t.id, t.status === 'done']))
       .toEqual([
         ['a', true],
         ['b', true],
@@ -152,20 +152,20 @@ test.describe('Quick notes', () => {
   test('a save that fails is retried and lands', async ({ page }) => {
     await page.goto('/');
     const title = uniq('Retry');
-    const id = await createTodo(page, null, title, [{ id: 'a', text: 'Floss', done: false }]);
+    const id = await createTodo(page, null, title, [{ id: 'a', text: 'Floss', status: 'open' }]);
     await openList(page, title);
     await dropFirstSave(page, id);
 
     await taskRow(page, 'Floss').locator('.qn-box').click();
     await expect(page.locator('#toast')).toContainText('check your connection');
-    await expect.poll(async () => (await serverTasks(page, id))[0].done, { timeout: 10000 }).toBe(true);
+    await expect.poll(async () => (await serverTasks(page, id))[0].status, { timeout: 10000 }).toBe('done');
   });
 
   test('a save bigger than the keepalive limit still goes out when the page hides', async ({ page }) => {
     await page.goto('/');
     const title = uniq('Huge');
     const long = 'x'.repeat(250);
-    const tasks = Array.from({ length: 200 }, (_, i) => ({ id: 't' + i, text: `Task ${i} ${long}`, done: false }));
+    const tasks = Array.from({ length: 200 }, (_, i) => ({ id: 't' + i, text: `Task ${i} ${long}`, status: 'open' }));
     const id = await createTodo(page, null, title, tasks);
     await openList(page, title);
 
@@ -175,7 +175,7 @@ test.describe('Quick notes', () => {
     // the app goes to the background before the debounced save fires
     await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
 
-    await expect.poll(async () => (await serverTasks(page, id))[0].done).toBe(true);
+    await expect.poll(async () => (await serverTasks(page, id))[0].status).toBe('done');
     const saves = await page.evaluate(() => window.__saves);
     expect(saves[0].size).toBeGreaterThan(64 * 1024);
     expect(saves[0].keepalive).toBe(false);
@@ -196,7 +196,7 @@ test.describe('Quick notes, with a fake clock', () => {
     await page.clock.install();
     await page.goto('/');
     const title = uniq('Offline');
-    const id = await createTodo(page, null, title, [{ id: 'a', text: 'Pay rent', done: false }]);
+    const id = await createTodo(page, null, title, [{ id: 'a', text: 'Pay rent', status: 'open' }]);
     await openList(page, title);
     const net = await dropAllSaves(page, id);
 
@@ -211,7 +211,7 @@ test.describe('Quick notes, with a fake clock', () => {
 
     net.down = false;
     await page.evaluate(() => window.dispatchEvent(new Event('online')));
-    await expect.poll(async () => (await serverTasks(page, id))[0].done).toBe(true);
+    await expect.poll(async () => (await serverTasks(page, id))[0].status).toBe('done');
     expect(net.attempts).toBe(8);
   });
 });
@@ -220,7 +220,7 @@ test('saves sent together while the page hides stay under the keepalive limit', 
   await page.clock.install();
   const canvasId = await freshCanvas(page);
   const long = 'x'.repeat(200);
-  const tasks = Array.from({ length: 80 }, (_, i) => ({ id: 't' + i, text: `Task ${i} ${long}`, done: false }));
+  const tasks = Array.from({ length: 80 }, (_, i) => ({ id: 't' + i, text: `Task ${i} ${long}`, status: 'open' }));
   const a = await createTodo(page, canvasId, uniq('HalfA'), tasks); // about 40 KB per save
   const b = await createTodo(page, canvasId, uniq('HalfB'), tasks);
   await page.reload();
@@ -245,7 +245,11 @@ test('a non-English save over the keepalive limit in bytes goes out without keep
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   const title = uniq('漢字');
-  const tasks = Array.from({ length: 100 }, (_, i) => ({ id: 't' + i, text: `${i} ${'漢'.repeat(120)}`, done: false }));
+  const tasks = Array.from({ length: 100 }, (_, i) => ({
+    id: 't' + i,
+    text: `${i} ${'漢'.repeat(120)}`,
+    status: 'open',
+  }));
   const id = await createTodo(page, null, title, tasks);
   await page.click('#mNotes');
   await page.locator('.qn-row-btn', { hasText: title }).click();
@@ -253,7 +257,7 @@ test('a non-English save over the keepalive limit in bytes goes out without keep
   await page.locator('.qn-task', { hasText: '0 漢' }).first().locator('.qn-box').click();
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
 
-  await expect.poll(async () => (await serverTasks(page, id))[0].done).toBe(true);
+  await expect.poll(async () => (await serverTasks(page, id))[0].status).toBe('done');
   const [save] = await page.evaluate(() => window.__saves);
   expect(save.size).toBeLessThan(60000); // under the limit in characters…
   expect(save.bytes).toBeGreaterThan(64 * 1024); // …but over it in bytes
@@ -262,7 +266,7 @@ test('a non-English save over the keepalive limit in bytes goes out without keep
 
 test('returning to the tab after a failed save keeps the edit on screen', async ({ page }) => {
   const canvasId = await freshCanvas(page);
-  const id = await createTodo(page, canvasId, uniq('Keep'), [{ id: 'a', text: 'Feed cat', done: false }]);
+  const id = await createTodo(page, canvasId, uniq('Keep'), [{ id: 'a', text: 'Feed cat', status: 'open' }]);
   await page.reload();
   const box = page.locator(`[data-id="${id}"] .task input[type="checkbox"]`).first();
   await expect(box).toBeVisible();
@@ -281,7 +285,7 @@ test('returning to the tab after a failed save keeps the edit on screen', async 
 
 test('a canvas save that fails is retried and lands', async ({ page }) => {
   const canvasId = await freshCanvas(page);
-  const id = await createTodo(page, canvasId, uniq('Canvas'), [{ id: 'a', text: 'Water plants', done: false }]);
+  const id = await createTodo(page, canvasId, uniq('Canvas'), [{ id: 'a', text: 'Water plants', status: 'open' }]);
   await page.reload();
   const todo = page.locator(`[data-id="${id}"]`);
   await expect(todo).toBeVisible();
@@ -289,5 +293,5 @@ test('a canvas save that fails is retried and lands', async ({ page }) => {
 
   await todo.locator('.task input[type="checkbox"]').first().check();
   await expect(page.locator('#toast')).toContainText('check your connection');
-  await expect.poll(async () => (await serverTasks(page, id))[0].done, { timeout: 10000 }).toBe(true);
+  await expect.poll(async () => (await serverTasks(page, id))[0].status, { timeout: 10000 }).toBe('done');
 });

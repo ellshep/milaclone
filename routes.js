@@ -206,7 +206,10 @@ router.post('/api/item', (req, res) => {
     createdAt: Date.now(),
   };
   if (RICH_TYPES.has(item.type)) item.data = toRich(item.data);
-  if (Array.isArray(item.data.tasks)) item.data.tasks = tasklist.withIds(item.data.tasks, () => id('t_'));
+  // A new card's tasks keep the status times they come with (a paste, an import).
+  if (Array.isArray(item.data.tasks)) {
+    item.data.tasks = tasklist.withIds(item.data.tasks.map(tasklist.upgradeTask), () => id('t_'));
+  }
 
   db.transaction(() => {
     // A board item owns a freshly created child canvas.
@@ -252,9 +255,14 @@ router.patch('/api/item/:id', (req, res) => {
     const stored = it.data.tasks;
     it.data = Object.assign({}, it.data, b.data);
     if (Array.isArray(b.data.tasks)) {
-      const mine = tasklist.withIds(b.data.tasks, () => id('t_'));
-      it.data.tasks =
-        Array.isArray(b.baseTasks) && Array.isArray(stored) ? tasklist.merge(b.baseTasks, stored, mine) : mine;
+      const mine = tasklist.withIds(b.data.tasks.map(tasklist.upgradeTask), () => id('t_'));
+      const base = Array.isArray(b.baseTasks) ? b.baseTasks.map(tasklist.upgradeTask) : null;
+      const before = Array.isArray(stored) ? stored : [];
+      it.data.tasks = tasklist.stampStatus(
+        base && Array.isArray(stored) ? tasklist.merge(base, stored, mine) : mine,
+        before,
+        Date.now()
+      );
     }
   }
 

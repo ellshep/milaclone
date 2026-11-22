@@ -57,7 +57,7 @@ test('rejects a missing or wrong token with 401', async () => {
   assert.equal((await post({ title: 'x' }, 'wrong-token-0123456789')).status, 401);
   assert.equal((await post({ title: 'x' }, 'short')).status, 401);
   assert.equal((await call('GET', '/api/tasks', undefined, null)).status, 401);
-  assert.equal((await call('PATCH', '/api/tasks/t_x', { done: true }, null)).status, 401);
+  assert.equal((await call('PATCH', '/api/tasks/t_x', { status: 'done' }, null)).status, 401);
 });
 
 test('returns 503 while TASK_API_TOKEN is unset', async () => {
@@ -88,10 +88,10 @@ test('creates a task in an Inbox list on Home that both screens see', async () =
   assert.deepEqual(t.tags, ['errands', 'home']);
   assert.equal(t.due, '2026-12-01');
   assert.equal(t.source, 'voice-note');
-  assert.equal(t.done, false);
+  assert.deepEqual([t.status, t.statusAt], ['open', null]);
+  assert.equal('done' in t || 'stale' in t, false);
   assert.equal(t.starred, false);
   assert.equal(t.pinned, false);
-  assert.equal(t.stale, false);
   assert.equal(t.rankScore, null);
   assert.equal(t.listTitle, 'Inbox');
   assert.ok(logs.some(l => l.includes('"task.create"') && l.includes('"voice-note"')));
@@ -217,9 +217,9 @@ test('dedupe skips an open task with the same title', async () => {
   // without dedupe the same title is created again
   assert.equal((await post({ title: 'Call the dentist' })).status, 201);
   // a done task doesn't block a new one
-  await patch(a.body.task.id, { done: true });
+  await patch(a.body.task.id, { status: 'done' });
   const c = await post({ title: 'Renew passport' });
-  await patch(c.body.task.id, { done: true });
+  await patch(c.body.task.id, { status: 'done' });
   assert.equal((await post({ title: 'Renew passport', dedupe: true })).status, 201);
 });
 
@@ -231,15 +231,23 @@ test('GET lists tasks by status, due date first then oldest', async () => {
   const pos = id => open.findIndex(t => t.id === id);
   assert.ok(pos(early.id) < pos(late.id));
   assert.ok(pos(late.id) < pos(undated.id));
-  assert.ok(open.every(t => !t.done));
+  assert.ok(open.every(t => t.status === 'open'));
   assert.ok(open.every(t => t.listId && t.listTitle));
 
-  await patch(early.id, { done: true });
+  await patch(early.id, { status: 'done' });
   const done = (await list('?status=done')).body.tasks;
   assert.ok(done.some(t => t.id === early.id));
-  assert.ok(done.every(t => t.done));
+  assert.ok(done.every(t => t.status === 'done'));
+  assert.ok(!(await list()).body.tasks.some(t => t.id === early.id));
+  await patch(late.id, { status: 'stale' });
+  const stale = (await list('?status=stale')).body.tasks;
+  assert.deepEqual(
+    stale.map(t => t.id),
+    [late.id]
+  );
+  assert.ok(!(await list()).body.tasks.some(t => t.id === late.id), 'a stale task is not open');
   const all = (await list('?status=all')).body.tasks;
-  assert.ok(all.some(t => t.id === early.id) && all.some(t => t.id === undated.id));
+  assert.ok([early.id, late.id, undated.id].every(id => all.some(t => t.id === id)));
   assert.equal((await list('?status=nope')).status, 400);
 });
 
@@ -253,8 +261,8 @@ test('GET skips the canvas editor’s blank placeholder rows', async () => {
       type: 'todo',
       data: {
         tasks: [
-          { id: 'blank1', text: '', done: false },
-          { id: 'real1', text: 'From canvas', done: false },
+          { id: 'blank1', text: '', status: 'open' },
+          { id: 'real1', text: 'From canvas', status: 'open' },
         ],
       },
     }),
@@ -267,9 +275,15 @@ test('GET skips the canvas editor’s blank placeholder rows', async () => {
 
 test('PATCH marks done, pins and edits fields', async () => {
   const t = (await post({ title: 'Patch me', tags: ['a'] })).body.task;
-  let r = await patch(t.id, { done: true, pinned: true });
+  const before = Date.now();
+  let r = await patch(t.id, { status: 'done', pinned: true });
   assert.equal(r.status, 200);
-  assert.equal(r.body.task.done, true);
+  assert.equal(r.body.task.status, 'done');
+  const doneAt = r.body.task.statusAt;
+  assert.ok(doneAt >= before && doneAt <= Date.now(), 'statusAt is the server clock');
+  // the same status again changes nothing; an edit or a star doesn't move statusAt
+  r = await patch(t.id, { status: 'done', statusAt: 1, starred: true });
+  assert.equal(r.body.task.statusAt, doneAt);
   assert.equal(r.body.task.pinned, true);
   assert.equal(r.body.task.text, 'Patch me');
   r = await patch(t.id, {
@@ -278,24 +292,31 @@ test('PATCH marks done, pins and edits fields', async () => {
     tags: ['b'],
     dueDate: '2027-01-01',
     priority: 'high',
-    done: false,
+    status: 'open',
   });
   assert.equal(r.body.task.text, 'Patched');
   assert.equal(r.body.task.note, 'more');
   assert.deepEqual(r.body.task.tags, ['b']);
   assert.equal(r.body.task.due, '2027-01-01');
   assert.equal(r.body.task.starred, true);
-  assert.equal(r.body.task.done, false);
-  assert.ok(logs.some(l => l.includes('"task.update"')));
+  assert.equal(r.body.task.status, 'open');
+  assert.ok(r.body.task.statusAt >= doneAt);
+  assert.ok(logs.some(l => l.includes('"task.update"') && l.includes('"status"')));
+  // `done` is shorthand: true for done, false for open; `status` wins over it
+  assert.equal((await patch(t.id, { done: true })).body.task.status, 'done');
+  assert.equal((await patch(t.id, { done: false })).body.task.status, 'open');
+  assert.equal((await patch(t.id, { done: true, status: 'stale' })).body.task.status, 'stale');
+  await patch(t.id, { status: 'open' });
 
   const { lists } = await plain('/api/todos');
   const stored = lists.flatMap(l => l.tasks).find(x => x.id === t.id);
   assert.equal(stored.text, 'Patched');
   assert.equal(stored.source, 'api');
 
-  assert.equal((await patch('t_missing', { done: true })).status, 404);
+  assert.equal((await patch('t_missing', { status: 'done' })).status, 404);
   assert.equal((await patch(t.id, {})).status, 400);
   assert.equal((await patch(t.id, { done: 'yes' })).status, 400);
+  assert.equal((await patch(t.id, { status: 'deleted' })).status, 400);
   assert.equal((await patch(t.id, { title: '' })).status, 400);
 });
 
@@ -397,7 +418,7 @@ test('a client edit from a stale copy keeps tasks the API added', async () => {
   // the API adds a task after the client loaded the list
   const added = (await post({ title: 'Added by API' })).body.task;
   // the client ticks its copy of the first task and saves with its stale base
-  const mine = baseTasks.map(x => (x.id === t.id ? Object.assign({}, x, { done: true }) : x));
+  const mine = baseTasks.map(x => (x.id === t.id ? Object.assign({}, x, { status: 'done' }) : x));
   const saved = await fetch(base + '/api/item/' + t.listId, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -406,7 +427,7 @@ test('a client edit from a stale copy keeps tasks the API added', async () => {
   const ids = saved.data.tasks.map(x => x.id);
   assert.ok(ids.includes(added.id));
   const kept = saved.data.tasks.find(x => x.id === t.id);
-  assert.equal(kept.done, true);
+  assert.equal(kept.status, 'done');
   assert.equal(kept.source, 'api');
 });
 
@@ -448,12 +469,16 @@ test('view=digest: the focus three plus overdue and due today, at most 8 lines',
         body: JSON.stringify({ canvasId, type, data }),
       })
     ).json();
-  const task = (id, due, f = {}) => ({ id, text: id, done: false, createdAt: 1, due, ...f });
+  const task = (id, due, f = {}) => ({ id, text: id, status: 'open', createdAt: 1, due, ...f });
   // Nine tasks more overdue than anything else here; decoys more overdue still, all left out.
   const late = Array.from({ length: 9 }, (_, i) => task(`dg-${i + 1}`, `2000-01-0${i + 1}`));
   await item(root, 'todo', {
     title: 'Late',
-    tasks: [...late, task('dg-stale', '1999-01-01', { stale: true }), task('dg-done', '1999-01-01', { done: true })],
+    tasks: [
+      ...late,
+      task('dg-stale', '1999-01-01', { status: 'stale' }),
+      task('dg-done', '1999-01-01', { status: 'done' }),
+    ],
   });
   await item(root, 'todo', { title: 'Ref', labels: ['Reference'], tasks: [task('dg-ref', '1999-01-01')] });
   const tpl = await item(root, 'board', { title: 'Templates' });

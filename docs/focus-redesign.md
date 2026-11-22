@@ -58,7 +58,7 @@ mockup and this text disagree, the text wins.
 
 ## F1 · One status field
 
-- [ ] **F1.1 `status`, `statusAt`, `statusReason`.** `tasklist.js` defines them
+- [x] **F1.1 `status`, `statusAt`, `statusReason`.** `tasklist.js` defines them
       (default `open`, `null`, `null`) and stamps `statusAt` when a write
       changes `status`, in the merge and in every server write. Quick notes'
       `normTask` follows.

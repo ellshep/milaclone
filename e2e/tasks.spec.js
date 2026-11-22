@@ -27,7 +27,7 @@ const editTask = async (page, n) => {
   }
   await page.locator('.task .txt').nth(n).click();
 };
-const t = (id, text, extra) => ({ id, text, done: false, ...extra });
+const t = (id, text, extra) => ({ id, text, status: 'open', ...extra });
 
 test('F7.1: tab and shift+tab change a task’s indent, one level under the task above', async ({ page }) => {
   const id = await freshCanvas(page);

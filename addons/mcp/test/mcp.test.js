@@ -175,7 +175,10 @@ test('every tool works on readable boards and refuses a blocked one', async () =
   assert.match(task.id, /^t_/);
   assert.equal(task.due, '2026-12-01');
   const done = await call('set_todo_task_done', { item_id: list.id, task_id: task.id });
-  assert.equal(done.done, true);
+  assert.equal(done.status, 'done');
+  assert.equal(typeof done.statusAt, 'number'); // stamped by the board
+  const undone = await call('set_todo_task_done', { item_id: list.id, task_id: task.id, done: false });
+  assert.equal(undone.status, 'open');
 
   const hits = await call('search', { query: 'zebra' });
   assert.deepEqual(
@@ -213,7 +216,7 @@ test('every tool works on readable boards and refuses a blocked one', async () =
     after.items.map(i => i.id),
     [privTodo.id]
   );
-  assert.notEqual(after.items[0].data.tasks[0].done, true);
+  assert.notEqual(after.items[0].data.tasks[0].status, 'done');
 
   // other refusals are plain errors, not crashes
   assert.match((await raw('get_item', { item_id: 'i_nope' })).content[0].text, /no card with id i_nope/);

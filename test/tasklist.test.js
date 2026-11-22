@@ -5,7 +5,17 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normTask, isBlank, withIds, copyTasks, newTask, merge } = require('../tasklist');
+const {
+  normTask,
+  isBlank,
+  withIds,
+  copyTasks,
+  newTask,
+  merge,
+  upgradeTask,
+  stampStatus,
+  setStatus,
+} = require('../tasklist');
 
 let n = 0;
 const makeId = () => 'new' + n++;
@@ -15,7 +25,9 @@ test('normTask fills every known field and passes unknown ones through', () => {
     id: 'a',
     text: 'Milk',
     source: 'alexa',
-    done: false,
+    status: 'open',
+    statusAt: null,
+    statusReason: null,
     starred: false,
     due: null,
     tags: [],
@@ -25,9 +37,19 @@ test('normTask fills every known field and passes unknown ones through', () => {
     indent: 0,
   });
   // wrong types fall back to the defaults
-  const t = normTask({ text: 5, done: 1, tags: 'x', note: null, noteStyle: [], indent: 1.5 });
+  const t = normTask({
+    text: 5,
+    status: 'gone',
+    statusAt: '1',
+    statusReason: 3,
+    tags: 'x',
+    note: null,
+    noteStyle: [],
+    indent: 1.5,
+  });
   assert.equal(t.text, '');
-  assert.equal(t.done, true);
+  assert.deepEqual([t.status, t.statusAt, t.statusReason], ['open', null, null]);
+  assert.equal(normTask({ status: 'stale' }).status, 'stale');
   assert.deepEqual(t.tags, []);
   assert.equal(t.note, '');
   assert.deepEqual(t.noteStyle, {});
@@ -58,7 +80,7 @@ test('withIds gives missing and duplicated ids fresh ones and keeps the rest', (
 test('newTask makes an open task with an id and a creation time', () => {
   assert.deepEqual(newTask({ text: 'Milk', source: 'api' }, 't1', 123), {
     id: 't1',
-    done: false,
+    status: 'open',
     createdAt: 123,
     text: 'Milk',
     source: 'api',
@@ -67,8 +89,8 @@ test('newTask makes an open task with an id and a creation time', () => {
 
 test('merge: filled-in defaults are not edits', () => {
   // the client's base is raw (no star), the server's copy has been starred elsewhere
-  const base = [{ id: 'a', text: 'Milk', done: false }];
-  const server = [{ id: 'a', text: 'Milk', done: false, starred: true, due: '2026-12-01', tags: ['shop'] }];
+  const base = [{ id: 'a', text: 'Milk', status: 'open' }];
+  const server = [{ id: 'a', text: 'Milk', status: 'open', starred: true, due: '2026-12-01', tags: ['shop'] }];
   // the client fills in defaults and edits only the text
   const mine = [{ ...normTask(base[0]), text: 'Oat milk' }];
   const [t] = merge(base, server, mine);
@@ -97,13 +119,13 @@ test('merge: adds and deletes on both sides survive, unknown fields are kept', (
     { id: 's', text: 'Added on the server' },
   ]; // c deleted elsewhere
   const mine = [
-    { id: 'a', text: 'Milk', done: true },
+    { id: 'a', text: 'Milk', status: 'done' },
     { id: 'b', text: 'Free-range eggs' }, // a client that doesn't know `indent`
     { id: 'c', text: 'Gone' },
     { id: 'm', text: 'Added here' },
   ];
   assert.deepEqual(merge(base, server, mine), [
-    { id: 'a', text: 'Milk', done: true },
+    { id: 'a', text: 'Milk', status: 'done' },
     { id: 'b', text: 'Free-range eggs', indent: 1 },
     { id: 'm', text: 'Added here' },
     { id: 's', text: 'Added on the server' },
@@ -137,7 +159,7 @@ test('merge: a base with missing or repeated ids lets the client list win', () =
   ];
   const mine = [
     { id: 'r1', text: 'Milk' },
-    { id: 'r2', text: 'Eggs', done: true },
+    { id: 'r2', text: 'Eggs', status: 'done' },
   ];
   assert.deepEqual(merge([{ text: 'Milk' }, { text: 'Eggs' }], server, mine), mine);
   assert.deepEqual(
@@ -152,4 +174,76 @@ test('merge: a base with missing or repeated ids lets the client list win', () =
     mine
   );
   assert.deepEqual(merge([null], server, mine), mine);
+});
+
+test('upgradeTask folds the old done flag into status and drops stale', () => {
+  assert.deepEqual(upgradeTask({ id: 'a', text: 'Milk', done: true }), {
+    id: 'a',
+    text: 'Milk',
+    status: 'done',
+    statusAt: null,
+  });
+  assert.deepEqual(upgradeTask({ id: 'b', done: false, stale: true }), { id: 'b' });
+  // an old tab sends done: false on a task the server has as done: it stays done
+  assert.deepEqual(upgradeTask({ id: 'c', status: 'done', statusAt: 5, done: false }), {
+    id: 'c',
+    status: 'done',
+    statusAt: 5,
+  });
+  const current = { id: 'd', status: 'open' };
+  assert.equal(upgradeTask(current), current, 'a task already on status is returned as is');
+  assert.equal(upgradeTask(null), null);
+});
+
+test('stampStatus: the server stamps a status change and keeps its own times otherwise', () => {
+  const before = [
+    { id: 'a', text: 'Milk', status: 'done', statusAt: 100 },
+    { id: 'b', text: 'Eggs' },
+    { id: 'c', text: 'Bread', status: 'stale', statusAt: 50, statusReason: '40 days old' },
+  ];
+  const out = stampStatus(
+    [
+      { id: 'a', text: 'Oat milk', status: 'done', statusAt: 999 }, // a client's own time never counts
+      { id: 'b', text: 'Eggs', status: 'done', statusAt: 1 },
+      { id: 'c', text: 'Bread', status: 'open', statusReason: 'mine' },
+      { id: 'n', text: 'New and done', status: 'done' },
+      { id: 'm', text: 'New', statusAt: 7 },
+    ],
+    before,
+    500
+  );
+  assert.deepEqual(out, [
+    { id: 'a', text: 'Oat milk', status: 'done', statusAt: 100 },
+    { id: 'b', text: 'Eggs', status: 'done', statusAt: 500 },
+    { id: 'c', text: 'Bread', status: 'open', statusAt: 500 },
+    { id: 'n', text: 'New and done', status: 'done', statusAt: 500 },
+    { id: 'm', text: 'New' },
+  ]);
+  assert.equal(before[0].statusAt, 100, 'the stored list is untouched');
+});
+
+test('setStatus stamps only a real change', () => {
+  const t = { id: 'a', statusReason: 'old' };
+  assert.equal(setStatus(t, 'open', 5), false);
+  assert.deepEqual(t, { id: 'a', statusReason: 'old' });
+  assert.equal(setStatus(t, 'done', 6), true);
+  assert.deepEqual(t, { id: 'a', status: 'done', statusAt: 6 });
+});
+
+test('merge then stamp: done on one device, a text edit on another, both kept', () => {
+  const stored = [{ id: 'a', text: 'Milk', status: 'open' }];
+  // device 1 ticks the task
+  const afterTick = stampStatus(
+    merge(stored, stored, [{ id: 'a', text: 'Milk', status: 'done', statusAt: 1 }]),
+    stored,
+    1000
+  );
+  assert.deepEqual(afterTick, [{ id: 'a', text: 'Milk', status: 'done', statusAt: 1000 }]);
+  // device 2 still holds the open copy and edits the text
+  const afterEdit = stampStatus(
+    merge(stored, afterTick, [{ id: 'a', text: 'Oat milk', status: 'open' }]),
+    afterTick,
+    2000
+  );
+  assert.deepEqual(afterEdit, [{ id: 'a', text: 'Oat milk', status: 'done', statusAt: 1000 }]);
 });

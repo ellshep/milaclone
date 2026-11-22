@@ -11,15 +11,15 @@
 //      ranker may shift a task one tier with `rankNudge` (+1 up, -1 down);
 //      within a tier, higher `rankScore` first, then unscored oldest first.
 //
-// Left out: done, blank and `stale` tasks, lists labelled "Reference", and
-// anything inside the Templates board on Home. Dates are calendar days in
-// TASK_TZ.
+// Left out: tasks that aren't open (`status` done or stale), blank tasks, lists
+// labelled "Reference", and anything inside the Templates board on Home. Dates
+// are calendar days in TASK_TZ.
 //
 // The /focus page writes back through `markDone` and `setPlacements` (its List
 // mode drag and Reset).
 
 const { db, stmt, rowToItem, breadcrumb } = require('./db');
-const { isBlank } = require('./tasklist');
+const { isBlank, isOpen, setStatus } = require('./tasklist');
 
 const SOON_DAYS = 3;
 const TIERS = ['soon', 'starred', 'rest'];
@@ -49,7 +49,7 @@ function orderTasks(entries, today) {
   const t0 = dayNum(today);
   const rows = [];
   for (const { task, card, board } of entries) {
-    if (task.done || task.stale || isBlank(task)) continue;
+    if (!isOpen(task) || isBlank(task)) continue;
     const dueIn = typeof task.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(task.due) ? dayNum(task.due) - t0 : null;
     let tier;
     if (dueIn !== null && dueIn < 0) tier = 'overdue';
@@ -61,7 +61,17 @@ function orderTasks(entries, today) {
       tier = TIERS[Math.max(0, Math.min(2, base - nudge))];
     }
     const listTitle = card.data.title || 'To-do';
-    rows.push(Object.assign({}, task, { listId: card.id, listTitle, boardTitle: board || null, tier, dueIn }));
+    rows.push(
+      Object.assign({}, task, {
+        status: 'open',
+        statusAt: task.statusAt ?? null,
+        listId: card.id,
+        listTitle,
+        boardTitle: board || null,
+        tier,
+        dueIn,
+      })
+    );
   }
   const rank = { overdue: 0, today: 1, placed: 2, soon: 3, starred: 4, rest: 5 };
   rows.sort((a, b) => {
@@ -143,8 +153,8 @@ function markDone(taskId) {
     for (const card of stmt.todoItems.all().map(rowToItem)) {
       const task = (Array.isArray(card.data.tasks) ? card.data.tasks : []).find(t => t.id === taskId);
       if (!task) continue;
-      if (task.done) return false;
-      task.done = true;
+      if (!isOpen(task)) return false;
+      setStatus(task, 'done', Date.now());
       saveCard(card);
       return true;
     }

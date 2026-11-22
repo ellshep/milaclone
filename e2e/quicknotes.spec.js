@@ -42,8 +42,8 @@ const taskRow = (page, text) => page.locator('.qn-task', { hasText: text });
 test('the Quick notes tab opens the overview with every todo list', async ({ page }) => {
   const title = uniq('Nightly');
   await seedList(page, title, [
-    { id: 'a', text: 'Floss', done: false },
-    { id: 'b', text: 'Shower', done: true },
+    { id: 'a', text: 'Floss', status: 'open' },
+    { id: 'b', text: 'Shower', status: 'done' },
   ]);
   await openQuickNotes(page);
 
@@ -55,8 +55,8 @@ test('the Quick notes tab opens the overview with every todo list', async ({ pag
 test('drilling into a list shows open tasks and a collapsible completed group', async ({ page }) => {
   const title = uniq('Routine');
   await seedList(page, title, [
-    { id: 'a', text: 'Wash face', done: false },
-    { id: 'b', text: 'Shower', done: true },
+    { id: 'a', text: 'Wash face', status: 'open' },
+    { id: 'b', text: 'Shower', status: 'done' },
   ]);
   await openQuickNotes(page);
   await listRow(page, title).click();
@@ -72,7 +72,7 @@ test('drilling into a list shows open tasks and a collapsible completed group', 
 
 test('checking a task persists and moves it into Completed', async ({ page }) => {
   const title = uniq('Errands');
-  const id = await seedList(page, title, [{ id: 'a', text: 'Buy milk', done: false }]);
+  const id = await seedList(page, title, [{ id: 'a', text: 'Buy milk', status: 'open' }]);
   await openQuickNotes(page);
   await listRow(page, title).click();
 
@@ -86,13 +86,14 @@ test('checking a task persists and moves it into Completed', async ({ page }) =>
     const r = await (await fetch('/api/todos')).json();
     return r.lists.find(l => l.id === id).tasks;
   }, id);
-  expect(tasks[0].done).toBe(true);
+  expect(tasks[0].status).toBe('done');
+  expect(typeof tasks[0].statusAt).toBe('number'); // stamped by the server
 });
 
 test('starring a task feeds the Starred smart view', async ({ page }) => {
   const title = uniq('Starry');
   const task = uniq('Call the plumber'); // the Starred view lists every run's starred tasks
-  await seedList(page, title, [{ id: 'a', text: task, done: false }]);
+  await seedList(page, title, [{ id: 'a', text: task, status: 'open' }]);
   await openQuickNotes(page);
   await listRow(page, title).click();
   await taskRow(page, task).locator('.qn-star').click();
@@ -112,9 +113,9 @@ test('the All smart view lists the newest task first', async ({ page }) => {
   const mid = uniq('Undated task'); // made on the canvas: no createdAt, so it takes its list's
   const fresh = uniq('Newer task');
   await seedList(page, title, [
-    { id: 'a', text: old, done: false, createdAt: 1000 },
-    { id: 'b', text: mid, done: false },
-    { id: 'c', text: fresh, done: false, createdAt: Date.now() + 60000 },
+    { id: 'a', text: old, status: 'open', createdAt: 1000 },
+    { id: 'b', text: mid, status: 'open' },
+    { id: 'c', text: fresh, status: 'open', createdAt: Date.now() + 60000 },
   ]);
   await openQuickNotes(page);
   await page.locator('.qn-tile[data-smart="all"]').click();
@@ -149,7 +150,7 @@ test('the add bar appends tasks and stays open for the next one', async ({ page 
 
 test('task detail edits the note, due date and tags', async ({ page }) => {
   const title = uniq('Life');
-  const id = await seedList(page, title, [{ id: 'a', text: 'Book counseling', done: false }]);
+  const id = await seedList(page, title, [{ id: 'a', text: 'Book counseling', status: 'open' }]);
   await openQuickNotes(page);
   await listRow(page, title).click();
   await taskRow(page, 'Book counseling').click();
@@ -186,8 +187,8 @@ test('task detail edits the note, due date and tags', async ({ page }) => {
 test('the tag sheet marks the tags already on the task and toggles them', async ({ page }) => {
   const title = uniq('Tagged');
   await seedList(page, title, [
-    { id: 'a', text: 'Pay rent', done: false, tags: ['money'] },
-    { id: 'b', text: 'Try a recipe', done: false, tags: ['taste'] },
+    { id: 'a', text: 'Pay rent', status: 'open', tags: ['money'] },
+    { id: 'b', text: 'Try a recipe', status: 'open', tags: ['taste'] },
   ]);
   await openQuickNotes(page);
   await listRow(page, title).click();
@@ -220,7 +221,7 @@ test('the tag sheet marks the tags already on the task and toggles them', async 
 
 test('the note bullet button rewrites the note lines', async ({ page }) => {
   const title = uniq('Notes');
-  await seedList(page, title, [{ id: 'a', text: 'Plan trip', done: false }]);
+  await seedList(page, title, [{ id: 'a', text: 'Plan trip', status: 'open' }]);
   await openQuickNotes(page);
   await listRow(page, title).click();
   await taskRow(page, 'Plan trip').click();
@@ -235,7 +236,7 @@ test('the note bullet button rewrites the note lines', async ({ page }) => {
 test('search matches task text and opens the task', async ({ page }) => {
   const title = uniq('Search');
   const needle = uniq('quokka');
-  await seedList(page, title, [{ id: 'a', text: needle, done: false }]);
+  await seedList(page, title, [{ id: 'a', text: needle, status: 'open' }]);
   await openQuickNotes(page);
 
   await page.click('#qnSearchBtn');
@@ -249,7 +250,7 @@ test('search matches task text and opens the task', async ({ page }) => {
 });
 
 test('search reports when nothing matches', async ({ page }) => {
-  await seedList(page, uniq('Empty'), [{ id: 'a', text: 'something', done: false }]);
+  await seedList(page, uniq('Empty'), [{ id: 'a', text: 'something', status: 'open' }]);
   await openQuickNotes(page);
   await page.click('#qnSearchBtn');
   await page.fill('#qnQuery', 'zzz-no-such-task-zzz');
@@ -262,8 +263,8 @@ test('an overview tag chip keeps the lists whose tasks carry that tag', async ({
   const tag = uniq('tag').toLowerCase();
   const tagged = uniq('Tagged');
   const plain = uniq('Plain');
-  await seedList(page, tagged, [{ id: 'a', text: 'Call the bank', done: false, tags: [tag] }]);
-  await seedList(page, plain, [{ id: 'a', text: 'Buy stamps', done: false }]);
+  await seedList(page, tagged, [{ id: 'a', text: 'Call the bank', status: 'open', tags: [tag] }]);
+  await seedList(page, plain, [{ id: 'a', text: 'Buy stamps', status: 'open' }]);
   await openQuickNotes(page);
 
   await page.click('#qnHomeMenu');
@@ -302,7 +303,7 @@ test('Your boards returns to the canvas', async ({ page }) => {
 
 test('desktop phone button opens the From your phone popover', async ({ page }) => {
   const title = uniq('DeskList');
-  await seedList(page, title, [{ id: 'a', text: 'Ship it', done: false }]);
+  await seedList(page, title, [{ id: 'a', text: 'Ship it', status: 'open' }]);
   await page.setViewportSize({ width: 1200, height: 800 });
   await page.goto('/');
 

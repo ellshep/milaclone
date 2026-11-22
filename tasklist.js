@@ -6,13 +6,15 @@
 // shape, the defaults, the blank rule, ids and the merge are defined once.
 //
 // Stored tasks stay as minimal as their writers made them (a canvas task may
-// have only id/text/done). Defaults are filled in only to compare, so a client
+// have only id/text/status). Defaults are filled in only to compare, so a client
 // that fills them in (Quick notes) and one that doesn't (the canvas) agree.
 
 // Every field some client reads, with the value a task has when it's missing.
 const DEFAULTS = {
   text: '',
-  done: false,
+  status: 'open',
+  statusAt: null,
+  statusReason: null,
   starred: false,
   due: null,
   tags: [],
@@ -24,6 +26,9 @@ const DEFAULTS = {
 
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 
+// A task is open, done or stale (set aside by the stale rule), never two at once.
+const STATUSES = ['open', 'done', 'stale'];
+
 // The task with every known field present and of the expected type; unknown
 // fields (source, rank*, importId, …) pass through unchanged.
 function normTask(t) {
@@ -31,7 +36,9 @@ function normTask(t) {
   return {
     ...src,
     text: typeof src.text === 'string' ? src.text : DEFAULTS.text,
-    done: !!src.done,
+    status: STATUSES.includes(src.status) ? src.status : DEFAULTS.status,
+    statusAt: Number.isFinite(src.statusAt) ? src.statusAt : null,
+    statusReason: typeof src.statusReason === 'string' ? src.statusReason : null,
     starred: !!src.starred,
     due: src.due || null,
     tags: Array.isArray(src.tags) ? src.tags : DEFAULTS.tags,
@@ -40,6 +47,43 @@ function normTask(t) {
     createdAt: src.createdAt || null,
     indent: Number.isInteger(src.indent) ? src.indent : DEFAULTS.indent,
   };
+}
+
+const isOpen = t => normTask(t).status === 'open';
+const isDone = t => normTask(t).status === 'done';
+
+// A task written with the flags from before `status` (old rows at boot, a tab
+// still running old code, an importer): `done: true` becomes `status: "done"`
+// (when unknown, `statusAt` null); `done: false` and `stale` are dropped, so an
+// old client that sends `done: false` for every task never reopens one.
+function upgradeTask(t) {
+  if (!isObj(t) || !('done' in t || 'stale' in t)) return t;
+  const { done, stale, ...rest } = t; // oxlint-disable-line no-unused-vars -- dropped on purpose
+  return done === true ? { ...rest, status: 'done', statusAt: rest.statusAt ?? null } : rest;
+}
+
+// `statusAt` and `statusReason` belong to the server: a write that changes a
+// task's status stamps `statusAt` with now and drops the reason; any other
+// write keeps the stored ones, whatever the client sent. `before` is the list
+// as stored; a task it doesn't have was open. Returns a new array.
+function stampStatus(tasks, before, now) {
+  const prev = new Map(before.filter(isObj).map(t => [t.id, normTask(t)]));
+  return tasks.map(t => {
+    const p = prev.get(t.id);
+    const { statusAt, statusReason, ...out } = t; // oxlint-disable-line no-unused-vars -- the client's never count
+    if (normTask(t).status !== (p ? p.status : 'open')) return { ...out, statusAt: now };
+    if (p && p.statusAt !== null) out.statusAt = p.statusAt;
+    if (p && p.statusReason !== null) out.statusReason = p.statusReason;
+    return out;
+  });
+}
+
+// A server write's status change, stamped like stampStatus. Returns whether it changed.
+function setStatus(task, status, now) {
+  if (normTask(task).status === status) return false;
+  Object.assign(task, { status, statusAt: now });
+  delete task.statusReason;
+  return true;
 }
 
 // A row with no text: the canvas editor's "type here" placeholder. Kept in the
@@ -72,7 +116,7 @@ function withIds(tasks, makeId, seen = new Set()) {
 const copyTasks = (tasks, makeId) => withIds(tasks, makeId, new Set(tasks.map(t => t && t.id)));
 
 // A new open task with an id and a creation time; `fields` may add anything.
-const newTask = (fields, taskId, now = Date.now()) => ({ id: taskId, done: false, createdAt: now, ...fields });
+const newTask = (fields, taskId, now = Date.now()) => ({ id: taskId, status: 'open', createdAt: now, ...fields });
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -139,4 +183,18 @@ function applyRanks(tasks, ranks, now) {
   return { written, changed };
 }
 
-module.exports = { normTask, isBlank, withIds, copyTasks, newTask, merge, applyRanks };
+module.exports = {
+  STATUSES,
+  normTask,
+  isOpen,
+  isDone,
+  upgradeTask,
+  stampStatus,
+  setStatus,
+  isBlank,
+  withIds,
+  copyTasks,
+  newTask,
+  merge,
+  applyRanks,
+};

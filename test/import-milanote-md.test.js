@@ -49,8 +49,8 @@ test('parseMd maps boards, todos, notes, links, images; skips junk', () => {
   assert.equal(todo.title, 'Checklist Section');
   assert.equal(todo.tasks.length, 3);
   assert.equal(todo.tasks[0].text, 'first task');
-  assert.equal(todo.tasks[0].done, false);
-  assert.equal(todo.tasks[1].done, true);
+  assert.equal(todo.tasks[0].status, 'open');
+  assert.equal(todo.tasks[1].status, 'done');
 
   const note = doc.boards[0].blocks[1];
   assert.equal(note.title, 'Notes Section');

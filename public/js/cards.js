@@ -272,7 +272,8 @@ function buildTodo(el, it) {
     list.innerHTML = '';
     tasks.forEach(task => {
       const row = document.createElement('div');
-      row.className = 'task' + (task.done ? ' done' : '');
+      const isDone = () => task.status === 'done';
+      row.className = 'task' + (isDone() ? ' done' : '');
       row.dataset.tid = task.id;
       row.style.setProperty('--indent', task.indent || 0);
       const grip = document.createElement('span'); // lucide swaps the <i>, so the listener sits on a wrapper
@@ -283,12 +284,12 @@ function buildTodo(el, it) {
       grip.addEventListener('pointerdown', e => reorderTask(e, row));
       const cb = document.createElement('input');
       cb.type = 'checkbox';
-      cb.checked = !!task.done;
+      cb.checked = isDone();
       cb.setAttribute('data-nodrag', '');
       cb.onclick = e => {
         e.stopPropagation();
-        task.done = cb.checked;
-        row.classList.toggle('done', task.done);
+        task.status = cb.checked ? 'done' : 'open';
+        row.classList.toggle('done', cb.checked);
         saveData(it, { tasks });
       };
       const tx = makeField('area', 'txt', task.text, 'List item');
@@ -299,7 +300,7 @@ function buildTodo(el, it) {
       tx.addEventListener('keydown', e => {
         if (e.key === 'Enter') {
           e.preventDefault();
-          const ni = { id: rid(), text: '', done: false };
+          const ni = { id: rid(), text: '', status: 'open' };
           tasks.splice(tasks.indexOf(task) + 1, 0, ni);
           saveData(it, { tasks });
           renderTasks();
@@ -351,7 +352,7 @@ function buildTodo(el, it) {
           d.className = 'tdue';
           d.textContent = due.label;
           d.title = due.full + ' (' + due.sub + ')';
-          d.classList.toggle('overdue', due.n <= 0 && !task.done);
+          d.classList.toggle('overdue', due.n <= 0 && !isDone());
           meta.appendChild(d);
         }
         for (const tag of task.tags || []) {
@@ -412,7 +413,7 @@ function buildTodo(el, it) {
   add.textContent = '+ Add item';
   add.onclick = e => {
     e.stopPropagation();
-    tasks.push({ id: rid(), text: '', done: false });
+    tasks.push({ id: rid(), text: '', status: 'open' });
     saveData(it, { tasks });
     renderTasks();
     enterEdit(el);

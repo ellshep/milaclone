@@ -21,7 +21,7 @@ export function label(it) {
   if (it.type === 'shortcut') return 'Shortcut to ' + ((it._target && it._target.title) || 'a trashed board');
   const d = it.data || {};
   if (it.type === 'todo') {
-    const open = (d.tasks || []).filter(t => !t.done && t.text && t.text.trim()).length;
+    const open = (d.tasks || []).filter(t => t.status !== 'done' && t.text && t.text.trim()).length;
     return `${d.title || 'To-do'} (${open} open)`;
   }
   const s = d.title || d.text || d.name || d.caption || d.url || d.src || '';

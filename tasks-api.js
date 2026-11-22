@@ -13,7 +13,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const { db, stmt, id, rootCanvasId, rowToItem, breadcrumb } = require('./db');
-const { isBlank, newTask, applyRanks } = require('./tasklist');
+const { STATUSES, normTask, isBlank, isDone, newTask, setStatus, applyRanks } = require('./tasklist');
 const { focusView, digestView, parseLimit, inTemplates, hasLabel, LIMIT_MAX } = require('./focus');
 
 const router = express.Router();
@@ -201,7 +201,10 @@ function inboxCard() {
   return card;
 }
 
-const listView = (task, card) => Object.assign({}, task, { listId: card.id, listTitle: card.data.title || 'To-do' });
+const listView = (task, card) => {
+  const { status, statusAt } = normTask(task);
+  return Object.assign({}, task, { status, statusAt, listId: card.id, listTitle: card.data.title || 'To-do' });
+};
 
 function findTask(taskId) {
   for (const card of todoCards()) {
@@ -259,7 +262,7 @@ router.post(
       }
       if (b.dedupe) {
         const key = normTitle(text);
-        const hit = tasksOf(card).find(t => !t.done && normTitle(t.text) === key);
+        const hit = tasksOf(card).find(t => !isDone(t) && normTitle(t.text) === key);
         if (hit) return { status: 200, body: { task: listView(hit, card), created: false, duplicate: true } };
       }
       const task = newTask(
@@ -271,7 +274,6 @@ router.post(
           note,
           source,
           pinned: false,
-          stale: false,
           rankScore: null,
           rankReason: null,
           rankedAt: null,
@@ -295,8 +297,6 @@ router.post(
   })
 );
 
-const STATUSES = { open: t => !t.done, done: t => !!t.done, all: () => true };
-
 router.get(
   '/api/tasks',
   handle((req, res) => {
@@ -308,8 +308,8 @@ router.get(
       return res.json(focusView({ limit }));
     }
     const status = req.query.status || 'open';
-    const keep = STATUSES[status];
-    if (!keep) bad('status must be open, done or all');
+    if (status !== 'all' && !STATUSES.includes(status)) bad('status must be open, done, stale or all');
+    const keep = t => status === 'all' || normTask(t).status === status;
     const tasks = [];
     for (const card of todoCards()) {
       for (const t of tasksOf(card)) if (!isBlank(t) && keep(t)) tasks.push(listView(t, card));
@@ -392,7 +392,12 @@ router.patch(
     if (b.notes !== undefined) patch.note = cleanNotes(b.notes);
     if (b.tags !== undefined) patch.tags = cleanTags(b.tags);
     if (b.dueDate !== undefined) patch.due = cleanDue(b.dueDate);
-    if (b.done !== undefined) patch.done = cleanBool(b.done, 'done');
+    // `status` sets the task's state; `done: true|false` is shorthand for done|open.
+    let status;
+    if (b.status !== undefined) {
+      if (!STATUSES.includes(b.status)) bad('status must be open, done or stale');
+      status = b.status;
+    } else if (b.done !== undefined) status = cleanBool(b.done, 'done') ? 'done' : 'open';
     if (b.pinned !== undefined) patch.pinned = cleanBool(b.pinned, 'pinned');
     const star = starFrom(b);
     if (star !== undefined) patch.starred = star;
@@ -405,7 +410,7 @@ router.patch(
       }
       move = { listId: b.listId, movedBy: cleanSource(b.movedBy, 'movedBy'), moveReason: b.moveReason?.trim() || null };
     }
-    if (!Object.keys(patch).length && !move) bad('nothing to update');
+    if (!Object.keys(patch).length && !status && !move) bad('nothing to update');
 
     const out = db.transaction(() => {
       let dest = null;
@@ -417,6 +422,7 @@ router.patch(
       if (!found) return null;
       const { card, task } = found;
       Object.assign(task, patch);
+      if (status) setStatus(task, status, Date.now());
       if (!dest || dest.id === card.id) {
         saveCard(card);
         return { task: listView(task, card) };
@@ -436,7 +442,8 @@ router.patch(
     if (!out) return res.status(404).json({ error: 'not found' });
     const t = out.task;
     if (out.moved) log('task.move', { taskId: t.id, from: t.movedFrom, listId: t.listId, by: t.movedBy });
-    if (Object.keys(patch).length) log('task.update', { taskId: t.id, listId: t.listId, fields: Object.keys(patch) });
+    const fields = Object.keys(patch).concat(status ? ['status'] : []);
+    if (fields.length) log('task.update', { taskId: t.id, listId: t.listId, fields });
     res.json({ task: t });
   })
 );
