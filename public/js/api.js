@@ -55,7 +55,10 @@ let keepaliveBytes = 0;
 function normalizeReadTasks(data) {
   if (!Array.isArray(data.tasks)) return;
   data.tasks = data.tasks.map(task => {
-    if (!task || typeof task !== 'object' || !('done' in task || 'stale' in task)) return task;
+    if (!task || typeof task !== 'object') return task;
+    if (!('done' in task || 'stale' in task)) {
+      return 'status' in task && !['open', 'done', 'stale'].includes(task.status) ? { ...task, status: 'open' } : task;
+    }
     const out = { ...task, status: task.done ? 'done' : 'open' };
     delete out.done;
     delete out.stale;

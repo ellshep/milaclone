@@ -19,7 +19,7 @@
 // mode drag and Reset).
 
 const { db, stmt, rowToItem, breadcrumb, INBOX_KEY } = require('./db');
-const { isBlank, isOpen, setStatus } = require('./tasklist');
+const { isBlank, isDone, isOpen, setStatus } = require('./tasklist');
 
 const SOON_DAYS = 3;
 const TIERS = ['soon', 'starred', 'rest'];
@@ -149,13 +149,13 @@ function digestView() {
 
 const saveCard = card => stmt.updateItem.run({ ...card, data: JSON.stringify(card.data) });
 
-/** Marks one open task done. Returns false when no open task has that id. */
+/** Marks a task done. Returns false if it is missing or already done. */
 function markDone(taskId) {
   return db.transaction(() => {
     for (const card of stmt.todoItems.all().map(rowToItem)) {
       const task = (Array.isArray(card.data.tasks) ? card.data.tasks : []).find(t => t.id === taskId);
       if (!task) continue;
-      if (!isOpen(task)) return false;
+      if (isDone(task)) return false;
       setStatus(task, 'done', Date.now());
       saveCard(card);
       return true;

@@ -648,6 +648,32 @@ test('tasks: item create and edit reject invalid statuses before writing', async
   );
 });
 
+test('tasks: old invalid statuses read as open and their lists can still be edited', async () => {
+  const { db } = require('../db');
+  const canvasId = await root();
+  const created = await send('POST', '/api/item', { canvasId, type: 'todo', data: { title: 'Older import' } });
+  const id = created.body.id;
+  const tasks = [
+    { id: 'import-pending', text: 'Milk', status: 'pending' },
+    { id: 'import-null', text: 'Eggs', status: null },
+    { id: 'import-stale', text: 'Bread', status: 'stale', statusAt: 123 },
+  ];
+  db.prepare('UPDATE items SET data = ? WHERE id = ?').run(JSON.stringify({ title: 'Older import', tasks }), id);
+
+  const expected = [{ ...tasks[0], status: 'open' }, { ...tasks[1], status: 'open' }, tasks[2]];
+  const canvas = (await get('/api/canvas/' + canvasId)).body;
+  const baseTasks = canvas.items.find(it => it.id === id).data.tasks;
+  assert.deepEqual(baseTasks, expected);
+  const quickNotes = (await get('/api/todos')).body.lists.find(list => list.id === id);
+  assert.deepEqual(quickNotes.tasks, expected);
+  assert.deepEqual(JSON.parse(db.prepare('SELECT data FROM items WHERE id = ?').get(id).data).tasks, tasks);
+
+  const mine = [baseTasks[0], { ...baseTasks[1], text: 'Free-range eggs' }, baseTasks[2]];
+  const saved = await send('PATCH', '/api/item/' + id, { baseTasks, data: { tasks: mine } });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(saved.body.data.tasks, [expected[0], { ...expected[1], text: 'Free-range eggs' }, expected[2]]);
+});
+
 test('tasks: document checklist fields keep their generic item behavior', async () => {
   const canvasId = await root();
   const checklist = [

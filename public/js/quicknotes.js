@@ -160,7 +160,8 @@ const saves = createSaveQueue({
     const list = listById(id);
     if (!list || !patch.tasks || !Array.isArray(saved.data.tasks)) return;
     const merged = saved.data.tasks.map(normTask);
-    if (saves.pending(id) || adoptTaskMetadata(list.tasks, merged)) return;
+    if (adoptTaskMetadata(list.tasks, merged)) return true;
+    if (saves.pending(id)) return;
     list.tasks = merged;
     render();
   },

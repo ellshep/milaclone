@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
-const { withIds, copyTasks } = require('./tasklist');
+const { STATUSES, withIds, copyTasks } = require('./tasklist');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'board.db');
@@ -131,7 +131,15 @@ process.on('SIGTERM', () => {
 // the API (and the frontend) always work with it as an object.
 // ---------------------------------------------------------------------------
 function rowToItem(row) {
-  return Object.assign({}, row, { data: row.data ? JSON.parse(row.data) : {} });
+  const data = row.data ? JSON.parse(row.data) : {};
+  if (row.type === 'todo' && Array.isArray(data?.tasks)) {
+    for (const task of data.tasks) {
+      if (task && typeof task === 'object' && 'status' in task && !STATUSES.includes(task.status)) {
+        task.status = 'open';
+      }
+    }
+  }
+  return { ...row, data };
 }
 
 // ---------------------------------------------------------------------------

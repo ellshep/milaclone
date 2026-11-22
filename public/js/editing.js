@@ -128,15 +128,11 @@ const saves = createSaveQueue({
     if (it.type === 'board' && patch.title != null) renderCrumbs();
     // Another device changed this list meanwhile: show the merged result
     // (unless more local edits are already queued; they'll merge on their save).
-    if (
-      patch.tasks &&
-      !saves.pending(id) &&
-      Array.isArray(saved.data.tasks) &&
-      !adoptTaskMetadata(it.data.tasks, saved.data.tasks)
-    ) {
-      it.data.tasks = saved.data.tasks;
-      refreshItem(it);
-    }
+    if (!patch.tasks || !Array.isArray(saved.data.tasks)) return;
+    if (adoptTaskMetadata(it.data.tasks, saved.data.tasks)) return true;
+    if (saves.pending(id)) return;
+    it.data.tasks = saved.data.tasks;
+    refreshItem(it);
   },
 });
 

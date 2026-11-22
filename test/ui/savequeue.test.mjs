@@ -74,6 +74,43 @@ describe('save queue', () => {
     expect(sent[0].body).toEqual({ data: { title: 'x' } });
   });
 
+  it.each(['queued', 'in flight'])('keeps task metadata when a list rename is %s', async renameState => {
+    const tasks = [{ id: 't1', text: 'Milk', status: 'done' }];
+    const savedTasks = [{ ...tasks[0], statusAt: 1000 }];
+    let acknowledgeTasks, acknowledgeTitle;
+    const send = vi
+      .fn()
+      .mockImplementationOnce(
+        () => new Promise(resolve => (acknowledgeTasks = () => resolve({ data: { tasks: savedTasks } })))
+      )
+      .mockImplementationOnce(
+        () => new Promise(resolve => (acknowledgeTitle = () => resolve({ data: { title: 'Renamed' } })))
+      )
+      .mockResolvedValue(false);
+    const q = createSaveQueue({
+      send,
+      delay: 400,
+      current: () => tasks,
+      onSaved: (_id, saved, patch) => patch.tasks && adoptTaskMetadata(tasks, saved.data.tasks),
+    });
+    q.track('a', [{ ...tasks[0], status: 'open' }]);
+    q.edit('a', { tasks });
+    const taskSave = q.flush('a');
+    q.edit('a', { title: 'Renamed' });
+    const titleSave = renameState === 'in flight' ? q.flush('a') : null;
+    expect(q.pending('a')).toBe(true);
+
+    acknowledgeTasks();
+    await taskSave;
+    expect(tasks).toEqual(savedTasks);
+    const rename = titleSave || q.flush('a');
+    acknowledgeTitle();
+    await rename;
+    q.edit('a', { tasks: [{ ...tasks[0], text: 'Oat milk' }] });
+    await q.flush('a');
+    expect(send.mock.lastCall[1].baseTasks).toEqual(savedTasks);
+  });
+
   it('retries a failed save with the current values, backing off', async () => {
     const { q, sent, local, saved } = setup({ replies: [null, null] });
     local.a.title = 'Typed'; // surfaces update their copy, then queue the edit

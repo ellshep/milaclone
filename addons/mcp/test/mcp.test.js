@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { Board } from '../src/board.js';
+import { Board, label } from '../src/board.js';
 import { httpHandler } from '../src/server.js';
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
@@ -260,6 +260,25 @@ test('todo creation tools respect server-owned status metadata and count only op
   const invalid = { type: 'todo', data: { tasks: [{ text: 'Invalid', status: 'complete' }] } };
   assert.equal((await raw('create_item', { board_id, ...invalid })).isError, true);
   assert.equal((await raw('create_items', { board_id, items: [invalid] })).isError, true);
+});
+
+test('the board outline counts unrecognized statuses as open', () => {
+  assert.equal(
+    label({
+      type: 'todo',
+      data: {
+        title: 'Import',
+        tasks: [
+          { text: 'Old value', status: 'pending' },
+          { text: 'No status' },
+          { text: 'Open', status: 'open' },
+          { text: 'Finished', status: 'done' },
+          { text: 'Set aside', status: 'stale' },
+        ],
+      },
+    }),
+    'Import (3 open)'
+  );
 });
 
 test('agent cards, and blocked boards below an open one, stay out of reach', async () => {

@@ -199,6 +199,26 @@ test('POST /api/focus/:taskId/done marks the task done once', async () => {
   assert.equal((await json('POST', '/api/focus/nope/done')).status, 404);
 });
 
+test('Focus can complete a task that was set aside while the page showed it', async context => {
+  const { rootCanvasId } = (await json('GET', '/api/root')).body;
+  const list = await todo(rootCanvasId, 'Set aside', [
+    { id: 'stale-while-visible', text: 'Finish me', status: 'open' },
+  ]);
+  const focus = async () => ids((await json('GET', '/api/focus?limit=all')).body);
+  assert.ok((await focus()).includes('stale-while-visible'));
+  const stale = await json('PATCH', '/api/tasks/stale-while-visible', { status: 'stale' }, TOKEN);
+  assert.equal(stale.body.task.status, 'stale');
+  assert.ok(!(await focus()).includes('stale-while-visible'));
+  const now = 1800000000000;
+  context.mock.method(Date, 'now', () => now);
+  assert.deepEqual((await json('POST', '/api/focus/stale-while-visible/done')).body, { ok: true });
+  const saved = (await json('GET', '/api/canvas/' + rootCanvasId)).body.items.find(it => it.id === list.id).data
+    .tasks[0];
+  assert.deepEqual([saved.status, saved.statusAt], ['done', now]);
+  assert.equal((await json('POST', '/api/focus/stale-while-visible/done')).status, 404);
+  await json('DELETE', '/api/item/' + list.id);
+});
+
 test('PUT /api/focus/order places tasks across lists, and [] resets', async () => {
   const { rootCanvasId } = (await json('GET', '/api/root')).body;
   const mk = (id, f = {}) => Object.assign({ id, text: id, status: 'open', createdAt: 1 }, f);

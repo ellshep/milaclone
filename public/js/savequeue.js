@@ -104,12 +104,12 @@ export function createSaveQueue({ send, delay, current, onSaved = () => {}, retr
     if (!saved) return;
     // The base is the list the surface's copy grew from. Only a to-do save moves it
     // (a title or label save must not make a stale list look like deletions): to
-    // the merged list, which the surface then shows, or while more edits are
-    // pending and the surface keeps its own copy, to the list this save sent.
+    // the merged list if the surface adopts it, or the list this save sent
+    // while more edits are pending and the surface keeps its own copy.
+    const adopted = onSaved(id, saved, patch) === true;
     if (patch.tasks && Array.isArray(saved.data?.tasks)) {
-      bases.set(id, isPending(id) ? sentTasks : clone(saved.data.tasks));
+      bases.set(id, adopted || !isPending(id) ? clone(saved.data.tasks) : sentTasks);
     }
-    onSaved(id, saved, patch);
   }
 
   return {
