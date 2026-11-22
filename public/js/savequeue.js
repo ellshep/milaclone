@@ -8,12 +8,14 @@
 // For each item: fields edited inside the debounce window go out together as
 // one PATCH; a to-do edit carries `baseTasks`, the list as this surface last
 // got it from the server, so the server can merge three ways; after a to-do
-// save the server's list becomes the new base. A save that may work later goes
-// back in the queue and is retried with backoff, sending each field's *current*
-// value at that moment (never the failed one, so a retry can't undo a newer
-// edit). After `retryDelay` gives up (null) the edit stays queued for the next
-// edit or flush. A rejected save is not retried. An item counts as pending from
-// its first edit until a save lands or is rejected, including while in flight.
+// save the server's list becomes the new base (or, while more edits are
+// pending and the surface keeps its own copy, the list that save sent). A save
+// that may work later goes back in the queue and is retried with backoff,
+// sending each field's *current* value at that moment (never the failed one, so
+// a retry can't undo a newer edit). After `retryDelay` gives up (null) the edit
+// stays queued for the next edit or flush. A rejected save is not retried. An
+// item counts as pending from its first edit until a save lands or is rejected,
+// including while in flight.
 //
 // The server is reached through `send(id, body, keepalive)`, which resolves to
 // the saved item, `null` (failed, worth retrying) or `false` (rejected): the
@@ -31,6 +33,8 @@ export function createSaveQueue({ send, delay, current, onSaved = () => {}, retr
   const bases = new Map(); // id -> task list as last received
   const stale = new Map(); // id -> fields whose failed value must be re-read before sending
   const inflight = new Map(); // id -> saves sent and not yet answered
+
+  const isPending = id => pending.has(id) || inflight.has(id);
 
   function schedule(id, ms) {
     clearTimeout(timers.get(id));
@@ -63,6 +67,7 @@ export function createSaveQueue({ send, delay, current, onSaved = () => {}, retr
     stale.delete(id);
     const body = { data: patch };
     if (patch.tasks) body.baseTasks = bases.get(id) || [];
+    const sentTasks = patch.tasks && clone(patch.tasks); // surfaces edit the list in place after this
     inflight.set(id, (inflight.get(id) || 0) + 1);
     let saved;
     try {
@@ -74,9 +79,13 @@ export function createSaveQueue({ send, delay, current, onSaved = () => {}, retr
     if (saved === null) return requeue(id, patch);
     retries.delete(id);
     if (!saved) return;
-    // Only a to-do save moves the base: the surface adopts the merged list then,
-    // and a title or label save must not make its stale list look like deletions.
-    if (patch.tasks && Array.isArray(saved.data?.tasks)) bases.set(id, clone(saved.data.tasks));
+    // The base is the list the surface's copy grew from. Only a to-do save moves it
+    // (a title or label save must not make a stale list look like deletions): to
+    // the merged list, which the surface then shows, or while more edits are
+    // pending and the surface keeps its own copy, to the list this save sent.
+    if (patch.tasks && Array.isArray(saved.data?.tasks)) {
+      bases.set(id, isPending(id) ? sentTasks : clone(saved.data.tasks));
+    }
     onSaved(id, saved, patch);
   }
 
@@ -110,7 +119,7 @@ export function createSaveQueue({ send, delay, current, onSaved = () => {}, retr
     // item, or any. While true, don't replace the surface's copy with the server's.
     pending(id) {
       if (id === undefined) return pending.size > 0 || inflight.size > 0;
-      return pending.has(id) || inflight.has(id);
+      return isPending(id);
     },
   };
 }

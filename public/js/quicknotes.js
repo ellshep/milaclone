@@ -140,10 +140,11 @@ const saves = createSaveQueue({
   retryDelay,
   current: (id, key) => listById(id)?.[key],
   // The server merges task edits with changes made elsewhere (the canvas card,
-  // another device); show its result if it differs.
-  onSaved(id, saved) {
+  // another device); show its result if it differs. Only after a to-do save,
+  // the one that moves the task base (savequeue.js).
+  onSaved(id, saved, patch) {
     const list = listById(id);
-    if (!list || !Array.isArray(saved.data.tasks)) return;
+    if (!list || !patch.tasks || !Array.isArray(saved.data.tasks)) return;
     const merged = saved.data.tasks.map(normTask);
     if (saves.pending(id) || JSON.stringify(merged) === JSON.stringify(list.tasks)) return;
     list.tasks = merged;
