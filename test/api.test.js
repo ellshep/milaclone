@@ -785,6 +785,7 @@ test('F1.3 the parent rule also holds on create and for columns; PATCH never cha
   const stay = await send('PATCH', '/api/item/' + inCol.id, { canvasId: other, parentItemId: null });
   assert.equal(stay.body.canvasId, canvasId);
   assert.equal((await send('PATCH', '/api/item/' + board.id, { canvasId: other })).body.canvasId, canvasId);
+  assert.ok((await send('GET', '/api/canvas/' + canvasId)).body.items.some(i => i.id === board.id));
 
   const cycle = await send('PATCH', '/api/items', {
     updates: [

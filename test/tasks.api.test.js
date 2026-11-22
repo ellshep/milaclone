@@ -132,6 +132,13 @@ test('listId puts the task in another to-do list', async () => {
   assert.equal(r.status, 201);
   assert.equal(r.body.task.listId, card.id);
   assert.equal(r.body.task.listTitle, 'Groceries');
+  // dedupe checks only the target list: an open "Milk" in Groceries doesn't block the Inbox
+  const inboxMilk = await post({ title: 'Milk', dedupe: true });
+  assert.equal(inboxMilk.status, 201);
+  assert.notEqual(inboxMilk.body.task.listId, card.id);
+  const again = await post({ title: 'milk', listId: card.id, dedupe: true });
+  assert.equal(again.body.duplicate, true);
+  assert.equal(again.body.task.id, r.body.task.id);
 
   const note = await fetch(base + '/api/item', {
     method: 'POST',
