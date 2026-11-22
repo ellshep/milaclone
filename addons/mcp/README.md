@@ -30,6 +30,13 @@ board does not open the boards inside it.
 - Home is blocked too until an agent card sits on it (it has no board card to
   flip).
 - A board an agent creates starts blocked, like any new board.
+- Agents can't create, change or move agent cards (only you set an agent's
+  scope), or trash or move a card that would take a blocked board with it.
+- Exports leave out blocked boards below the one asked for (title only).
+- This server has one token, so it can't tell agents apart: "only that agent"
+  (an agent card opens its board to that agent alone) is enforced by the agent
+  service (`addons/agent/`), not here. Claude Code and Claude Desktop see every
+  open board.
 
 Every write is logged as one JSON line (`docker compose logs mcp | grep mcp.write`).
 Nothing is deleted for good: anything an agent trashes is in the board's Trash.

@@ -233,6 +233,45 @@ test('every tool works on readable boards and refuses a blocked one', async () =
   ]);
 });
 
+test('agent cards, and blocked boards below an open one, stay out of reach', async () => {
+  const { rootCanvasId } = await api('GET', '/api/root');
+  const open = await boardOn(rootCanvasId, 'Open 2', { allow: true });
+  await api('POST', '/api/item', { canvasId: open, type: 'note', data: { text: 'visible fig' }, x: 0, y: 0 });
+  const kiwiCard = await api('POST', '/api/item', { canvasId: open, type: 'board', data: { title: 'Kiwi' }, y: 200 });
+  const kiwi = kiwiCard.data.childCanvasId;
+  await api('POST', '/api/item', { canvasId: kiwi, type: 'note', data: { text: 'kiwi hidden' } });
+  const deep = await boardOn(kiwi, 'Deeper', { allow: true }); // readable, though under a blocked board
+  await api('POST', '/api/item', { canvasId: deep, type: 'note', data: { text: 'deep visible' } });
+
+  const md = await call('export_board_markdown', { board_id: open });
+  assert.match(md, /^# Open 2\n\n## visible fig/);
+  assert.match(md, /# Kiwi\n\n\(Blocked for agents: its agentAccess flag is off\.\)/);
+  assert.match(md, /# Deeper\n\n## deep visible/);
+  assert.doesNotMatch(md, /kiwi hidden/);
+
+  await refused('delete_item', { item_id: kiwiCard.id }); // would trash the blocked board
+  await refused('move_item', { item_id: kiwiCard.id, board_id: open });
+  assert.equal((await api('GET', '/api/canvas/' + kiwi)).canvas.title, 'Kiwi');
+
+  const room = await boardOn(rootCanvasId, 'Agent room 2');
+  const agent = await api('POST', '/api/item', { canvasId: room, type: 'agent', data: { name: 'A', scope: 'board' } });
+  const col = await api('POST', '/api/item', { canvasId: room, type: 'column', data: { title: 'C' } });
+  await api('PATCH', '/api/item/' + agent.id, { parentItemId: col.id });
+  const noAgents = async (name, args) => {
+    const r = await raw(name, args);
+    assert.equal(r.isError, true, name);
+    assert.match(r.content[0].text, /agent cards are set up by the owner/, name);
+  };
+  await noAgents('create_item', { board_id: open, type: 'agent', data: { name: 'Me too' } });
+  await noAgents('create_items', { board_id: open, items: [{ type: 'note' }, { type: 'agent' }] });
+  await noAgents('update_item', { item_id: agent.id, data: { scope: 'boards', scopeBoards: 'Private' } });
+  await noAgents('move_item', { item_id: agent.id, board_id: open });
+  await noAgents('move_item', { item_id: col.id, board_id: open }); // the column carries the agent card
+  const still = (await api('GET', '/api/canvas/' + room)).items.find(i => i.id === agent.id);
+  assert.deepEqual([still.data.scope, still.canvasId], ['board', room]);
+  assert.deepEqual(await call('delete_item', { item_id: agent.id }), { trashed: agent.id }); // narrowing is fine
+});
+
 test('the HTTP endpoint needs the token and POST', async () => {
   const post = (headers = {}) =>
     fetch(mcpUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: '{}' });

@@ -87,13 +87,14 @@ export class Board {
     return out;
   }
 
-  /** The live item `id` and the board it is on; throws if it is missing or blocked. */
+  /** The live item `id`, the board it is on and the tree; throws if it is missing or blocked. */
   async item(id) {
-    for (const b of await this.tree()) {
+    const tree = await this.tree();
+    for (const b of tree) {
       const it = b.items.find(x => x.id === id);
       if (!it) continue;
       if (!b.readable) throw new BoardError(blocked(b.canvas.title));
-      return { item: it, board: b };
+      return { item: it, board: b, tree };
     }
     throw new BoardError(`no card with id ${id} (it may be in the trash)`);
   }

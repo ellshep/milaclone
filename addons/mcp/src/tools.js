@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { BoardError, OUTLINE_MAX, blocked, label } from './board.js';
+import { boardMarkdown } from './markdown.js';
 
 const RICH = new Set(['note', 'comment']);
 
@@ -19,6 +20,24 @@ const slim = it => {
 };
 
 const byPosition = (a, b) => (a.y || 0) - (b.y || 0) || (a.x || 0) - (b.x || 0);
+
+// A16: only the owner sets an agent's scope, so agents never make, edit or move agent cards.
+const NO_AGENTS = 'agent cards are set up by the owner on the board; agents cannot create, change or move them';
+
+// Moving or trashing a card takes its column's cards and any boards below it
+// along: refuse when that would touch an agent card or a blocked board.
+function guardSubtree(item, b, tree) {
+  const byId = new Map(tree.map(t => [t.canvas.id, t]));
+  const check = (it, items) => {
+    if (it.type === 'agent') throw new BoardError(NO_AGENTS);
+    for (const k of items.filter(x => x.parentItemId === it.id)) check(k, items);
+    if (it.type !== 'board' || !it.data || !byId.has(it.data.childCanvasId)) return;
+    const child = byId.get(it.data.childCanvasId);
+    if (!child.readable) throw new BoardError(blocked(child.canvas.title));
+    for (const k of child.items.filter(x => !x.parentItemId)) check(k, child.items);
+  };
+  check(item, b.items);
+}
 
 function outline(c) {
   const lines = [];
@@ -81,6 +100,7 @@ export function registerTools(server, board, agent = null) {
     });
 
   const create = async (boardId, a) => {
+    if (a.type === 'agent') throw new BoardError(NO_AGENTS);
     const it = await board.call('POST', '/api/item', {
       canvasId: boardId,
       type: a.type,
@@ -157,6 +177,7 @@ export function registerTools(server, board, agent = null) {
     { board_id: z.string(), items: z.array(z.object(cardFields)).min(1).max(50) },
     async a => {
       await board.readable(a.board_id);
+      if (a.items.some(it => it.type === 'agent')) throw new BoardError(NO_AGENTS);
       const made = [];
       for (const it of a.items) made.push(await create(a.board_id, it));
       return made;
@@ -169,6 +190,7 @@ export function registerTools(server, board, agent = null) {
     { item_id: z.string(), data: cardFields.data, ...position },
     async a => {
       const { item, board: b } = await board.item(a.item_id);
+      if (item.type === 'agent') throw new BoardError(NO_AGENTS);
       const body = placement(a);
       if (a.data) {
         const data = Object.assign({}, a.data);
@@ -191,8 +213,9 @@ export function registerTools(server, board, agent = null) {
     'Move a card (and everything inside it) to another board, or elsewhere on the same one.',
     { item_id: z.string(), board_id: z.string(), x: z.number().optional(), y: z.number().optional() },
     async a => {
-      const { item, board: from } = await board.item(a.item_id);
+      const { item, board: from, tree } = await board.item(a.item_id);
       await board.readable(a.board_id);
+      guardSubtree(item, from, tree);
       const out = await board.call('POST', `/api/item/${item.id}/move`, { canvasId: a.board_id, x: a.x, y: a.y });
       log('move_item', { boardId: from.canvas.id, toBoardId: a.board_id, itemId: item.id });
       return slim(out);
@@ -204,7 +227,8 @@ export function registerTools(server, board, agent = null) {
     'Move a card and everything inside it to the trash (restore_item brings it back).',
     { item_id: z.string() },
     async a => {
-      const { item, board: b } = await board.item(a.item_id);
+      const { item, board: b, tree } = await board.item(a.item_id);
+      if (item.type !== 'agent') guardSubtree(item, b, tree); // trashing an agent card only narrows access
       await board.call('DELETE', '/api/item/' + item.id);
       log('delete_item', { boardId: b.canvas.id, itemId: item.id });
       return { trashed: item.id };
@@ -214,8 +238,8 @@ export function registerTools(server, board, agent = null) {
   tool('restore_item', 'Bring a deleted card back from the trash.', { item_id: z.string() }, async a => {
     const entry = (await board.call('GET', '/api/trash')).items.find(t => t.id === a.item_id);
     if (!entry) throw new BoardError(`card ${a.item_id} is not in the trash (only the card that was deleted is)`);
-    if (!entry.restorable) throw new BoardError(`card ${a.item_id}'s board is in the trash; restore that first`);
-    const c = await board.canvas(entry.canvasId);
+    if (!entry.restorable) throw new BoardError(`card ${a.item_id} can't be restored: its board is in the trash`);
+    const c = await board.canvas(entry.canvasId); // readability before anything about the card itself
     if (!c.readable) throw new BoardError(blocked(c.canvas.title));
     const out = await board.call('POST', `/api/item/${a.item_id}/restore`);
     log('restore_item', { boardId: entry.canvasId, itemId: a.item_id });
@@ -224,12 +248,9 @@ export function registerTools(server, board, agent = null) {
 
   tool(
     'export_board_markdown',
-    "A board as Markdown, the same file as the board's Export.",
+    "A board and the boards below it as Markdown, shaped like the board's Export. Blocked boards show only their title.",
     { board_id: z.string() },
-    async a => {
-      await board.readable(a.board_id);
-      return board.call('GET', `/api/canvas/${encodeURIComponent(a.board_id)}/export.md`, undefined, { text: true });
-    }
+    async a => boardMarkdown(await board.readable(a.board_id), id => board.canvas(id), board.base)
   );
 
   tool(
