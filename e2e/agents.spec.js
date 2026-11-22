@@ -47,6 +47,20 @@ test('W1.2: an agent card is placed from the rail, edited and comes back after a
   expect(it.data.memory).toBe('thread');
 });
 
+test('W1.2: keys pressed in an agent card dropdown stay in the dropdown', async ({ page }) => {
+  await freshCanvas(page);
+  await place(page, 'agent');
+  await leaveEdit(page);
+  const card = page.locator('.item.type-agent');
+  await card.click({ position: { x: 10, y: 10 } }); // selected, so Backspace would trash it
+  await expect(card).toHaveClass(/selected/);
+  await card.locator('.ag-provider').focus();
+  await page.keyboard.press('Backspace');
+  await expect(card).toHaveCount(1);
+  await page.keyboard.press('l');
+  await expect(page.locator('.tool.armed')).toHaveCount(0); // "l" didn't arm the Link tool
+});
+
 test('W1.3: a board blocks agents until its card menu allows them', async ({ page }) => {
   const id = await freshCanvas(page);
   const board = await post(page, { canvasId: id, type: 'board', x: 200, y: 150, data: { title: 'Private' } });
