@@ -295,7 +295,7 @@ test('view=digest stops at the three when the rest are neither overdue nor due t
   await json('PUT', '/api/focus/order', { ids: [] });
 });
 
-test('M3.3 nightly filing: PUT /api/tasks/rank moves, the Filed view and Back to Inbox', async () => {
+test('M3.3 nightly filing: the focus view marks Inbox tasks, and PUT /api/tasks/rank moves them', async () => {
   const { rootCanvasId } = (await json('GET', '/api/root')).body;
   const add = title => json('POST', '/api/tasks', { title }, TOKEN);
   const a = (await add('Buy seeds')).body.task;
@@ -340,28 +340,4 @@ test('M3.3 nightly filing: PUT /api/tasks/rank moves, the Filed view and Back to
   for (const moves of ['x', [{ id: b.id }], [{ id: b.id, listId: errands.id, reason: 'r'.repeat(501) }]]) {
     assert.equal((await put({ ranks: [], moves })).status, 400, JSON.stringify(moves));
   }
-
-  // Filed: the last 7 days of the ranker's moves, newest first
-  const old = await todo(rootCanvasId, 'Old filing', [
-    { id: 'f-old', text: 'Filed long ago', done: false, movedBy: 'ranker', movedAt: Date.now() - 8 * 86400000 },
-    { id: 'f-owner', text: 'Moved by hand', done: false, movedBy: 'owner', movedAt: Date.now() },
-  ]);
-  const list = (await json('GET', '/api/focus/filed')).body.tasks;
-  assert.deepEqual(
-    list.map(x => x.id),
-    [a.id]
-  );
-  assert.deepEqual(
-    [list[0].listTitle, list[0].boardTitle, list[0].moveReason],
-    ['Garden jobs', 'Home', 'Garden shopping']
-  );
-  assert.ok(old.id);
-
-  // Back to Inbox: into the current Inbox, recorded as the owner's move, gone from Filed
-  assert.deepEqual((await json('POST', `/api/focus/${a.id}/unfile`)).body, { ok: true });
-  const back = (await json('GET', '/api/focus?limit=all')).body.tasks.find(x => x.id === a.id);
-  assert.deepEqual([back.listId, back.inbox, back.movedBy, back.movedFrom], [inboxId, true, 'owner', errands.id]);
-  assert.deepEqual((await json('GET', '/api/focus/filed')).body.tasks, []);
-  assert.equal((await json('POST', '/api/focus/nope/unfile')).status, 404);
-  assert.equal((await json('POST', `/api/focus/${a.id}/unfile`)).status, 404); // already in the Inbox
 });

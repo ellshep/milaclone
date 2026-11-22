@@ -22,6 +22,8 @@ class FakeClient:
         self.tasks, self.prio, self.lists = tasks, priorities, lists or {}
         self.writes, self.moves, self.fail = [], [], None
         self.list_reads = 0
+        self.log = None  # the Filing log card on Home
+        self.gone = []  # move ids the app reports as skipped
 
     def filing_lists(self):
         self.list_reads += 1
@@ -40,7 +42,20 @@ class FakeClient:
     def write_ranks(self, ranks, moves=None):
         self.writes.append(ranks)
         self.moves.append(moves)
-        return {"ranked": len(ranks), "skipped": []}
+        return {"ranked": len(ranks), "skipped": [], "moved": len(moves or []), "movesSkipped": self.gone}
+
+    def filing_log(self, title):
+        return self.log, "c_home"
+
+    def update_item(self, item_id, data):
+        if self.fail == "log":
+            raise TaskAPIError("board HTTP 500")
+        self.log["data"] = data
+
+    def add_card(self, canvas_id, kind, data):
+        if self.fail == "log":
+            raise TaskAPIError("board HTTP 500")
+        self.log = {"id": "i_log", "type": kind, "canvasId": canvas_id, "data": data}
 
 
 def answer(monkeypatch, *rows):
@@ -200,10 +215,75 @@ def test_a_failed_read_after_the_write_still_counts_as_done(monkeypatch, capsys)
     assert '"rank.after_unavailable"' in out and '"rank.done"' in out and '"rank.failed"' not in out
 
 
-def test_nothing_to_rank_writes_nothing():
+def test_nothing_to_rank_writes_nothing_but_the_log_entry():
     client = FakeClient(BOARD[:2])
     assert rank.run(FAKE, client, "one-tier") == 0
     assert client.writes == []
+    assert client.log["data"]["runs"][0]["lines"] == ["No tasks to rank, so none to file."]
+
+
+def test_filing_log_records_every_inbox_decision_newest_first_and_keeps_30(monkeypatch):
+    tasks = [task("seeds", "rest", inbox=True), task("bins", "rest", inbox=True), task("ink", "rest")]
+    client = FakeClient(tasks, lists=LISTS)
+    files(monkeypatch, ("Garden", "Garden shopping"), (None, "  no list fits  "), None)
+    assert rank.run(FAKE, client, "one-tier", tz="America/Chicago") == 0
+    card = client.log
+    assert (card["type"], card["canvasId"], card["data"]["title"]) == ("document", "c_home", "Filing log")
+    first = card["data"]["runs"][0]
+    assert first["lines"] == ['Moved "Seeds" to Garden: Garden shopping', 'Left "Bins" in the Inbox: no list fits']
+    assert first["at"].endswith(" CST") and len(first["at"]) == len("2026-11-22 03:00 CST")
+    doc = card["data"]["doc"]["content"]
+    assert [n["type"] for n in doc] == ["heading", "paragraph", "paragraph"]
+    assert card["data"]["text"] == "\n".join([first["at"], *first["lines"]])
+
+    files(monkeypatch, None, ("Errands", "a bin run"), None)
+    assert rank.run(FAKE, client, "one-tier") == 0
+    runs = client.log["data"]["runs"]
+    assert [r["lines"] for r in runs] == [
+        ['Left "Seeds" in the Inbox: no reason given', 'Moved "Bins" to Errands: a bin run'], first["lines"]]
+    for _ in range(29):  # 31 runs in all
+        assert rank.run(FAKE, client, "one-tier") == 0
+    runs = client.log["data"]["runs"]
+    assert len(runs) == rank.LOG_RUNS and runs[-1]["lines"] != first["lines"]
+
+
+def test_filing_log_explains_what_was_left(monkeypatch):
+    tasks = [task(f"t{i}", "rest", inbox=True) for i in range(rank.FILE_CAP + 1)]
+    tasks += [task("odd", "rest", inbox=True), task("mute", "rest", inbox=True)]
+    client = FakeClient(tasks, lists=LISTS)
+    files(monkeypatch, *[("Errands", "errand")] * (rank.FILE_CAP + 1), ("Garage", "a garage job"))
+    client.gone = ["t0"]
+    assert rank.run(FAKE, client, "one-tier") == 0
+    lines = client.log["data"]["runs"][0]["lines"]
+    assert lines[0] == 'Left "T0" in the Inbox: it left the Inbox before it could be moved'
+    assert lines[rank.FILE_CAP] == f'Left "T{rank.FILE_CAP}" in the Inbox: the nightly limit of 10 moves was reached'
+    assert lines[-2:] == ['Left "Odd" in the Inbox: Garage isn\'t a Filing list',
+                          'Left "Mute" in the Inbox: the model gave no answer for it']
+
+
+def test_no_filing_lists_is_logged(monkeypatch):
+    client = FakeClient([task("seeds", "rest", inbox=True)])
+    answer(monkeypatch, (1, 10, "a", "none"))
+    assert rank.run(FAKE, client, "one-tier") == 0
+    assert client.log["data"]["runs"][0]["lines"] == ["No list is labelled Filing."]
+
+
+def test_dry_run_prints_the_log_entry_and_writes_no_log(monkeypatch, capsys):
+    client = FakeClient([task("seeds", "rest", inbox=True)], lists=LISTS)
+    files(monkeypatch, ("Garden", "Garden shopping"))
+    assert rank.run(FAKE, client, "one-tier", dry_run=True) == 0
+    assert client.log is None
+    out = capsys.readouterr().out
+    assert 'Filing log entry (' in out and '\n  Moved "Seeds" to Garden: Garden shopping' in out
+
+
+def test_a_failed_log_write_is_reported(monkeypatch, capsys):
+    client = FakeClient([task("seeds", "rest", inbox=True)], lists=LISTS)
+    client.fail = "log"
+    files(monkeypatch, ("Garden", "Garden shopping"))
+    assert rank.run(FAKE, client, "one-tier") == 1
+    assert len(client.writes) == 1  # the ranking and the move landed
+    assert '"rank.log_failed"' in capsys.readouterr().out
 
 
 def test_rank_settings_fall_back_to_extract(monkeypatch):
@@ -274,3 +354,30 @@ def test_tasks_client_ranking_calls():
     with pytest.raises(TaskAPIError):
         client.write_ranks([], [{"id": "t1", "listId": "i_g", "reason": "fits"}])
     assert json.loads(seen[3][3]) == {"ranks": [], "moves": [{"id": "t1", "listId": "i_g", "reason": "fits"}]}
+
+
+def test_tasks_client_filing_log_calls():
+    seen = []
+    home = [
+        {"id": "i_inbox", "type": "todo", "x": 60, "w": 240, "data": {}},
+        {"id": "i_mine", "type": "document", "x": 400, "w": 300, "data": {"title": "Filing log", "text": "mine"}},
+        {"id": "i_kid", "type": "note", "parentItemId": "i_col", "x": 5000, "w": 240, "data": {}},
+    ]
+
+    def handler(request):
+        seen.append((request.method, request.url.path, json.loads(request.content) if request.content else None))
+        if request.url.path == "/api/root":
+            return httpx.Response(200, json={"rootCanvasId": "c_home"})
+        if request.method == "GET":
+            return httpx.Response(200, json={"items": home})
+        return httpx.Response(200, json={"id": "i_new"})
+
+    client = TasksClient("http://app:4321", "tok", http=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert client.filing_log("Filing log") == (None, "c_home")  # the owner's own document isn't the log
+    home.append({"id": "i_log", "type": "document", "data": {"title": "Filing log", "runs": []}})
+    assert client.filing_log("Filing log")[0]["id"] == "i_log"
+    client.add_card("c_home", "document", {"title": "Filing log"})
+    assert seen[-1] == ("POST", "/api/item", {"canvasId": "c_home", "type": "document", "x": 740, "y": 60, "w": 320,
+                                              "data": {"title": "Filing log"}})
+    client.update_item("i_log", {"runs": []})
+    assert seen[-1] == ("PATCH", "/api/item/i_log", {"data": {"runs": []}})

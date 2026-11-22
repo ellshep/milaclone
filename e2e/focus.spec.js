@@ -163,25 +163,3 @@ test('controls appear on hover; the mode switch and refresh work', async ({ page
   await page.getByRole('button', { name: 'Refresh' }).click();
   await expect(page.locator('#list .row', { hasText: 'Water the plants' })).toHaveCount(1);
 });
-
-test('Filed: the night’s filings show with their reason, and Back to Inbox moves one back', async ({
-  page,
-  request,
-}) => {
-  const filed = task('Buy compost', { movedBy: 'ranker', movedAt: Date.now(), moveReason: 'Garden shopping' });
-  const list = await addList(request, 'Garden jobs', [filed]);
-  await page.goto('/focus#filed');
-  const row = page.locator('#filed .row', { hasText: 'Buy compost' });
-  await expect(row).toContainText('Garden jobs in Home');
-  await expect(row).toContainText('Garden shopping');
-  await expect(page.locator('#three')).toBeHidden();
-
-  await row.getByRole('button', { name: 'Back to Inbox: Buy compost' }).click();
-  await expect(row).toHaveCount(0);
-  const { tasks } = await (await request.get('/api/focus?limit=all')).json();
-  const moved = tasks.find(t => t.id === filed.id);
-  expect([moved.inbox, moved.movedBy, moved.movedFrom]).toEqual([true, 'owner', list.id]);
-
-  await page.getByRole('link', { name: 'List' }).click(); // the other modes still load their own data
-  await expect(page.locator('#list .row', { hasText: 'Buy compost' })).toBeVisible();
-});

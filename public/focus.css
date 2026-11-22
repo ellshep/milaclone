@@ -484,30 +484,6 @@ body:hover .controls,
   border-color: var(--fx-muted);
 }
 
-/* ---- Filed ---- */
-
-.filed .row {
-  grid-template-columns: 1.6em minmax(0, 1fr) auto;
-  color: var(--fx-ink);
-}
-
-.unfile {
-  align-self: center;
-  padding: 0.4em 0.9em;
-  border: 2px solid var(--fx-rule);
-  border-radius: 999px;
-  color: var(--fx-muted);
-  font-size: 0.5em;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.unfile:hover,
-.unfile:focus-visible {
-  color: var(--fx-ink);
-  border-color: var(--fx-muted);
-}
-
 .empty {
   max-width: 30ch;
   font-size: clamp(1.4rem, 2.6vw, 2.4rem);

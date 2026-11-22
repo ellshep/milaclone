@@ -18,8 +18,8 @@
 // The /focus page writes back through `markDone` and `setPlacements` (its List
 // mode drag and Reset).
 
-const { db, stmt, rowToItem, breadcrumb, inboxCard, INBOX_KEY } = require('./db');
-const { isBlank, moveTask } = require('./tasklist');
+const { db, stmt, rowToItem, breadcrumb, INBOX_KEY } = require('./db');
+const { isBlank } = require('./tasklist');
 
 const SOON_DAYS = 3;
 const TIERS = ['soon', 'starred', 'rest'];
@@ -178,42 +178,6 @@ function setPlacements(ids) {
   })();
 }
 
-// ---- Filed (M3.3) ---------------------------------------------------------------
-const FILED_DAYS = 7;
-
-/** The nightly ranking's moves of the last 7 days, newest first, each with its list and board. */
-function filedView(now = Date.now()) {
-  const since = now - FILED_DAYS * 86400000;
-  const tasks = [];
-  for (const card of stmt.todoItems.all().map(rowToItem)) {
-    for (const task of Array.isArray(card.data.tasks) ? card.data.tasks : []) {
-      if (task.movedBy !== 'ranker' || !(task.movedAt >= since) || isBlank(task)) continue;
-      const board = breadcrumb(card.canvasId).at(-1)?.title || 'Board';
-      tasks.push(
-        Object.assign({}, task, { listId: card.id, listTitle: card.data.title || 'To-do', boardTitle: board })
-      );
-    }
-  }
-  return { tasks: tasks.sort((a, b) => b.movedAt - a.movedAt) };
-}
-
-/** Back to Inbox: moves a task into the current Inbox as the owner. False when no list has it or it's there already. */
-function unfile(taskId) {
-  return db.transaction(() => {
-    const inbox = inboxCard();
-    for (const card of stmt.todoItems.all().map(rowToItem)) {
-      const task = (Array.isArray(card.data.tasks) ? card.data.tasks : []).find(t => t.id === taskId);
-      if (!task) continue;
-      if (card.id === inbox.id) return false;
-      moveTask(card, inbox, task, 'owner');
-      saveCard(card);
-      saveCard(inbox);
-      return true;
-    }
-    return false;
-  })();
-}
-
 const LIMIT_MAX = 1000;
 /** Parses a `limit` query value: default 3, "all" or 1..LIMIT_MAX; null when invalid. */
 function parseLimit(v) {
@@ -230,8 +194,6 @@ module.exports = {
   digestView,
   markDone,
   setPlacements,
-  filedView,
-  unfile,
   parseLimit,
   dayOf,
   inTemplates,

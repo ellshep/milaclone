@@ -127,9 +127,12 @@ Nightly filing: when there are lists labelled **Filing** (see Filing above), the
 same model call may file Inbox tasks into the one Filing list that clearly
 fits, with a reason, at most 10 a night. The moves are written in the same
 `PUT`, so they land with the ranking or not at all. Each is recorded on the task
-(`movedBy: "ranker"`), and the focus page's **Filed** mode lists the last 7 days
-of them, each with Back to Inbox. A task sent back is never filed again. The
-dry run prints the planned moves as `→ List: task - reason`.
+(`movedBy: "ranker"`). A task sent back to the Inbox is never filed again. Each
+run then writes the **Filing log**, a document card on Home: the run's time and,
+for every Inbox task it considered, where it moved or why it stayed. Newest run
+first, the last 30 kept. To undo a move, drag the task back to the Inbox. The
+dry run prints the planned moves as `→ List: task - reason` and the log entry
+it would write, and writes neither.
 
 | Variable        | Default                                             | Purpose                                                                 |
 | --------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |

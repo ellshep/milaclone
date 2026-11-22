@@ -77,7 +77,6 @@ with every add-on off. A box is ticked when its acceptance test lands.
     shows a hint. "N in queue" in the controls.
   - **List**: every ranked task, scrollable, drag to reorder; overdue and due
     today marked. **Reset** clears placements.
-  - The Filed mode comes with the data it shows (M3.3).
   - Mode switch and refresh appear only on hover. Refetch on
     `visibilitychange` and refresh; no timers.
   - Mac setup in the docs: app-mode browser window, open at login, display
@@ -100,7 +99,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
 - [x] **M3.2 At capture.** Extraction gets the Filing lists as an enum (like
       tags) and files a task only when the speaker names one; ambiguous names
       go to the Inbox.
-- [ ] **M3.3 Nightly.** The ranking pass may move Inbox tasks into exactly one
+- [x] **M3.3 Nightly.** The ranking pass may move Inbox tasks into exactly one
       clearly fitting Filing list, with a reason. No Filed mode on the focus
       page (`docs/focus-redesign.md` R26).
   - Each run writes a filing log the owner and the Home orchestrator (W4) can

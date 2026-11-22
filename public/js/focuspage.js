@@ -10,9 +10,6 @@
 //   List (#list)     every ranked task with its list and board. Drag a row by
 //                    its grip (mouse or touch), or Alt+↑/↓, to reorder; that
 //                    saves placements (focusOrder). Reset clears them.
-//   Filed (#filed)   what the nightly ranking filed from the Inbox into a
-//                    Filing list in the last 7 days (M3.3), each with its
-//                    reason and Back to Inbox.
 //
 // The order itself comes from the server (focus.js), so the page, the task API
 // and the digest never disagree. No polling: it refetches when the window
@@ -32,17 +29,15 @@ const TAB =
 const $ = sel => document.querySelector(sel);
 const threeEl = $('#three');
 const listEl = $('#list');
-const filedEl = $('#filed');
 const emptyEl = $('#empty');
 const resetBtn = $('#reset');
 const queueEl = $('#queue');
 
 let tasks = [];
-let filed = []; // Filed mode's rows, from /api/focus/filed
 const holds = new Map(); // task id → { at, timer } while its ring is held down
 let saving = 0; // Done saves in flight. Refetches wait while this or `holds` is non-empty.
 
-const mode = () => ({ '#list': 'list', '#filed': 'filed' })[location.hash] || 'three';
+const mode = () => (location.hash === '#list' ? 'list' : 'three');
 
 function el(tag, cls, text) {
   const n = document.createElement(tag);
@@ -58,16 +53,12 @@ function showMessage(text) {
 
 async function load() {
   if (holds.size || saving) return;
-  const forFiled = mode() === 'filed';
   try {
-    const r = await fetch(forFiled ? '/api/focus/filed' : '/api/focus?limit=all');
+    const r = await fetch('/api/focus?limit=all');
     if (!r.ok) throw new Error(String(r.status));
-    const got = (await r.json()).tasks;
-    if (forFiled) filed = got;
-    else tasks = got;
+    tasks = (await r.json()).tasks;
   } catch {
-    if (forFiled) filed = [];
-    else tasks = [];
+    tasks = [];
     render();
     showMessage("Can't reach the board. Use refresh to try again.");
     return;
@@ -83,16 +74,10 @@ function render() {
   }
   threeEl.hidden = m !== 'three';
   listEl.hidden = m !== 'list';
-  filedEl.hidden = m !== 'filed';
   resetBtn.hidden = true;
   const queued = tasks.length - 3;
   queueEl.textContent = `${queued} in queue`;
   queueEl.hidden = m !== 'three' || queued < 1;
-  if (m === 'filed') {
-    showMessage(filed.length ? '' : 'Nothing filed in the last 7 days.');
-    renderFiled();
-    return;
-  }
   showMessage(tasks.length ? '' : 'Nothing to do. New tasks from the board show up here.');
   if (m === 'three') renderThree();
   else renderList();
@@ -356,45 +341,10 @@ listEl.addEventListener('keydown', async e => {
 
 resetBtn.addEventListener('click', () => saveOrder([]));
 
-// ---- Filed ---------------------------------------------------------------------
-
-function renderFiled() {
-  const rows = filed.map(task => {
-    const li = el('li', 'row');
-    li.dataset.id = task.id;
-    const sub = el('p', 'row-meta');
-    sub.append(el('span', 'where', where(task)));
-    if (task.done) sub.append(el('span', 'due', 'Done'));
-    if (task.moveReason) sub.append(el('span', 'reason', task.moveReason));
-    const text = el('div', 'row-text');
-    text.append(el('span', 'row-title', task.text), sub);
-    const back = el('button', 'unfile', 'Back to Inbox');
-    back.type = 'button';
-    back.setAttribute('aria-label', `Back to Inbox: ${task.text}`);
-    li.append(el('span', 'grip'), text, back);
-    return li;
-  });
-  filedEl.replaceChildren(...rows);
-}
-
-filedEl.addEventListener('click', async e => {
-  const li = e.target.closest('.unfile')?.closest('.row');
-  if (!li) return;
-  let ok = false;
-  try {
-    ok = (await fetch(`/api/focus/${encodeURIComponent(li.dataset.id)}/unfile`, { method: 'POST' })).ok;
-  } catch {
-    ok = false;
-  }
-  if (!ok) return showMessage("Couldn't move it back. Try again.");
-  filed = filed.filter(t => t.id !== li.dataset.id);
-  render();
-});
-
 // ---- Controls and refetching ---------------------------------------------------
 
 $('#refresh').addEventListener('click', load);
-window.addEventListener('hashchange', load); // each mode shows fresh data
+window.addEventListener('hashchange', render);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') load();
 });

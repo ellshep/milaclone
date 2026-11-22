@@ -101,10 +101,6 @@ order without a token at `GET /api/focus` for the `/focus` page, which writes
 back through two more board routes: `POST /api/focus/:taskId/done`, and
 `PUT /api/focus/order` with `{ ids }`, the placed tasks top first (they get
 `focusOrder` 1, 2, …, every other task loses its placement, and `[]` resets).
-Filed mode reads `GET /api/focus/filed` (`{ tasks }`: the tasks the nightly
-ranking filed in the last 7 days, newest first, each with `listId`, `listTitle`,
-`boardTitle`) and sends one back with `POST /api/focus/:taskId/unfile`, which
-moves it into the Inbox as `movedBy: "owner"` (`404` if it's there already).
 
 ```bash
 curl -sS "https://mila.your-tailnet.ts.net/api/tasks?view=focus&limit=3" \

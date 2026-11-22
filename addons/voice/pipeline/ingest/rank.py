@@ -14,7 +14,10 @@ leaves the fixed order as it was. There is no stale rule yet (N22).
 Nightly filing (M3.3): Inbox tasks among those sent may be filed into the one
 list labelled Filing that clearly fits, at most FILE_CAP a night, with a reason.
 The moves ride in the same PUT (movedBy "ranker"). A task the owner sent back
-to the Inbox (its last move was theirs) is never filed again.
+to the Inbox (its last move was theirs) is never filed again. Each run then
+writes the "Filing log" document card on Home through the board's HTTP API:
+the run's time and, for every Inbox task it considered, moved where or left,
+and why. Newest run first, the last LOG_RUNS kept.
 """
 
 from __future__ import annotations
@@ -43,6 +46,8 @@ NUDGE_CAP = 3
 MAX_TASKS = 200
 REASON_MAX = 300
 FILE_CAP = 10  # Inbox tasks filed a night, at most (M3.3)
+LOG_TITLE = "Filing log"
+LOG_RUNS = 30  # runs the filing log keeps
 
 
 class RankedTask(BaseModel):
@@ -88,7 +93,8 @@ def build_schema(lists: tuple[str, ...] = ()) -> dict:
     schema = json.loads(json.dumps(SCHEMA))
     item = schema["properties"]["tasks"]["items"]
     item["properties"]["file"] = {"type": ["string", "null"], "enum": [*lists, None]}
-    item["properties"]["fileReason"] = {"type": "string", "description": "Why it fits that list, or empty."}
+    item["properties"]["fileReason"] = {"type": "string",
+                                        "description": "For an [Inbox] task: why it fits that list, or why none clearly does."}
     item["required"] = [*item["required"], "file", "fileReason"]
     return schema
 
@@ -130,8 +136,8 @@ def _file_rule(lists: tuple[str, ...]) -> str:
         return ""
     return ("Tasks whose list is marked [Inbox] may be filed: set file to the one list below that clearly fits "
             "from the task's own words, and fileReason to why (under 12 words). If no list clearly fits, or "
-            "more than one might, file is null and fileReason empty. Every other task: file null, fileReason "
-            "empty.\nLists: " + ", ".join(json.dumps(name) for name in lists) + "\n\n")
+            "more than one might, file is null and fileReason says why not. Every other task: file null, "
+            "fileReason empty.\nLists: " + ", ".join(json.dumps(name) for name in lists) + "\n\n")
 
 
 def build_prompt(tasks: list[dict], today: str, priorities: str | None, mode: str,
@@ -178,19 +184,79 @@ def plan(tasks: list[dict], ranking: Ranking, mode: str) -> list[dict]:
     return ranks
 
 
-def plan_moves(tasks: list[dict], ranking: Ranking, lists: dict[str, str]) -> list[dict]:
-    """The moves to send: fileable tasks only, a Filing list's title only (any
-    case), each task once, at most FILE_CAP."""
-    by_title = {title.lower(): list_id for title, list_id in lists.items()}
-    moves, seen = [], set()
+def plan_moves(tasks: list[dict], ranking: Ranking, lists: dict[str, str]) -> tuple[list[dict], list[dict]]:
+    """The moves to send (fileable tasks only, a Filing list's title only, any
+    case, each task once, at most FILE_CAP) and a decision for every fileable
+    task sent: `{id, text, list, reason}`, `list` None when it stays."""
+    if not lists:
+        return [], []  # nothing to file into: the log says so once
+    by_title = {title.lower(): (title, list_id) for title, list_id in lists.items()}
+    answers = {}
     for a in ranking.tasks:
-        if len(moves) >= FILE_CAP or not 1 <= a.n <= len(tasks) or a.n in seen:
+        answers.setdefault(a.n, a)
+    moves, decisions = [], []
+    for n, t in enumerate(tasks, 1):
+        if not fileable(t):
             continue
-        seen.add(a.n)
-        t, list_id = tasks[a.n - 1], by_title.get((a.file or "").strip().lower())
-        if list_id and fileable(t) and t.get("listId") != list_id:
-            moves.append({"id": t["id"], "listId": list_id, "reason": " ".join(a.fileReason.split())[:REASON_MAX]})
-    return moves
+        a = answers.get(n)
+        reason = " ".join(a.fileReason.split())[:REASON_MAX] if a else ""
+        named = (a.file or "").strip() if a else ""
+        title, list_id = by_title.get(named.lower(), (None, None))
+        if not a:
+            title, reason = None, "the model gave no answer for it"
+        elif named and not list_id:
+            reason = f"{named} isn't a Filing list"
+        elif list_id and list_id == t.get("listId"):
+            title, reason = None, "it is in that list already"
+        elif list_id and len(moves) >= FILE_CAP:
+            title, reason = None, f"the nightly limit of {FILE_CAP} moves was reached"
+        if title:
+            moves.append({"id": t["id"], "listId": list_id, "reason": reason})
+        decisions.append({"id": t["id"], "text": t.get("text", ""), "list": title, "reason": reason or "no reason given"})
+    return moves, decisions
+
+
+def log_lines(decisions: list[dict], note: str = "") -> list[str]:
+    """One line per decision for the filing log, or the note when there are none."""
+    if not decisions:
+        return [note or "No Inbox tasks to file."]
+    return [f'Moved "{d["text"]}" to {d["list"]}: {d["reason"]}' if d["list"]
+            else f'Left "{d["text"]}" in the Inbox: {d["reason"]}' for d in decisions]
+
+
+def log_card(runs: list[dict]) -> dict:
+    """The Filing log card's data: the runs (newest first) plus the TipTap doc and
+    plain text the board shows and searches. Document cards keep both."""
+    def node(kind, text, **attrs):
+        return {"type": kind, **({"attrs": attrs} if attrs else {}), "content": [{"type": "text", "text": text}]}
+    content, text = [], []
+    for r in runs:
+        content.append(node("heading", r["at"], level=2))
+        content += [node("paragraph", line) for line in r["lines"]]
+        text += [r["at"], *r["lines"], ""]
+    return {"title": LOG_TITLE, "runs": runs, "doc": {"type": "doc", "content": content},
+            "text": "\n".join(text).strip()}
+
+
+def stamp(tz: str) -> str:
+    try:
+        zone = ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError):
+        zone = ZoneInfo("UTC")
+    return datetime.now(zone).strftime("%Y-%m-%d %H:%M %Z")
+
+
+def write_log(client: TasksClient, entry: dict) -> None:
+    """Adds `entry` on top of the Filing log card on Home (made on first use),
+    keeping the last LOG_RUNS. Only a document card titled "Filing log" whose
+    data has `runs` counts as the log, so an owner's own document is never overwritten."""
+    card, home = client.filing_log(LOG_TITLE)
+    runs = card["data"]["runs"] if card else []
+    data = log_card([entry, *runs][:LOG_RUNS])
+    if card:
+        client.update_item(card["id"], data)
+    else:
+        client.add_card(home, "document", data)
 
 
 def predict(tasks: list[dict], ranks: list[dict]) -> list[dict]:
@@ -220,14 +286,21 @@ def cost(model: str, input_tokens: int | None, output_tokens: int | None) -> flo
     return round((input_tokens * price[0] + output_tokens * price[1]) / 1e6, 4)
 
 
-def run(cfg: StepConfig, client: TasksClient, mode: str, *, dry_run: bool = False, complete=complete_json) -> int:
-    """One ranking pass. Returns 0 on success, 1 when anything failed (nothing written)."""
+def run(cfg: StepConfig, client: TasksClient, mode: str, *, dry_run: bool = False, complete=complete_json,
+        tz: str = "UTC") -> int:
+    """One ranking pass. Returns 0 on success, 1 when anything failed (nothing
+    written, or the ranking written but not its filing log entry)."""
     try:
         view = client.focus()
         tasks = [t for t in view.get("tasks", []) if t.get("tier") in TIERS][:MAX_TASKS]
         before = top3(view.get("tasks", []))
         if not tasks:
             log("rank.skip", reason="no tasks to rank", before=before)
+            entry = {"at": stamp(tz), "lines": log_lines([], "No tasks to rank, so none to file.")}
+            if dry_run:
+                print(f"Filing log entry ({entry['at']}):", *entry["lines"], sep="\n  ")
+            else:
+                write_log(client, entry)
             return 0
         lists = client.filing_lists() if any(fileable(t) for t in tasks) else {}
         prompt = build_prompt(tasks, view.get("today", ""), client.priorities(), mode, tuple(lists))
@@ -235,7 +308,8 @@ def run(cfg: StepConfig, client: TasksClient, mode: str, *, dry_run: bool = Fals
         ranks = plan(tasks, result.data, mode)
         if not ranks:
             raise LLMError("the model ranked none of the tasks")
-        moves = plan_moves(tasks, result.data, lists)
+        moves, decisions = plan_moves(tasks, result.data, lists)
+        note = "" if lists or not any(fileable(t) for t in tasks) else "No list is labelled Filing."
         if dry_run:
             after = top3(predict(view["tasks"], ranks))
             titles = {t["id"]: t.get("text", "") for t in tasks}
@@ -245,8 +319,18 @@ def run(cfg: StepConfig, client: TasksClient, mode: str, *, dry_run: bool = Fals
             names = {list_id: title for title, list_id in lists.items()}
             for m in moves:
                 print(f"\u2192 {names[m['listId']]}: {titles[m['id']]} - {m['reason']}")
+            print(f"Filing log entry ({stamp(tz)}):", *log_lines(decisions, note), sep="\n  ")
         else:
-            client.write_ranks(ranks, moves)
+            written = client.write_ranks(ranks, moves)
+            gone = set(written.get("movesSkipped") or [])  # moved or deleted since the focus view was read
+            for d in decisions:
+                if d["id"] in gone:
+                    d.update(list=None, reason="it left the Inbox before it could be moved")
+            try:
+                write_log(client, {"at": stamp(tz), "lines": log_lines(decisions, note)})
+            except TaskAPIError as e:
+                log("rank.log_failed", error=str(e), filed=len(moves) - len(gone))
+                return 1
             try:
                 after = top3(client.focus(limit="3").get("tasks", []))
             except (TaskAPIError, ValueError) as e:  # written already: report it as done
@@ -276,7 +360,7 @@ def serve(cfg: StepConfig, client: TasksClient, mode: str, tz: str) -> None:
         # Short sleeps, so a suspended host or clock change can't push the run a day.
         while (left := at.timestamp() - time.time()) > 0:
             time.sleep(min(left, 600))
-        run(cfg, client, mode)
+        run(cfg, client, mode, tz=tz)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -290,7 +374,7 @@ def main(argv: list[str] | None = None) -> int:
     settings = Settings.from_env()
     cfg, client = rank_config(), TasksClient(settings.app_url, settings.task_token)
     if args.dry_run:
-        return run(cfg, client, mode, dry_run=True)
+        return run(cfg, client, mode, dry_run=True, tz=settings.tz)
     if _env("RANK_SCHEDULE", "off").lower() != "on":
         log("rank.schedule_off", hint="run --dry-run, then set RANK_SCHEDULE=on to rank nightly at 03:00")
         return 0
