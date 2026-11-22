@@ -15,10 +15,11 @@ Its own Compose service and image behind the `voice` and `alexa` profiles. FastA
 - `POST /ingest/text` runs synchronously and returns `speech` for a voice assistant.
 - `process.py` saves each step's output to `ingest.db` (`store.py`, rows never deleted) before the next runs, then posts each task to the app's `/api/tasks` with `dedupe: true` and `TASK_API_TOKEN`. New `ingest.db` columns are added at startup (`store.ADDED_COLUMNS`).
 - Extraction may only tag a task with tags already on the list: `extract_and_create` reads them through `TasksClient.existing_tags` (100 most used; on a task API error it extracts with none) and `extract.build_schema` puts them in an `enum`, so unknown tags are dropped.
-- `llm.py` `complete_json` is the provider abstraction (anthropic via the official SDK; openai, gemini, openai_compatible via httpx; fake for tests), configured per step by `<STEP>_PROVIDER/_MODEL/_API_KEY/_BASE_URL` (`EXTRACT_*` now, `RANK_*` reserved). It validates against a pydantic model and retries once.
+- `llm.py` `complete_json` is the provider abstraction (anthropic via the official SDK; openai, gemini, openai_compatible via httpx; fake for tests), configured per step by `<STEP>_PROVIDER/_MODEL/_API_KEY/_BASE_URL` (`EXTRACT_*`, `RANK_*`; `max_tokens` and `timeout_s` are per step too). It validates against a pydantic model and retries once.
 - The Anthropic client is built once per key (`_anthropic_client`), and `llm.preload` builds it in a background thread at startup: importing the SDK takes 7–9 s under the 0.5 CPU cap, longer than the Alexa Worker waits.
 - Tests (`pipeline/tests`, pytest) inject fakes through `Deps`. The `Pipeline tests` job also checks the add-on is off without a profile, creates the compose containers and checks text → task end to end in Docker.
 - `tailscale/serve.json` routes `/ingest/` to `pipeline:8000`.
+- `ingest/rank.py` is the nightly ranking, its own Compose service `ranker` (voice profile, `restart: on-failure`, exits 0 unless `RANK_SCHEDULE=on`). It sends only the soon/starred/rest tiers, so fixed and placed tasks are never touched, and writes nothing unless every step worked: one `PUT /api/tasks/rank`. Each unset `RANK_*` falls back to `EXTRACT_*`, except the model, which defaults to Opus 5.5 with Anthropic.
 
 ## Alexa (`alexa/`)
 
@@ -33,4 +34,4 @@ Its own npm package, deployed to Cloudflare with wrangler, not part of the Docke
 
 ## Env vars
 
-Only read when `COMPOSE_PROFILES` includes `voice` or `alexa`: `INGEST_API_TOKEN`, `TASK_API_TOKEN`, `APP_URL`, `EXTRACT_*`, `DEEPGRAM_API_KEY`/`_MODEL`/`_LANGUAGE`/`_MIP_OPT_OUT`/`_KEYTERMS`, `TRANSCRIBE_RETRY_DELAYS`, `ALERT_WEBHOOK_URL`, `INGEST_REVIEW_URL`, `TASK_TZ`, `MAX_AUDIO_MB`. Data lives in the `milaclone_ingest` volume.
+Only read when `COMPOSE_PROFILES` includes `voice` or `alexa`: `INGEST_API_TOKEN`, `TASK_API_TOKEN`, `APP_URL`, `EXTRACT_*`, `RANK_*` (`_SCHEDULE`, `_NUDGE`, `_PROVIDER`, `_MODEL`, `_API_KEY`, `_BASE_URL`), `DEEPGRAM_API_KEY`/`_MODEL`/`_LANGUAGE`/`_MIP_OPT_OUT`/`_KEYTERMS`, `TRANSCRIBE_RETRY_DELAYS`, `ALERT_WEBHOOK_URL`, `INGEST_REVIEW_URL`, `TASK_TZ`, `MAX_AUDIO_MB`. Data lives in the `milaclone_ingest` volume.
