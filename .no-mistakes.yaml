@@ -1,6 +1,5 @@
 # no-mistakes gate config (https://kunchenguid.github.io/no-mistakes/reference/repo-config/).
-# The agent, model and effort live in ~/.no-mistakes/config.yaml (Codex, gpt-6.2-sol);
-# commands here are read from main only. CI stays the full regression run.
+# Commands here are read from main only. CI stays the full regression run.
 commands:
   prepare: 'npm ci --prefer-offline'
   test: 'npm test && npm run test:ui'
