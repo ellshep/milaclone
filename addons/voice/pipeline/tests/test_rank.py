@@ -23,7 +23,7 @@ class FakeClient:
         self.writes, self.fail = [], None
 
     def focus(self, limit="all"):
-        if self.fail == "focus":
+        if self.fail == "focus" or (self.fail == "after" and limit != "all"):
             raise TaskAPIError("task API HTTP 500")
         return {"today": "2026-11-22", "tasks": self.tasks if limit == "all" else self.tasks[:int(limit)]}
 
@@ -118,6 +118,26 @@ def test_dry_run_prints_and_writes_nothing(monkeypatch, capsys):
     assert done["dry_run"] is True
 
 
+def test_only_the_first_max_tasks_are_sent(monkeypatch):
+    monkeypatch.setattr(rank, "MAX_TASKS", 2)
+    client = FakeClient(BOARD)
+    answer(monkeypatch, (1, 10, "a", "none"), (2, 20, "b", "none"), (3, 30, "beyond the cap", "none"))
+    prompts, complete = capture()
+    assert rank.run(FAKE, client, "one-tier", complete=complete) == 0
+    assert [r["id"] for r in client.writes[0]] == ["soon", "chore"]
+    assert "| Big" not in prompts[0]
+
+
+def test_a_failed_read_after_the_write_still_counts_as_done(monkeypatch, capsys):
+    client = FakeClient(BOARD)
+    client.fail = "after"
+    answer(monkeypatch, (1, 10, "a", "none"))
+    assert rank.run(FAKE, client, "one-tier") == 0
+    assert len(client.writes) == 1
+    out = capsys.readouterr().out
+    assert '"rank.after_unavailable"' in out and '"rank.done"' in out and '"rank.failed"' not in out
+
+
 def test_nothing_to_rank_writes_nothing():
     client = FakeClient(BOARD[:2])
     assert rank.run(FAKE, client, "one-tier") == 0
@@ -158,6 +178,9 @@ def test_main_stays_off_unless_scheduled(monkeypatch):
     monkeypatch.delenv("RANK_SCHEDULE", raising=False)
     monkeypatch.setattr(rank, "serve", lambda *a: pytest.fail("schedule is off"))
     assert rank.main([]) == 0
+    monkeypatch.setenv("RANK_SCHEDULE", "on")
+    monkeypatch.setenv("TASK_TZ", "Mars/Olympus")
+    assert rank.main([]) == 0  # a bad zone stops cleanly instead of crash-looping
     monkeypatch.setenv("RANK_NUDGE", "lots")
     assert rank.main([]) == 2
 

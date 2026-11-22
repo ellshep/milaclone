@@ -311,3 +311,22 @@ test('a client edit from a stale copy keeps tasks the API added', async () => {
   assert.equal(kept.done, true);
   assert.equal(kept.source, 'api');
 });
+
+test('a client edit from a stale copy keeps the nightly ranking written since', async () => {
+  const t = (await post({ title: 'Rank base' })).body.task;
+  const baseTasks = (await plain('/api/todos')).lists.find(l => l.id === t.listId).tasks;
+  const ranked = await call('PUT', '/api/tasks/rank', {
+    ranks: [{ id: t.id, rankScore: 77, rankReason: 'Matters', rankNudge: 1 }],
+  });
+  assert.deepEqual(ranked.body, { ranked: 1, skipped: [] });
+  // the client still has the copy from before the ranking (rankScore: null) and renames the task
+  const mine = baseTasks.map(x => (x.id === t.id ? Object.assign({}, x, { text: 'Renamed' }) : x));
+  const saved = await fetch(base + '/api/item/' + t.listId, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { tasks: mine }, baseTasks }),
+  }).then(r => r.json());
+  const kept = saved.data.tasks.find(x => x.id === t.id);
+  assert.deepEqual([kept.text, kept.rankScore, kept.rankReason, kept.rankNudge], ['Renamed', 77, 'Matters', 1]);
+  assert.equal(typeof kept.rankedAt, 'number');
+});

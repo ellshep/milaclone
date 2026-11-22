@@ -32,7 +32,7 @@ acceptable for you:
   OpenAI, Gemini, or a local model through any OpenAI-compatible endpoint) to
   pick out the tasks.
 - **With the nightly ranking switched on** (`RANK_SCHEDULE=on`), the titles,
-  due dates and list names of your open tasks, and your Home "Focus
+  due dates, list names and board titles of your open tasks, and your Home "Focus
   priorities" note, go to the ranking's LLM provider once a night
   ([details](docs/voice-capture.md#nightly-ranking)).
 - **With Alexa,** Amazon hears what you say to the Echo. With the skill, the

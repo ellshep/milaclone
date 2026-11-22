@@ -19,7 +19,7 @@ import sys
 import time
 from datetime import datetime, timedelta
 from typing import Literal
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel
 
@@ -32,6 +32,9 @@ DEFAULT_MODEL = "claude-opus-5-5"  # N7, at the low effort llm.py always asks fo
 PRICES = {"claude-opus-5-5": (4.0, 20.0)}  # USD per million input / output tokens
 TIERS = ("soon", "starred", "rest")  # focus.js tiers the ranker may order
 NUDGE_CAP = 3
+# The first this many rankable tasks (in the current order) go to the model, so
+# the answer fits in max_tokens; the rest keep their last score.
+MAX_TASKS = 200
 REASON_MAX = 300
 
 
@@ -167,7 +170,7 @@ def run(cfg: StepConfig, client: TasksClient, mode: str, *, dry_run: bool = Fals
     """One ranking pass. Returns 0 on success, 1 when anything failed (nothing written)."""
     try:
         view = client.focus()
-        tasks = [t for t in view.get("tasks", []) if t.get("tier") in TIERS]
+        tasks = [t for t in view.get("tasks", []) if t.get("tier") in TIERS][:MAX_TASKS]
         before = top3(view.get("tasks", []))
         if not tasks:
             log("rank.skip", reason="no tasks to rank", before=before)
@@ -185,7 +188,11 @@ def run(cfg: StepConfig, client: TasksClient, mode: str, *, dry_run: bool = Fals
                 print(f"{r['rankScore']:5.1f}{move:5} {titles[r['id']]} - {r['rankReason'] or ''}")
         else:
             client.write_ranks(ranks)
-            after = top3(client.focus(limit="3").get("tasks", []))
+            try:
+                after = top3(client.focus(limit="3").get("tasks", []))
+            except (TaskAPIError, ValueError) as e:  # written already: report it as done
+                after = None
+                log("rank.after_unavailable", error=str(e))
     except (LLMError, TaskAPIError, ValueError) as e:
         log("rank.failed", dry_run=dry_run, error=str(e))
         return 1
@@ -227,6 +234,12 @@ def main(argv: list[str] | None = None) -> int:
         return run(cfg, client, mode, dry_run=True)
     if _env("RANK_SCHEDULE", "off").lower() != "on":
         log("rank.schedule_off", hint="run --dry-run, then set RANK_SCHEDULE=on to rank nightly at 03:00")
+        return 0
+    try:
+        ZoneInfo(settings.tz)
+    except (ZoneInfoNotFoundError, ValueError):
+        # Exit 0, so restart: on-failure doesn't loop; the app needs a valid TASK_TZ too.
+        log("rank.bad_tz", error=f"TASK_TZ {settings.tz!r} is not a time zone; not scheduling")
         return 0
     serve(cfg, client, mode, settings.tz)
     return 0
