@@ -67,7 +67,7 @@ to a chat column, plus the agents' threads and receipts.
 
 ## W2 · `addons/mcp/`
 
-- [ ] **W2.1 Server.** Node, streamable HTTP behind a bearer token, stdio for
+- [x] **W2.1 Server.** Node, streamable HTTP behind a bearer token, stdio for
       local use. Tools: `get_root`, `list_boards`, `get_board_outline`,
       `get_board`, `get_item`, `search`, `create_item`, `create_items`,
       `update_item`, `move_item`, `delete_item`, `restore_item`,
@@ -75,7 +75,7 @@ to a chat column, plus the agents' threads and receipts.
       tool respects A3: a blocked board returns a refusal naming the flag.
   - Acceptance: a test boots the board on a temp `DATA_DIR`, runs every tool
     against it, and checks a blocked board is refused.
-- [ ] **W2.2 Docs.** `addons/mcp/README.md` with Claude Code and Claude Desktop
+- [x] **W2.2 Docs.** `addons/mcp/README.md` with Claude Code and Claude Desktop
       config, and what leaves the house (nothing: it is local).
 
 ## W3 · `addons/agent/`: one agent on one board

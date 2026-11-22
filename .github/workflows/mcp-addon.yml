@@ -1,0 +1,49 @@
+name: MCP add-on
+
+# The optional MCP add-on (addons/mcp/). Not a required check: it runs only
+# when the add-on or the board API it calls changes.
+on:
+  pull_request:
+    paths:
+      - 'addons/mcp/**'
+      - 'routes.js'
+      - 'db.js'
+      - 'server.js'
+      - 'export-md.js'
+      - '.github/workflows/mcp-addon.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'addons/mcp/**'
+      - 'routes.js'
+      - 'db.js'
+      - 'server.js'
+      - 'export-md.js'
+      - '.github/workflows/mcp-addon.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: MCP tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            addons/mcp/package-lock.json
+      # The test boots the real board, so the root needs its dependencies too.
+      - run: npm ci
+      - run: npm ci
+        working-directory: addons/mcp
+      - run: npm test
+        working-directory: addons/mcp
+      - name: Image builds
+        run: docker build -t milaclone-mcp:ci addons/mcp
