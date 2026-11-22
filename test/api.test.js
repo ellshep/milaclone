@@ -455,6 +455,120 @@ test('F7.1 tasks: the merge keeps indent levels when both sides edited the list'
   );
 });
 
+test('tasks: a stale client that fills in defaults keeps fields set elsewhere', async () => {
+  const canvasId = await root();
+  const seeded = [
+    { id: 'a', text: 'Milk', done: false },
+    { id: 'b', text: 'Eggs', done: false },
+  ];
+  const list = (await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: seeded } })).body;
+  // another device stars Milk and dates it
+  await send('PATCH', '/api/item/' + list.id, {
+    baseTasks: seeded,
+    data: { tasks: [{ ...seeded[0], starred: true, due: '2026-12-01', tags: ['shop'] }, seeded[1]] },
+  });
+  // a client holding the raw seeded list sends Quick-notes-shaped tasks with Eggs ticked
+  const filled = t => ({ ...t, starred: false, due: null, tags: [], note: '', noteStyle: {}, createdAt: null });
+  const r = await send('PATCH', '/api/item/' + list.id, {
+    baseTasks: seeded,
+    data: { tasks: [filled(seeded[0]), { ...filled(seeded[1]), done: true }] },
+  });
+  const [milk, eggs] = r.body.data.tasks;
+  assert.equal(eggs.done, true);
+  assert.equal(milk.starred, true);
+  assert.equal(milk.due, '2026-12-01');
+  assert.deepEqual(milk.tags, ['shop']);
+});
+
+test('tasks: every task gets a unique id when written', async () => {
+  const canvasId = await root();
+  const created = (
+    await send('POST', '/api/item', {
+      canvasId,
+      type: 'todo',
+      data: { tasks: [{ text: 'no id' }, { id: 'x', text: 'one' }, { id: 'x', text: 'two' }] },
+    })
+  ).body;
+  const ids = created.data.tasks.map(t => t.id);
+  assert.equal(new Set(ids).size, 3);
+  assert.ok(ids.every(Boolean));
+
+  const r = await send('PATCH', '/api/item/' + created.id, { data: { tasks: [{ text: 'fresh' }] } });
+  assert.ok(r.body.data.tasks[0].id);
+});
+
+test('tasks: old rows with id-less tasks are repaired at boot', async () => {
+  const { db, migrateTaskIds } = require('../db');
+  const canvasId = await root();
+  db.prepare(
+    "INSERT INTO items (id, canvasId, type, x, y, w, z, data, createdAt) VALUES ('old-todo', ?, 'todo', 0, 0, 240, 0, ?, 0)"
+  ).run(canvasId, JSON.stringify({ tasks: [{ text: 'a' }, { id: 'k', text: 'b' }, { id: 'k', text: 'c' }] }));
+  assert.ok(migrateTaskIds() >= 1);
+  const tasks = JSON.parse(db.prepare("SELECT data FROM items WHERE id = 'old-todo'").get().data).tasks;
+  assert.equal(new Set(tasks.map(t => t.id)).size, 3);
+  assert.equal(migrateTaskIds(), 0, 'a second run has nothing to fix');
+});
+
+test('tasks: a tab opened before the id repair saves without duplicating the list', async () => {
+  const { db, migrateTaskIds } = require('../db');
+  const canvasId = await root();
+  const old = [{ text: 'Milk' }, { text: 'Eggs' }]; // an old list with no task ids
+  db.prepare(
+    "INSERT INTO items (id, canvasId, type, x, y, w, z, data, createdAt) VALUES ('stale-todo', ?, 'todo', 0, 0, 240, 0, ?, 1)"
+  ).run(canvasId, JSON.stringify({ tasks: old }));
+  migrateTaskIds(); // the deploy restarts the server; the open tab still holds `old`
+  // the tab gave the rows local ids before tracking, then ticks Eggs
+  const r = await send('PATCH', '/api/item/stale-todo', {
+    baseTasks: old,
+    data: {
+      tasks: [
+        { id: 'r1', text: 'Milk' },
+        { id: 'r2', text: 'Eggs', done: true },
+      ],
+    },
+  });
+  assert.deepEqual(
+    r.body.data.tasks.map(t => [t.text, !!t.done]),
+    [
+      ['Milk', false],
+      ['Eggs', true],
+    ]
+  );
+});
+
+test('tasks: a copied to-do card gets fresh task ids', async () => {
+  const canvasId = await root();
+  const orig = (
+    await send('POST', '/api/item', {
+      canvasId,
+      type: 'todo',
+      data: { title: 'Packing', tasks: [{ id: 'p1', text: 'Socks', importId: 'imp-1', focusOrder: 2 }] },
+    })
+  ).body;
+  const copied = (await send('POST', '/api/item/' + orig.id + '/copy', { canvasId, x: 0, y: 0 })).body;
+  assert.notEqual(copied.id, orig.id);
+  assert.notEqual(copied.data.tasks[0].id, 'p1');
+  assert.equal(copied.data.tasks[0].text, 'Socks');
+  assert.equal(copied.data.tasks[0].importId, undefined);
+  assert.equal(copied.data.tasks[0].focusOrder, undefined);
+});
+
+test('tasks: the id repair makes ids unique across cards and the oldest card keeps them', async () => {
+  const { db, migrateTaskIds } = require('../db');
+  const canvasId = await root();
+  const insert = db.prepare(
+    "INSERT INTO items (id, canvasId, type, x, y, w, z, data, createdAt) VALUES (?, ?, 'todo', 0, 0, 240, 0, ?, ?)"
+  );
+  insert.run('tpl-todo', canvasId, JSON.stringify({ tasks: [{ id: 'shared-1', text: 'Socks', importId: 'i1' }] }), 10);
+  insert.run('copy-todo', canvasId, JSON.stringify({ tasks: [{ id: 'shared-1', text: 'Socks', importId: 'i1' }] }), 20);
+  migrateTaskIds();
+  const read = id => JSON.parse(db.prepare('SELECT data FROM items WHERE id = ?').get(id).data).tasks[0];
+  assert.deepEqual(read('tpl-todo'), { id: 'shared-1', text: 'Socks', importId: 'i1' });
+  const copied = read('copy-todo');
+  assert.notEqual(copied.id, 'shared-1');
+  assert.equal(copied.importId, undefined);
+});
+
 test('uploads: active content downloads instead of rendering on our origin', async () => {
   const upload = async (body, type, name) => {
     const fd = new FormData();

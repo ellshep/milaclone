@@ -12,13 +12,11 @@ Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-c
 
 ## Now
 
-- **DM1** One server-side task-list module owning task shape, defaults, the blank-task rule and the three-way merge (`routes.js` `mergeTasks`/PATCH/`/api/todos`, `tasks-api.js` `isBlank`/`saveCard`, `quicknotes.js` `normTask`, `export-md.js:37`). Makes the merge safe whatever base a client sends (AU3 was fixed client-side). Interface to be designed with the owner first.
+- **DM2** One client save queue shared by the canvas and Quick notes (`editing.js:117-170`, `quicknotes.js:132-182`): pending edits, base tracking, flush, retry, adopt. The PATCH is the seam (`api.js` + an in-memory adapter for Vitest). Puts the AU1/AU2 retry and keepalive logic, now duplicated in both files, in one place.
 
 ## Next
 
-- **DM2** One client save queue shared by the canvas and Quick notes (`editing.js:117-170`, `quicknotes.js:132-182`): pending edits, base tracking, flush, retry, adopt. The PATCH is the seam (`api.js` + an in-memory adapter for Vitest). Puts the AU1/AU2 retry and keepalive logic, now duplicated in both files, in one place; do after DM1.
 - **AU4** Voice `dedupe: true` matches open tasks anywhere, including Templates, so "add milk" is dropped as a duplicate (`tasks-api.js:264`). Fix: check only the target list.
-- **AU5** Copying a to-do card keeps its task ids and `importId`s, so `PATCH /api/tasks/:id` can hit a template copy (`db.js:220` `copyItemDeep`). Fix: fresh task ids, drop `importId`.
 - **AU6** `PATCH /api/item {canvasId}` moves a board without `/move`'s checks, so a board can be moved into itself and vanish (`routes.js:276`). Fix: drop cross-canvas moves from PATCH (`drag.js:139`, test at `test/api.test.js:670`).
 - **AU8** The service worker caches every query-string URL (each search prefix) and never evicts; trashed images stay on the phone (`sw.js:7`). Fix: don't cache same-origin URLs with `url.search`.
 - **AU9** Cut-and-paste leaves an invisible, unselectable line on the old board when one end stays behind (`db.js:248`, `lines.js:109`). Fix: in `moveItemDeep`, turn that end into a free point at the card's old position.
@@ -42,6 +40,8 @@ Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-c
 
 ## Closed
 
+- **AU5** Copied to-do cards get fresh task ids; the boot repair makes ids unique across cards (#71).
+- **DM1** `tasklist.js` owns the task shape, blank rule, ids and the merge; the merge compares with defaults filled in.
 - **AU1, AU2, AU3, AU11** Failed saves now retry, big background saves skip `keepalive`, Quick notes' base no longer erases stars and due dates; `e2e/saves.spec.js` covers all three.
 - **V4** Voice tags are limited to tags already on the list (an `enum` built from the 100 most used). Done in #63.
 - **AU7** `/ingest/text` blocked the pipeline's event loop during the model call. Fixed in #62.

@@ -19,6 +19,7 @@
 // mode drag and Reset).
 
 const { db, stmt, rowToItem, breadcrumb } = require('./db');
+const { isBlank } = require('./tasklist');
 
 const SOON_DAYS = 3;
 const TIERS = ['soon', 'starred', 'rest'];
@@ -33,7 +34,6 @@ const dayNum = ymd => {
 
 const isReference = card =>
   Array.isArray(card.data.labels) && card.data.labels.some(l => String(l).trim().toLowerCase() === 'reference');
-const isBlank = t => typeof t.text !== 'string' || !t.text.trim();
 const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 /**
