@@ -120,7 +120,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
 
 ## M5 · Morning digest
 
-- [ ] **M5.1 Digest data.** A token-protected read of the focus three plus any
+- [x] **M5.1 Digest data.** A token-protected read of the focus three plus any
       other overdue or due-today tasks, at most 8 lines.
 - [ ] **M5.2 Home Assistant recipe** (add-on docs): weekday notification with
       a Done button per task (default 07:30), an Echo announcement recalculated
