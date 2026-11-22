@@ -12,6 +12,10 @@ Security problems go through private reporting, not issues: see [SECURITY.md](SE
 
 Describe the problem you have, not only the feature you want. The app aims to stay small and easy to self-host, so many good ideas will be declined. That's about scope, not the idea.
 
+## Shipping a change
+
+Work in a [treehouse](https://github.com/kunchenguid/treehouse) worktree (`treehouse` from the repo root; `.worktreeinclude` seeds `.env`), never in the deploy checkout. Push through the [no-mistakes](https://github.com/kunchenguid/no-mistakes) gate, `git push no-mistakes <branch>`, or let the agent run `/no-mistakes`. The gate runs the targeted commands in `.no-mistakes.yaml`, has Codex review and fix the change, then pushes and opens the PR. Codex runs `gpt-6.2-sol`; the agent starting a run sets the reviewer effort to match the risk of the change by editing `agent_config.codex.effort` in `~/.no-mistakes/config.yaml` before `axi run` (`low`, `medium` or `high`): `low` for docs and copy, `high` for `db.js`, `routes.js`, `tasklist.js`, `focus.js` and the add-ons.
+
 ## Pull requests
 
 - **Start with an issue.** Pull requests must reference an issue the maintainer has accepted. Pull requests that don't are closed without review. (Pull requests may also be limited to collaborators in the repository settings; if so, an accepted issue is where it starts.)
