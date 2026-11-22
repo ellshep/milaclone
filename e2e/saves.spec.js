@@ -111,6 +111,44 @@ test.describe('Quick notes', () => {
     expect(milk).toMatchObject({ starred: true, due: '2026-12-01', tags: ['shop'] });
   });
 
+  test('a task added elsewhere while a save is in flight survives the next save', async ({ page }) => {
+    await page.goto('/');
+    const title = uniq('Busy');
+    const seeded = [
+      { id: 'a', text: 'Floss', done: false },
+      { id: 'b', text: 'Stretch', done: false },
+    ];
+    const id = await createTodo(page, null, title, seeded);
+    await openList(page, title);
+    let release;
+    const held = new Promise(r => (release = r));
+    let first = true;
+    await page.route('**/api/item/' + id, async route => {
+      if (first && route.request().method() === 'PATCH') {
+        first = false;
+        await held; // the first save stays in flight
+      }
+      return route.continue();
+    });
+
+    await taskRow(page, 'Floss').locator('.qn-box').click();
+    await expect.poll(() => !first).toBe(true);
+    // voice adds a task to this list meanwhile
+    await page.request.patch('/api/item/' + id, {
+      data: { data: { tasks: [...seeded, { id: 'v', text: 'Call mum', done: false }] }, baseTasks: seeded },
+    });
+    await taskRow(page, 'Stretch').locator('.qn-box').click(); // queued behind the save in flight
+    release();
+
+    await expect
+      .poll(async () => (await serverTasks(page, id)).map(t => [t.id, !!t.done]))
+      .toEqual([
+        ['a', true],
+        ['b', true],
+        ['v', false],
+      ]);
+  });
+
   test('a save that fails is retried and lands', async ({ page }) => {
     await page.goto('/');
     const title = uniq('Retry');
