@@ -91,6 +91,18 @@ test('an edit still in the debounce window is saved when the page is left', asyn
     .toBe('last words');
 });
 
+test('duplicating right after typing copies the last words (AU10)', async ({ page }) => {
+  const canvasId = await freshCanvas(page);
+  await place(page, 'note');
+  await expect(page.locator('.item.type-note .ProseMirror')).toBeFocused();
+  await page.keyboard.type('last words');
+  await page.locator('.item.type-note').click({ button: 'right' }); // inside the 400 ms debounce
+  await page.locator('#ctxmenu .ctx-item', { hasText: 'Duplicate' }).click();
+  await expect(page.locator('.item.type-note')).toHaveCount(2);
+  const texts = (await (await page.request.get('/api/canvas/' + canvasId)).json()).items.map(i => i.data.text);
+  expect(texts).toEqual(['last words', 'last words']);
+});
+
 test('browser Back returns from a nested board to its parent', async ({ page }) => {
   const canvasId = await freshCanvas(page);
   await place(page, 'board');
