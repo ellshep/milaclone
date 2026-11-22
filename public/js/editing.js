@@ -1,7 +1,7 @@
 'use strict';
 
 import { state, elMap } from './state.js';
-import { api } from './api.js';
+import { api, retryDelay } from './api.js';
 import { toast, hexColor } from './util.js';
 import { render, renderCrumbs, refreshItem } from './cards.js';
 import { closePalette, closeCtx } from './menus.js';
@@ -139,6 +139,30 @@ export function trackTasks(it) {
   if (it.type === 'todo' && !it._baseTasks) it._baseTasks = clone(it.data.tasks || []);
 }
 
+// A save that failed but may work later goes back in the queue with the item's
+// current values for those fields (never the old ones, so a retry can't undo a
+// newer edit) and is retried with backoff (api.js retryDelay), or as soon as
+// the network returns. A newer edit already queued keeps its own, sooner timer.
+const retryCount = new Map();
+function requeue(it, patch) {
+  const newer = pending.has(it.id);
+  const p = pending.get(it.id) || { it, patch: {} };
+  for (const k of Object.keys(patch)) if (!(k in p.patch)) p.patch[k] = it.data[k];
+  pending.set(it.id, p);
+  const n = (retryCount.get(it.id) || 0) + 1;
+  retryCount.set(it.id, n);
+  const wait = retryDelay(n);
+  if (newer || wait === null) return;
+  saveTimers.set(
+    it.id,
+    setTimeout(() => flushSave(it.id), wait)
+  );
+}
+
+// Edits that haven't reached the server yet (queued, or failed and waiting to
+// retry): while there are any, don't replace the view with the server's copy.
+export const hasPendingSaves = () => pending.size > 0;
+
 async function flushSave(id, keepalive = false) {
   const p = pending.get(id);
   if (!p) return;
@@ -148,6 +172,8 @@ async function flushSave(id, keepalive = false) {
   const body = { data: patch };
   if (patch.tasks) body.baseTasks = it._baseTasks || [];
   const saved = await api.patch(id, body, keepalive);
+  if (saved === null) return requeue(it, patch);
+  retryCount.delete(id);
   if (it.type === 'board' && patch.title != null) renderCrumbs();
   if (!saved || !patch.tasks) return;
   it._baseTasks = clone(saved.data.tasks || []);
@@ -168,6 +194,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flushAllSaves();
 });
 window.addEventListener('pagehide', flushAllSaves);
+window.addEventListener('online', () => flushAllSaves(false));
 
 // Deleting moves items to the server-side trash; Undo (toast or cmd+Z)
 // restores them with everything that was inside them. Each undo entry is the

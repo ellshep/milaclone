@@ -12,6 +12,7 @@ import {
   exitEdit,
   undoDelete,
   flushAllSaves,
+  hasPendingSaves,
   selectIds,
 } from './editing.js';
 import { closePalette, closeCtx } from './menus.js';
@@ -200,6 +201,7 @@ document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible' || !state.view.canvas) return;
   try {
     await flushAllSaves(false);
+    if (hasPendingSaves()) return; // a save failed: keep the edit on screen until it lands
     if (!state.editingId && !state.drag && !isQuickNotesOpen() && !document.querySelector('dialog[open]')) {
       await reloadView();
     }
