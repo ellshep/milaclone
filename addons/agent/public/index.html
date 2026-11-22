@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Board agent</title>
+    <link rel="stylesheet" href="page.css" />
+  </head>
+  <body>
+    <iframe id="board" title="Board"></iframe>
+    <aside id="chat" aria-label="Agent chat">
+      <header>
+        <select id="agent" aria-label="Agent"></select>
+        <button id="new-thread" type="button" hidden>New thread</button>
+      </header>
+      <nav id="threads" aria-label="Threads" hidden></nav>
+      <ol id="messages" aria-live="polite"></ol>
+      <ol id="queue" aria-label="Notes to send"></ol>
+      <p id="selection">No cards selected</p>
+      <form id="ask">
+        <textarea
+          id="text"
+          rows="3"
+          aria-label="Message"
+          placeholder="Ask, or add a note about the selected cards"
+        ></textarea>
+        <div class="row">
+          <button id="queue-note" type="button" title="Keep this note, with the selected cards, for one send">
+            Queue
+          </button>
+          <button type="submit">Send</button>
+        </div>
+      </form>
+    </aside>
+    <script type="module" src="page.js"></script>
+  </body>
+</html>

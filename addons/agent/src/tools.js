@@ -32,11 +32,14 @@ async function proposeColumn(agent, mcp) {
   const title = proposeTitle(agent);
   const col = items.find(it => it.type === 'column' && (it.data || {}).title === title);
   if (col) return col.id;
-  const right = Math.max(0, ...items.filter(it => !it.parentItemId).map(it => (it.x || 0) + (it.w || 240)));
   return (
-    await mcp.call('create_item', { board_id: agent.boardId, type: 'column', data: { title }, x: right + 40, y: 60 })
+    await mcp.call('create_item', { board_id: agent.boardId, type: 'column', data: { title }, x: freeX(items), y: 60 })
   ).id;
 }
+
+/** An x to the right of every card on a board, for a card the service adds. */
+export const freeX = items =>
+  40 + Math.max(0, ...items.filter(it => !it.parentItemId).map(it => (it.x || 0) + (it.w || 240)));
 
 /**
  * Throws unless every board the arguments name, or a named card sits on, is in
@@ -75,13 +78,15 @@ async function fence(agent, mcp, name, args) {
   return item;
 }
 
-// The comment protocol's keys are the service's alone: the model can't mark a
-// comment answered (replyTo) or pass for another agent.
+// The comment protocol's and memory card's keys are the service's alone: the
+// model can't mark a comment answered (replyTo), pass for another agent, or
+// make a memory card.
 const clean = it => {
   if (!it.data) return it;
   const data = Object.assign({}, it.data);
   delete data.replyTo;
   delete data.agent;
+  delete data.agentMemory;
   return Object.assign({}, it, { data });
 };
 

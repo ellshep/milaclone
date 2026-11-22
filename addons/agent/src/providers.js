@@ -67,16 +67,22 @@ export function anthropicProvider(apiKey, clientOptions = {}) {
 
 /**
  * No network. Replies "Fake reply to: <request>"; a request starting "add "
- * also makes a note with the rest, through create_item when the agent has it.
+ * also makes a note with the rest, through create_item when the agent has it,
+ * and one starting "remember " saves the rest with remember.
  */
 export async function fakeProvider({ system, messages, tools }) {
   const prompt = String(messages[messages.length - 1].content);
   const request = (/<request>\n([\s\S]*?)\n<\/request>/.exec(prompt) || [])[1] || '';
   const boardId = (/\(board id ([^)]+)\)/.exec(system) || [])[1];
   const create = tools.find(t => t.name === 'create_item');
+  const remember = tools.find(t => t.name === 'remember');
   let toolCalls = 0;
   if (create && /^add /i.test(request)) {
     await create.run({ board_id: boardId, type: 'note', data: { text: request.slice(4) } });
+    toolCalls++;
+  }
+  if (remember && /^remember /i.test(request)) {
+    await remember.run({ text: request.slice(9) });
     toolCalls++;
   }
   return { text: `Fake reply to: ${request}`, usage: { input: 0, output: 0 }, toolCalls };

@@ -2,18 +2,25 @@
 // The board agents service (docs/agent-addon.md W3). It finds agent cards
 // through the MCP add-on, and every AGENT_POLL_SECONDS answers new `@agent`
 // comments (A13), one at a time, each with its agent's own settings, tools and
-// scope. Run one instance only: two would both answer a new comment.
+// scope. It also serves the agent page (page.js) on PORT. Run one instance
+// only: two would both answer a new comment.
 //
 //   MCP_URL             the MCP add-on (default http://mcp:8787/mcp)
 //   MCP_TOKEN           its token
 //   AGENT_API_KEY       Anthropic API key for agents with provider "anthropic"
 //   AGENT_POLL_SECONDS  default 30
 //   AGENT_PROVIDER=fake every agent uses the fake provider (tests, smoke runs)
+//   PORT, HOST          the page (default 8788 on 0.0.0.0)
+//   DATA_DIR            where agent.db keeps threads (default ./data)
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { agentConfig, findAgents } from './agents.js';
 import { commentContext, pending, replyCard, requestOf } from './comments.js';
 import { connect } from './mcp.js';
+import { Threads } from './memory.js';
+import { pageServer } from './page.js';
 import { anthropicProvider, fakeProvider } from './providers.js';
 import { runAgent } from './run.js';
 
@@ -45,9 +52,16 @@ export class Service {
     return out;
   }
 
-  /** Runs one agent on a request (the page's ask, in W3.3). */
-  async ask(agent, request, context = '') {
-    return runAgent({ agent, mcp: await this.mcp(agent.id), provider: this.provider(agent), request, context });
+  /** Runs one agent on a request; `history` is a page thread's earlier messages. */
+  async ask(agent, request, context = '', history = []) {
+    return runAgent({
+      agent,
+      mcp: await this.mcp(agent.id),
+      provider: this.provider(agent),
+      request,
+      context,
+      history,
+    });
   }
 
   /** Answers every waiting `@agent` comment once. Returns how many it answered. */
@@ -100,7 +114,11 @@ async function main() {
     fake: env.AGENT_PROVIDER === 'fake',
   });
   const every = Number(env.AGENT_POLL_SECONDS || 30) * 1000;
-  log('agent.started', { mcp: service.mcpUrl, pollSeconds: every / 1000, fake: service.fake });
+  const dir = env.DATA_DIR || 'data';
+  fs.mkdirSync(dir, { recursive: true });
+  const port = Number(env.PORT || 8788);
+  pageServer(service, new Threads(path.join(dir, 'agent.db'))).listen(port, env.HOST || '0.0.0.0');
+  log('agent.started', { mcp: service.mcpUrl, pollSeconds: every / 1000, fake: service.fake, port });
   for (;;) {
     try {
       const n = await service.pollOnce();

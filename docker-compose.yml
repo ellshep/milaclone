@@ -183,6 +183,35 @@ services:
           cpus: '0.25'
           memory: 128M
 
+  # ---- Optional board agents: the agent service (addons/agent/README.md) -----
+  # Same profile as the MCP server, which is its only way to the board. Answers
+  # @agent comments and serves the agent page; the Tailscale sidecar serves
+  # /agent/. Sends the agent's board content and requests to the provider on
+  # its card (Anthropic, with AGENT_API_KEY). One instance only.
+  agent:
+    build: ./addons/agent
+    image: milaclone-agent:local
+    container_name: milaclone-agent
+    profiles: ['agent']
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8185:8788'
+    volumes:
+      # agent.db: the page's threads (memory "thread" and "persistent").
+      - milaclone_agent:/data
+    environment:
+      - MCP_URL=http://mcp:8787/mcp
+      - MCP_TOKEN=${MCP_TOKEN:-}
+      - AGENT_API_KEY=${AGENT_API_KEY:-}
+      - AGENT_POLL_SECONDS=${AGENT_POLL_SECONDS:-30}
+    depends_on:
+      - mcp
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
   # Own tailnet node, so the app answers on https://mila.<tailnet>.ts.net
   # at "/" rather than a path prefix. Reaches the app over the compose network;
   # the loopback port binding above stays as-is for local access.
@@ -202,8 +231,9 @@ services:
       # single-file mount would keep showing the old copy. Tailscale watches
       # this folder and applies a changed serve.json without a restart.
       - ./tailscale:/config:ro
-    # serve.json also routes /ingest/ to the voice add-on and /mcp to the MCP
-    # add-on; without an add-on its path just answers 502.
+    # serve.json also routes /ingest/ to the voice add-on, /mcp to the MCP
+    # add-on and /agent/ to the agent service; without an add-on its path just
+    # answers 502.
     depends_on:
       - app
     deploy:
@@ -217,3 +247,4 @@ volumes:
   milaclone_uploads:
   milaclone_ts_state:
   milaclone_ingest:
+  milaclone_agent:
