@@ -3,9 +3,11 @@
 // its card's scope says; list_boards shows it every board's title. Two more
 // tools: list_agents, and delegate, which asks another agent with a comment card
 // on that agent's board, signed `agent` and `delegatedBy` with the orchestrator's
-// card id. comments.js answers an agent's comment only when it is signed so by an
-// orchestrator, and tools.js strips `delegatedBy` from what models write, so
-// delegate (capped per run) is the one way an agent sets another off.
+// card id and naming the target in `delegateTo`. comments.js answers an agent's
+// comment only when it is signed so by an orchestrator, and only a `normal` one
+// (a `priority` one is answered here at once, or not at all); tools.js strips
+// `delegatedBy` from what models write, so delegate (capped per run) is the one
+// way an agent sets another off. A chat-only orchestrator gets list_agents only.
 
 export const DELEGATE_CAP = 5; // delegations per orchestrator run
 const CARD_H = 160;
@@ -36,39 +38,47 @@ function requestCard(home, target, message, kind, items) {
     x: (card.x || 0) + (card.w || 320) + 40,
     y: (card.y || 0) + before * CARD_H,
     w: 240,
-    data: { text: `@${target.name} ${message}`, agent: home.id, delegatedBy: home.id, kind },
+    data: { text: `@${target.name} ${message}`, agent: home.id, delegatedBy: home.id, delegateTo: target.id, kind },
   };
 }
 
 /** list_agents and delegate for `home`'s run. `service` runs a priority request at once. */
 export function orchestratorTools(service, home) {
   let sent = 0;
-  const others = async () => (await service.agents()).filter(a => !a.agent.orchestrator);
+  // Agents on boards the orchestrator can read; the rest stay unnamed, even in errors (A3).
+  const others = async () =>
+    (await service.agents()).filter(({ agent }) => !agent.orchestrator && home.scope.has(agent.boardId));
   const listAgents = async () =>
     JSON.stringify(
-      (await others())
-        .filter(({ agent }) => home.scope.has(agent.boardId))
-        .map(({ agent }) => ({ id: agent.id, name: agent.name, board: agent.boardTitle, writes: agent.writes }))
+      (await others()).map(({ agent }) => ({
+        id: agent.id,
+        name: agent.name,
+        board: agent.boardTitle,
+        writes: agent.writes,
+      }))
     );
   const delegate = async ({ agent: who, message, kind }) => {
     if (sent >= DELEGATE_CAP) return `Error: at most ${DELEGATE_CAP} delegations per run`;
     if (typeof message !== 'string' || !message.trim()) return 'Error: message is empty';
     if (kind !== 'priority' && kind !== 'normal') return 'Error: kind must be "priority" or "normal"';
     const hits = (await others()).filter(({ agent }) => agent.id === who || key(agent.name) === key(who || ''));
-    if (!hits.length) return `Error: no agent called "${who}" (list_agents names them)`;
+    if (!hits.length) return `Error: no agent called "${who}" on a board you can read (list_agents names them)`;
     if (hits.length > 1) return `Error: several agents are called "${who}": use the id from list_agents`;
     const { agent: target, items } = hits[0];
-    if (!home.scope.has(target.boardId)) {
-      return `Error: board "${target.boardTitle}" is blocked: its owner hasn't turned agent access on`;
-    }
     sent++;
     const mcp = await service.mcp(home.id);
     const comment = await mcp.call('create_item', requestCard(home, target, message.trim(), kind, items));
     log('agent.delegate', { agent: home.id, to: target.id, boardId: target.boardId, comment: comment.id, kind });
     if (kind === 'normal') return `Asked ${target.name} on "${target.boardTitle}"; it answers on its next run.`;
-    return `${target.name} replied: ${await service.answer(comment, target, [...items, comment])}`;
+    try {
+      return `${target.name} replied: ${await service.answer(comment, target, [...items, comment])}`;
+    } catch (e) {
+      // The poll never answers a priority request, so this one stays unanswered rather than running later.
+      log('agent.delegate_failed', { agent: home.id, to: target.id, comment: comment.id, error: e.message });
+      return `Error: ${target.name} couldn't be run: ${e.message}`;
+    }
   };
-  return [
+  const tools = [
     {
       name: 'list_agents',
       description: 'The agents on boards you can read: id, name, board and what they may write.',
@@ -92,4 +102,5 @@ export function orchestratorTools(service, home) {
       run: delegate,
     },
   ];
+  return home.writes === 'chat' ? tools.slice(0, 1) : tools; // delegating writes a card
 }

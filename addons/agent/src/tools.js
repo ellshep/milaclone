@@ -83,6 +83,7 @@ const clean = it => {
   delete data.replyTo;
   delete data.agent;
   delete data.delegatedBy;
+  delete data.delegateTo;
   return Object.assign({}, it, { data });
 };
 

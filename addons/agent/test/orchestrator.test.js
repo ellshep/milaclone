@@ -186,13 +186,18 @@ test('a delegate to a blocked board is refused, and nothing is written there', a
     const chief = await find(svc, 'Chief');
     assert.match(
       await svc.ask(chief, 'delegate priority Guard: open up'),
-      /Error: board "Vault" is blocked: its owner hasn't turned agent access on/
+      /Error: no agent called "Guard" on a board you can read/ // its name isn't given away either
     );
     assert.deepEqual(await items(vault), before);
     const tools = Object.fromEntries(orchestratorTools(svc, chief).map(t => [t.name, t]));
     assert.match(await tools.delegate.run({ agent: 'Nobody', message: 'hi', kind: 'normal' }), /no agent called/);
     assert.match(await tools.delegate.run({ agent: 'Chief', message: 'hi', kind: 'normal' }), /no agent called/);
     assert.match(await tools.delegate.run({ agent: 'Guard', message: 'hi', kind: 'soon' }), /kind must be/);
+    // delegating writes a card, so a chat-only orchestrator only lists agents
+    assert.deepEqual(
+      orchestratorTools(svc, { ...chief, writes: 'chat' }).map(t => t.name),
+      ['list_agents']
+    );
   } finally {
     await svc.close();
   }
@@ -223,18 +228,101 @@ test('delegations are capped per run, and only an orchestrator can sign one', as
       })
     );
     assert.deepEqual([forged.data.delegatedBy, forged.data.agent], [undefined, yardie.id]);
+    const person = await api('POST', '/api/item', { canvasId: yard, type: 'comment', y: 2400, data: { text: 'hm' } });
+    const edited = JSON.parse(
+      await own.update_item.run({
+        item_id: person.id,
+        data: { text: '@Yardie go', delegatedBy: chief.id, delegateTo: yardie.id },
+      })
+    );
+    assert.deepEqual(
+      [edited.data.delegatedBy, edited.data.delegateTo, edited.data.agent],
+      [undefined, undefined, yardie.id]
+    );
     const c = (id, data) => ({ id, type: 'comment', data: { text: '@agent go', ...data } });
     const agents = [{ name: 'Yardie' }];
     const list = [
-      c('signed', { agent: 'i_home', delegatedBy: 'i_home' }),
-      c('not an orchestrator', { agent: 'i_x', delegatedBy: 'i_x' }),
-      c('mismatch', { agent: 'i_x', delegatedBy: 'i_home' }),
+      c('signed', { agent: 'i_home', delegatedBy: 'i_home', delegateTo: 'i_y', kind: 'normal' }),
+      c('priority', { agent: 'i_home', delegatedBy: 'i_home', delegateTo: 'i_y', kind: 'priority' }),
+      c('not an orchestrator', { agent: 'i_x', delegatedBy: 'i_x', delegateTo: 'i_y', kind: 'normal' }),
+      c('mismatch', { agent: 'i_x', delegatedBy: 'i_home', delegateTo: 'i_y', kind: 'normal' }),
     ];
+    agents[0].id = 'i_y';
     assert.deepEqual(
       pending(list, agents, new Set(['i_home'])).map(p => p.comment.id),
-      ['signed']
+      ['signed'] // a priority request is answered at once by delegate, never by the poll
     );
     assert.deepEqual(pending(list, agents), []);
+  } finally {
+    await svc.close();
+  }
+});
+
+test('a normal delegate reaches the agent it names, even beside a namesake', async () => {
+  const svc = service();
+  try {
+    await home();
+    const twins = await board('Twins', { allow: true, agent: { name: 'Agent', writes: 'chat' } });
+    const second = await api('POST', '/api/item', {
+      canvasId: twins,
+      type: 'agent',
+      x: 0,
+      y: 600,
+      data: { name: 'Agent', writes: 'chat' },
+    });
+    const chief = await find(svc, 'Chief');
+    const tools = Object.fromEntries(orchestratorTools(svc, chief).map(t => [t.name, t]));
+    assert.match(await tools.delegate.run({ agent: 'agent', message: 'x', kind: 'normal' }), /several agents/);
+    assert.match(await tools.delegate.run({ agent: second.id, message: 'which one?', kind: 'normal' }), /^Asked/);
+    const ask = (await items(twins)).find(it => it.data.delegateTo === second.id);
+    await svc.pollOnce();
+    const reply = (await items(twins)).find(it => it.data.replyTo === ask.id);
+    assert.equal(reply.data.agent, second.id); // not the board's oldest "Agent"
+  } finally {
+    await svc.close();
+  }
+});
+
+test('a priority delegate that fails is reported and never runs later as a normal one', async () => {
+  const svc = service();
+  try {
+    await home();
+    const dock = await board('Dock', { allow: true, agent: { name: 'Docker', writes: 'chat' } });
+    const chief = await find(svc, 'Chief');
+    svc.answer = async () => {
+      throw new Error('MCP down');
+    };
+    assert.match(await svc.ask(chief, 'delegate priority Docker: unload'), /Error: Docker couldn't be run: MCP down/);
+    delete svc.answer; // the class's own again
+    const ask = (await items(dock)).find(it => it.data.delegatedBy);
+    await svc.pollOnce();
+    assert.equal((await items(dock)).filter(it => it.data.replyTo === ask.id).length, 0);
+    assert.ok(logs.some(l => JSON.parse(l).event === 'agent.delegate_failed'));
+
+    // a run that fails inside answers with the error, as any comment does, and isn't retried
+    const failing = new Service({
+      mcpUrl,
+      token: TOKEN,
+      fake: false,
+      providers: {
+        anthropic: async ({ tools }) => {
+          const d = tools.find(t => t.name === 'delegate');
+          if (!d) throw new Error('boom'); // the target fails
+          return {
+            text: await d.run({ agent: 'Docker', message: 'retry', kind: 'priority' }),
+            usage: { input: 0, output: 0 },
+            toolCalls: 1,
+          };
+        },
+      },
+    });
+    try {
+      const boss = (await failing.agents()).find(a => a.agent.name === 'Chief').agent;
+      assert.match(await failing.ask(boss, 'go'), /Docker replied: Sorry, I couldn't answer that: boom/);
+      assert.equal(await failing.pollOnce(), 0);
+    } finally {
+      await failing.close();
+    }
   } finally {
     await svc.close();
   }
