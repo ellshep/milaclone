@@ -7,7 +7,7 @@
 import { ToolError } from './mcp.js';
 
 const READ = ['get_board_outline', 'get_board', 'get_item', 'search'];
-// Writes that take a board card's whole subtree with them (or rename its board).
+// Writes fence() checks the target card of (and a column's cards, for a move or trash).
 const CHANGES = new Set(['update_item', 'move_item', 'delete_item']);
 const ALLOWED = {
   chat: READ,
@@ -40,8 +40,11 @@ async function proposeColumn(agent, mcp) {
 
 /**
  * Throws unless every board the arguments name, or a named card sits on, is in
- * scope; changing a board card also needs every board under it in scope.
- * Returns the named card, if any.
+ * scope. Changing, moving or trashing a card also checks it (and, for a
+ * column's move or trash, every card in it): a board card needs every board
+ * under it in scope; a comment an agent wrote is never touched (it may be a
+ * reply still being written); no comment goes to another board (A16). Returns
+ * the named card, if any.
  */
 async function fence(agent, mcp, name, args) {
   const out = id => new ToolError(`board ${id} is outside ${agent.name}'s scope`);
@@ -49,17 +52,38 @@ async function fence(agent, mcp, name, args) {
   if (args.item_id === undefined) return null;
   const { item, boardId } = await mcp.call('get_item', { item_id: args.item_id });
   if (!agent.scope.has(boardId)) throw out(boardId);
+  if (!CHANGES.has(name)) return item;
   const under = async id => {
     if (!agent.scope.has(id)) throw out(id);
     for (const it of (await mcp.call('get_board', { board_id: id })).items) {
       if (it.type === 'board' && it.data && it.data.childCanvasId) await under(it.data.childCanvasId);
     }
   };
-  if (CHANGES.has(name) && item.type === 'board' && item.data && item.data.childCanvasId) {
-    await under(item.data.childCanvasId);
+  const away = name === 'move_item' && args.board_id !== boardId;
+  const check = async card => {
+    const d = card.data || {};
+    if (card.type === 'comment' && d.agent) throw new ToolError(`comment ${card.id} was written by an agent: leave it`);
+    if (card.type === 'comment' && away) throw new ToolError(`comment ${card.id} can't move to another board`);
+    if (card.type === 'board' && d.childCanvasId) await under(d.childCanvasId);
+  };
+  await check(item);
+  if (item.type === 'column' && name !== 'update_item') {
+    for (const it of (await mcp.call('get_board', { board_id: boardId })).items) {
+      if (it.parentItemId === item.id) await check(it);
+    }
   }
   return item;
 }
+
+// The comment protocol's keys are the service's alone: the model can't mark a
+// comment answered (replyTo) or pass for another agent.
+const clean = it => {
+  if (!it.data) return it;
+  const data = Object.assign({}, it.data);
+  delete data.replyTo;
+  delete data.agent;
+  return Object.assign({}, it, { data });
+};
 
 // Comments an agent writes carry its card id, so they never ask an agent
 // themselves (comments.js skips them): no agent loops, no agent running another.
@@ -76,6 +100,8 @@ async function call(agent, mcp, name, args) {
         ? Object.assign(place(args), { board_id: agent.boardId })
         : { board_id: agent.boardId, items: args.items.map(place) };
   }
+  if (name === 'create_item' || name === 'update_item') args = clean(args);
+  if (name === 'create_items') args = Object.assign({}, args, { items: args.items.map(clean) });
   const item = await fence(agent, mcp, name, args);
   if (name === 'create_item') args = mark(agent, args);
   if (name === 'create_items') args = Object.assign({}, args, { items: args.items.map(it => mark(agent, it)) });

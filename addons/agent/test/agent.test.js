@@ -149,6 +149,21 @@ test('an agent reaches only its own board and listed boards that are open to age
       hits.map(h => h.canvasId),
       [open]
     );
+
+    // a comment never goes to another board, on its own or in a column (A16)
+    const note = await api('POST', '/api/item', {
+      canvasId: home,
+      type: 'comment',
+      x: 0,
+      y: 500,
+      data: { text: 'hi' },
+    });
+    assert.match(await tools.move_item.run({ item_id: note.id, board_id: open }), /can't move to another board/);
+    const col = await api('POST', '/api/item', { canvasId: home, type: 'column', x: 900, data: { title: 'Talk' } });
+    await api('POST', '/api/item', { canvasId: home, type: 'comment', parentItemId: col.id, data: { text: 'yo' } });
+    assert.match(await tools.move_item.run({ item_id: col.id, board_id: open }), /can't move to another board/);
+    assert.equal((await items(open)).filter(it => it.type !== 'note').length, 0);
+    assert.doesNotMatch(await tools.move_item.run({ item_id: note.id, board_id: home, x: 40 }), /Error/);
   } finally {
     await svc.close();
   }
@@ -163,12 +178,20 @@ test("a board card whose board is another agent's can't be changed, or exported 
       .data.childCanvasId;
     await api('POST', '/api/item', { canvasId: sub, type: 'agent', data: { name: 'Hermit' } });
     await api('POST', '/api/item', { canvasId: sub, type: 'note', data: { text: 'secret plans' } });
+    // and a column holding a board that is open to agents but not listed for Boss
+    const col = await api('POST', '/api/item', { canvasId: home, type: 'column', x: 900, data: { title: 'Projects' } });
+    const flagged = (
+      await api('POST', '/api/item', { canvasId: home, type: 'board', parentItemId: col.id, data: { title: 'Open' } })
+    ).data.childCanvasId;
+    await api('PATCH', '/api/canvas/' + flagged, { agentAccess: true });
     const boss = await agentOn(svc, home);
     assert.deepEqual([...boss.scope.keys()], [home]);
     const tools = Object.fromEntries(agentTools(boss, await svc.mcp(boss.id)).map(t => [t.name, t]));
     assert.equal(tools.export_board_markdown, undefined); // it would walk into Private
     assert.match(await tools.get_board.run({ board_id: sub }), /outside Boss's scope/);
-    const card = (await items(home)).find(it => it.type === 'board');
+    assert.match(await tools.delete_item.run({ item_id: col.id }), /outside Boss's scope/);
+    assert.match(await tools.move_item.run({ item_id: col.id, board_id: home, x: 0 }), /outside Boss's scope/);
+    const card = (await items(home)).find(it => it.type === 'board' && !it.parentItemId);
     assert.match(await tools.delete_item.run({ item_id: card.id }), /outside Boss's scope/);
     assert.match(await tools.move_item.run({ item_id: card.id, board_id: home, x: 0 }), /outside Boss's scope/);
     assert.match(
@@ -177,6 +200,7 @@ test("a board card whose board is another agent's can't be changed, or exported 
     );
     const after = (await api('GET', '/api/canvas/' + home)).items.find(it => it.id === card.id);
     assert.deepEqual([after.x, after._childTitle], [600, 'Private']);
+    assert.equal((await items(home)).find(it => it.id === col.id).x, 900);
     // an ordinary card on its own board is still Boss's to change
     const note = await api('POST', '/api/item', { canvasId: home, type: 'note', data: { text: 'mine' } });
     assert.doesNotMatch(await tools.delete_item.run({ item_id: note.id }), /Error/);
@@ -199,6 +223,25 @@ test("comments an agent writes never ask an agent, so agents can't set each othe
     assert.equal(comments.length, 3);
     assert.ok(comments.every(c => c.data.agent === looper.id));
     assert.equal(await svc.pollOnce(), 0);
+    // what an agent wrote (a reply being written, say) is left alone
+    assert.match(await tools.delete_item.run({ item_id: plain.id }), /written by an agent/);
+    assert.match(await tools.update_item.run({ item_id: plain.id, data: { text: 'x' } }), /written by an agent/);
+    // and it can't mark a person's question answered, or sign as another agent
+    const ask = await api('POST', '/api/item', {
+      canvasId: desk,
+      type: 'comment',
+      y: 900,
+      data: { text: '@agent hi' },
+    });
+    const fake = JSON.parse(
+      await tools.create_item.run({
+        board_id: desk,
+        type: 'comment',
+        data: { text: 'done', replyTo: ask.id, agent: 'i_someone' },
+      })
+    );
+    assert.deepEqual([fake.data.replyTo, fake.data.agent], [undefined, looper.id]);
+    assert.equal(await svc.pollOnce(), 1);
   } finally {
     await svc.close();
   }
@@ -260,6 +303,24 @@ test('a failed run answers with the error once instead of retrying every poll', 
     const reply = (await items(desk)).find(it => it.data.replyTo === ask.id);
     assert.equal(reply.data.text, "Sorry, I couldn't answer that: boom");
     assert.match((await items(gem)).find(it => it.data.replyTo).data.text, /provider "gemini" isn't supported yet/);
+  } finally {
+    await svc.close();
+  }
+});
+
+test('a placeholder trashed mid-run is logged, and the poll carries on', async () => {
+  let desk;
+  const trashing = async () => {
+    const card = (await items(desk)).find(it => it.data.replyTo);
+    await api('DELETE', '/api/item/' + card.id);
+    return { text: 'too late', usage: { input: 0, output: 0 }, toolCalls: 0 };
+  };
+  const svc = service({ fake: false, providers: { anthropic: trashing } });
+  try {
+    desk = await board('Gone', { agent: { name: 'Gone' } });
+    await api('POST', '/api/item', { canvasId: desk, type: 'comment', data: { text: '@agent hi' } });
+    assert.equal(await svc.pollOnce(), 1);
+    assert.ok(logs.some(l => JSON.parse(l).event === 'agent.reply_failed'));
   } finally {
     await svc.close();
   }

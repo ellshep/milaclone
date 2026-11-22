@@ -73,7 +73,12 @@ export class Service {
           log('agent.failed', { agent: agent.id, comment: comment.id, error: e.message });
           reply = `Sorry, I couldn't answer that: ${e.message}`;
         }
-        await mcp.call('update_item', { item_id: card.id, data: { text: reply } });
+        try {
+          await mcp.call('update_item', { item_id: card.id, data: { text: reply } });
+        } catch (e) {
+          // Someone trashed or moved the placeholder mid-run: keep polling the rest.
+          log('agent.reply_failed', { agent: agent.id, comment: comment.id, error: e.message });
+        }
         answered++;
       }
     }
