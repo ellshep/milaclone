@@ -21,6 +21,7 @@ import { commentContext, pending, replyCard, requestOf } from './comments.js';
 import { connect } from './mcp.js';
 import { Threads } from './memory.js';
 import { pageServer } from './page.js';
+import { orchestratorTools } from './orchestrator.js';
 import { anthropicProvider, fakeProvider } from './providers.js';
 import { runAgent } from './run.js';
 
@@ -54,6 +55,7 @@ export class Service {
 
   /** Runs one agent on a request; `history` is a page thread's earlier messages. */
   async ask(agent, request, context = '', history = []) {
+    const extraTools = agent.orchestrator ? orchestratorTools(this, agent) : [];
     return runAgent({
       agent,
       mcp: await this.mcp(agent.id),
@@ -61,7 +63,31 @@ export class Service {
       request,
       context,
       history,
+      extraTools,
     });
+  }
+
+  /** Answers one comment for `agent` (`items` being its board's cards). Returns the reply text. */
+  async answer(comment, agent, items) {
+    const mcp = await this.mcp(agent.id);
+    // The reply card goes up first: from then on the comment counts as answered,
+    // so a crash mid-run (after direct writes, say) never runs it again.
+    const card = await mcp.call('create_item', replyCard(comment, agent, 'Working on it…'));
+    let reply;
+    try {
+      reply = await this.ask(agent, requestOf(comment, agent), commentContext(comment, items));
+    } catch (e) {
+      // Answered with the failure, so it isn't retried (and paid for) every poll; ask again to retry.
+      log('agent.failed', { agent: agent.id, comment: comment.id, error: e.message });
+      reply = `Sorry, I couldn't answer that: ${e.message}`;
+    }
+    try {
+      await mcp.call('update_item', { item_id: card.id, data: { text: reply } });
+    } catch (e) {
+      // Someone trashed or moved the placeholder mid-run: keep polling the rest.
+      log('agent.reply_failed', { agent: agent.id, comment: comment.id, error: e.message });
+    }
+    return reply;
   }
 
   /** Answers every waiting `@agent` comment once. Returns how many it answered. */
@@ -72,27 +98,11 @@ export class Service {
       if (!boards.has(agent.boardId)) boards.set(agent.boardId, { items, agents: [] });
       boards.get(agent.boardId).agents.push(agent);
     }
+    const orchestrators = new Set(all.filter(a => a.agent.orchestrator).map(a => a.agent.id));
     let answered = 0;
     for (const { items, agents } of boards.values()) {
-      for (const { comment, agent } of pending(items, agents)) {
-        const mcp = await this.mcp(agent.id);
-        // The reply card goes up first: from then on the comment counts as answered,
-        // so a crash mid-run (after direct writes, say) never runs it again.
-        const card = await mcp.call('create_item', replyCard(comment, agent, 'Working on it…'));
-        let reply;
-        try {
-          reply = await this.ask(agent, requestOf(comment, agent), commentContext(comment, items));
-        } catch (e) {
-          // Answered with the failure, so it isn't retried (and paid for) every poll; ask again to retry.
-          log('agent.failed', { agent: agent.id, comment: comment.id, error: e.message });
-          reply = `Sorry, I couldn't answer that: ${e.message}`;
-        }
-        try {
-          await mcp.call('update_item', { item_id: card.id, data: { text: reply } });
-        } catch (e) {
-          // Someone trashed or moved the placeholder mid-run: keep polling the rest.
-          log('agent.reply_failed', { agent: agent.id, comment: comment.id, error: e.message });
-        }
+      for (const { comment, agent } of pending(items, agents, orchestrators)) {
+        await this.answer(comment, agent, items);
         answered++;
       }
     }

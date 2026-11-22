@@ -78,15 +78,17 @@ async function fence(agent, mcp, name, args) {
   return item;
 }
 
-// The comment protocol's and memory card's keys are the service's alone: the
-// model can't mark a comment answered (replyTo), pass for another agent, or
-// make a memory card.
+// The comment protocol's, delegations' and memory card's keys are the
+// service's alone: the model can't mark a comment answered (replyTo), pass for
+// another agent, forge a delegation or make a memory card.
 const clean = it => {
   if (!it.data) return it;
   const data = Object.assign({}, it.data);
   delete data.replyTo;
   delete data.agent;
   delete data.agentMemory;
+  delete data.delegatedBy;
+  delete data.delegateTo;
   return Object.assign({}, it, { data });
 };
 
@@ -121,6 +123,7 @@ async function call(agent, mcp, name, args) {
 /** `[{ name, description, inputSchema, run }]` for a provider; run returns text, never throws a ToolError. */
 export function agentTools(agent, mcp) {
   const allowed = new Set(ALLOWED[agent.writes]);
+  if (agent.orchestrator) allowed.add('list_boards'); // every board's title (W4.1)
   return mcp.tools
     .filter(t => allowed.has(t.name))
     .map(t => {

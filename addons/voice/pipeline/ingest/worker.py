@@ -4,9 +4,12 @@ so uploads return at once and notes are processed in arrival order."""
 from __future__ import annotations
 
 import threading
+import time
 
 from .logs import log
-from .process import Deps, process_audio
+from .process import Deps, delete_old_audio, process_audio
+
+SWEEP_SECONDS = 3600  # how often old audio is looked for
 
 
 class Worker:
@@ -49,8 +52,18 @@ class Worker:
                 pass
         return True
 
+    def sweep(self) -> None:
+        try:
+            delete_old_audio(self.deps)
+        except Exception as e:  # retention must never stop the worker
+            log("worker.sweep_failed", error=str(e))
+
     def _run(self) -> None:
+        next_sweep = 0.0
         while not self._stop.is_set():
+            if time.monotonic() >= next_sweep:
+                self.sweep()
+                next_sweep = time.monotonic() + SWEEP_SECONDS
             if not self.run_once():
                 self._wake.wait(self.poll_seconds)
                 self._wake.clear()
