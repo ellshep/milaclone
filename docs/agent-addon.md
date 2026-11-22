@@ -25,7 +25,7 @@ acceptance test lands.
 | A7  | What it persists      | A `writes` field: **chat only** (never touches the board), **propose** (cards land in a column named "Proposed by <agent>"; drag out to accept, trash to reject) or **direct**. On the page, any reply can be pinned to the board by hand                                                                                                                                             |
 | A8  | Memory                | A `memory` field: **ephemeral**, **thread** (kept in the add-on's own database) or **persistent** (the agent also keeps one memory note card on the board, which it rewrites and the owner can edit)                                                                                                                                                                                  |
 | A9  | Tool surface          | One MCP server in Node, `addons/mcp/`, about twelve tools shaped like the fork's core set, outline first. The agent service, Claude Code and Claude Desktop all use it                                                                                                                                                                                                                |
-| A10 | Auth                  | An optional `API_KEY` env var protects every `/api/*` route with an `X-API-Key` header (unset = today's open tailnet behaviour). The MCP endpoint takes a bearer token. The task API keeps its own                                                                                                                                                                                    |
+| A10 | Auth                  | The MCP endpoint takes a bearer token; the task API keeps its own. No key on `/api/*`: the page would have to hand it to every browser on the tailnet, so it would guard nothing (dropped 2026-11-22)                                                                                                                                                                                 |
 | A11 | Runtime               | One Tool Runner loop per agent inside the service (Anthropic SDK; other providers through the pipeline's `llm.py` pattern). Managed Agents is a later `runtime` value per agent, not a split by surface                                                                                                                                                                               |
 | A12 | Context               | Three layers in cache order: persona and tools (frozen); the board outline, one line per card, capped, plus the memory card; everything else on demand through tools. A board agent never sees outside its scope                                                                                                                                                                      |
 | A13 | Comment protocol      | The service polls for new `@agent` comments. Context is the thread (comments chained by `data.replyTo`), the cards the comment overlaps or shares a column with, and the outline. The reply is a comment card below it with `replyTo`                                                                                                                                                 |
@@ -49,11 +49,6 @@ to a chat column, plus the agents' threads and receipts.
 
 ## W1 · Core: the generic pieces
 
-- [ ] **W1.1 API key.** `API_KEY` set → every `/api/*` route requires
-      `X-API-Key`; unset → unchanged. The frontend sends it from a `meta` tag
-      when the server has one.
-  - Acceptance: with the key set, a request without the header gets 401 and
-    the page still works; unset, `test/api.test.js` passes as today.
 - [ ] **W1.2 `agent` item type.** A form card with `name`, `persona`,
       `boardNotes`, `provider`, `model`, `effort`, `scope` (this board, or this
       board plus listed boards), `createBoards`, `writes`, `memory`, `runtime`.
