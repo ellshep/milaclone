@@ -37,15 +37,16 @@ const isReference = card =>
 const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 /**
- * Orders tasks. `entries` are `{ task, card }` already filtered to rankable
- * lists; `today` is YYYY-MM-DD. Returns `{ tasks, counts }`; each task is the
- * stored task plus `listId`, `listTitle`, `tier` and `dueIn` (days, negative
- * when overdue, null when undated).
+ * Orders tasks. `entries` are `{ task, card, board }` already filtered to
+ * rankable lists (`board` is the title of the board the list sits on);
+ * `today` is YYYY-MM-DD. Returns `{ tasks, counts }`; each task is the stored
+ * task plus `listId`, `listTitle`, `boardTitle`, `tier` and `dueIn` (days,
+ * negative when overdue, null when undated).
  */
 function orderTasks(entries, today) {
   const t0 = dayNum(today);
   const rows = [];
-  for (const { task, card } of entries) {
+  for (const { task, card, board } of entries) {
     if (task.done || task.stale || isBlank(task)) continue;
     const dueIn = typeof task.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(task.due) ? dayNum(task.due) - t0 : null;
     let tier;
@@ -57,7 +58,8 @@ function orderTasks(entries, today) {
       const nudge = Math.max(-1, Math.min(1, Math.trunc(num(task.rankNudge) || 0)));
       tier = TIERS[Math.max(0, Math.min(2, base - nudge))];
     }
-    rows.push(Object.assign({}, task, { listId: card.id, listTitle: card.data.title || 'To-do', tier, dueIn }));
+    const listTitle = card.data.title || 'To-do';
+    rows.push(Object.assign({}, task, { listId: card.id, listTitle, boardTitle: board || null, tier, dueIn }));
   }
   const rank = { overdue: 0, today: 1, placed: 2, soon: 3, starred: 4, rest: 5 };
   rows.sort((a, b) => {
@@ -82,28 +84,31 @@ function orderTasks(entries, today) {
   };
 }
 
-/** Every to-do card that counts for the focus order: not Reference, not under Templates. */
+/**
+ * Every to-do card that counts for the focus order (not Reference, not under
+ * Templates) as `{ card, board }`, `board` being the title of its board.
+ */
 function rankableCards() {
-  const inTemplates = new Map();
-  return stmt.todoItems
-    .all()
-    .map(rowToItem)
-    .filter(card => {
-      if (isReference(card)) return false;
-      if (!inTemplates.has(card.canvasId)) {
-        const trail = breadcrumb(card.canvasId);
-        inTemplates.set(card.canvasId, trail.length > 1 && /^templates$/i.test((trail[1].title || '').trim()));
-      }
-      return !inTemplates.get(card.canvasId);
-    });
+  const boards = new Map(); // canvasId → board title, or null under Templates
+  const out = [];
+  for (const card of stmt.todoItems.all().map(rowToItem)) {
+    if (isReference(card)) continue;
+    if (!boards.has(card.canvasId)) {
+      const trail = breadcrumb(card.canvasId);
+      const templates = trail.length > 1 && /^templates$/i.test((trail[1].title || '').trim());
+      boards.set(card.canvasId, templates ? null : trail.at(-1)?.title || 'Board');
+    }
+    if (boards.get(card.canvasId) !== null) out.push({ card, board: boards.get(card.canvasId) });
+  }
+  return out;
 }
 
 /** The focus order as of `now`: `{ today, tasks, counts }`, tasks cut to `limit`. */
 function focusView({ limit = 3, now = new Date() } = {}) {
   const today = dayOf(now, tz());
   const entries = [];
-  for (const card of rankableCards()) {
-    for (const task of Array.isArray(card.data.tasks) ? card.data.tasks : []) entries.push({ task, card });
+  for (const { card, board } of rankableCards()) {
+    for (const task of Array.isArray(card.data.tasks) ? card.data.tasks : []) entries.push({ task, card, board });
   }
   const { tasks, counts } = orderTasks(entries, today);
   return { today, tasks: tasks.slice(0, limit), counts };

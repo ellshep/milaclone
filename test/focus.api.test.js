@@ -167,6 +167,7 @@ test('GET /api/focus and view=focus share one order; Reference lists and Templat
     ['w-over', 'w-star', 'w-rest']
   );
   assert.deepEqual(board.counts, { overdue: 1, dueToday: 0, open: 3 });
+  assert.deepEqual([board.tasks[0].listTitle, board.tasks[0].boardTitle], ['Work', 'Home']);
 
   const viaApi = await json('GET', '/api/tasks?view=focus&limit=2', undefined, TOKEN);
   assert.equal(viaApi.status, 200);

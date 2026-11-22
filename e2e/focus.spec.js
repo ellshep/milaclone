@@ -91,14 +91,18 @@ test('List: drag to reorder saves placements, and Reset clears them', async ({ p
   await page.goto('/focus#list');
   const mine = page.locator('#list .row', { hasText: /Sort the garage|Fix the bike light|Order printer ink/ });
   await expect(mine).toHaveText([/Sort the garage/, /Fix the bike light/, /Order printer ink/]);
+  // each row says which list and board it's on
+  await expect(mine.first().locator('.where')).toHaveText('Focus list in Home');
   // overdue tasks are marked and can't be dragged
   const overdue = page.locator('#list .row.overdue', { hasText: 'Return library books' });
   await expect(overdue.locator('.due')).toContainText('days overdue');
-  await expect(overdue).not.toHaveAttribute('draggable', 'true');
+  await expect(overdue).not.toHaveClass(/movable/);
+  await expect(overdue.locator('.grip svg')).toHaveCount(0);
 
   const saved = page.waitForResponse(r => r.url().endsWith('/api/focus/order'));
   await page
     .locator('#list .row', { hasText: 'Order printer ink' })
+    .locator('.grip')
     .dragTo(page.locator('#list .row', { hasText: 'Sort the garage' }), { targetPosition: { x: 20, y: 4 } });
   await saved;
   await expect(mine).toHaveText([/Order printer ink/, /Sort the garage/, /Fix the bike light/]);
@@ -110,6 +114,37 @@ test('List: drag to reorder saves placements, and Reset clears them', async ({ p
 
   await page.getByRole('button', { name: 'Reset order' }).click();
   await expect(mine).toHaveText([/Sort the garage/, /Fix the bike light/, /Order printer ink/]);
+  await expect(page.getByRole('button', { name: 'Reset order' })).toBeHidden();
+});
+
+test('List: a finger drags a row by its grip', async ({ page, request }) => {
+  await addList(request, 'Focus touch', [
+    task('Clean the oven', { createdAt: 5 }),
+    task('Defrost the freezer', { createdAt: 6 }),
+  ]);
+  await page.goto('/focus#list');
+  const mine = page.locator('#list .row', { hasText: /Clean the oven|Defrost the freezer/ });
+  await expect(mine).toHaveText([/Clean the oven/, /Defrost the freezer/]);
+
+  // Chromium turns these into touch pointer events, as a phone sends them.
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+  const at = async (loc, dy) => {
+    const b = await loc.boundingBox();
+    return { x: b.x + b.width / 2, y: b.y + dy(b) };
+  };
+  const from = await at(mine.nth(1).locator('.grip'), b => b.height / 2);
+  const to = await at(mine.nth(0), () => 4);
+  const touch = (type, p) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [p] : [] });
+  const saved = page.waitForResponse(r => r.url().endsWith('/api/focus/order'));
+  await touch('touchStart', from);
+  for (let i = 1; i <= 8; i++) {
+    await touch('touchMove', { x: from.x, y: from.y + ((to.y - from.y) * i) / 8 });
+  }
+  await touch('touchEnd');
+  expect((await saved).ok()).toBe(true);
+  await expect(mine).toHaveText([/Defrost the freezer/, /Clean the oven/]);
+  await page.getByRole('button', { name: 'Reset order' }).click();
   await expect(page.getByRole('button', { name: 'Reset order' })).toBeHidden();
 });
 

@@ -83,7 +83,8 @@ curl -sS "https://mila.your-tailnet.ts.net/api/tasks?status=open" \
 The ranked open tasks the focus page, the watch and the morning digest share
 (`focus.js`). `limit` is 1–1000 or `all` (default 3). Returns
 `{ today, tasks, counts }`: `today` is the date in `TASK_TZ`; each task carries
-`listId`, `listTitle`, `tier` and `dueIn` (days, negative when overdue);
+`listId`, `listTitle`, `boardTitle` (the board the list sits on), `tier` and
+`dueIn` (days, negative when overdue);
 `counts` is `{ overdue, dueToday, open }`.
 
 The order:
