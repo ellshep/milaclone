@@ -5,7 +5,7 @@ The one list of open work. Agents and people read it before starting and update 
 - One line per item: ID, what's wrong or wanted, where, and the fix if known. Link a longer spec only when one exists.
 - **Now** is what's being worked on, **Next** is ready to pick up, **Later** is accepted but not soon, **Needs a decision** is blocked on the owner.
 - When an item ships, delete its line in that PR (the PR is the record). **Closed** keeps the last few for reference; trim it past ten lines.
-- IDs never get reused. `AU` = code audit finding, `DM` = deep-module candidate, `V` = voice add-on, `U` = `docs/next-updates.md`.
+- IDs never get reused. `AU` = code audit finding, `DM` = deep-module candidate, `V` = voice add-on, `U` = `docs/next-updates.md`, `AG` = board agents (`docs/agent-addon.md`).
 - Word cap 2,000 (`npm run check:docs`). If it doesn't fit, it's too detailed for this file.
 
 Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-codebase-architecture` pass; full write-up kept outside the repo), `docs/next-updates.md`, and the open items from the old voice handoff notes.
@@ -22,6 +22,7 @@ Nothing in progress: pick from Next.
 - **AU9** Cut-and-paste leaves an invisible, unselectable line on the old board when one end stays behind (`db.js:248`, `lines.js:109`). Fix: in `moveItemDeep`, turn that end into a free point at the card's old position.
 - **AU10** Copy/duplicate within 400 ms of an edit miss the last words (`clipboard.js:42`). Fix: `await flushAllSaves(false)` at the start of `placeAll`.
 - **V1** Next phases, planned with the owner on 2026-11-20 (decisions N1–N17, work items M1–M5 in `docs/next-phases.md`): Microsoft To Do import (M1), focus order, `/focus` page, nightly ranking and retention (M2), filing into lists (M3), Pebble watch app (M4), morning digest at 7:30 on weekdays, which settles V3 (M5). Replaces V2.
+- **AG1** Board agents, planned with the owner on 2026-11-22 (decisions A1–A22, work items W1–W6 in `docs/agent-addon.md`): API key, `agent` card and board access flag (W1), the MCP server (W2), the agent service and page (W3), the Home orchestrator (W4), Claude Code briefs (W5). Start with W1.
 
 ## Later
 
