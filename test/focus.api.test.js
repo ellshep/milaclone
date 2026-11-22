@@ -320,7 +320,12 @@ test('M3.3 nightly filing: the focus view marks Inbox tasks, and PUT /api/tasks/
     ],
   });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { ranked: 1, skipped: [], moved: 1, movesSkipped: ['t_missing'] });
+  assert.deepEqual(r.body, {
+    ranked: 1,
+    skipped: [],
+    moved: 1,
+    movesSkipped: [{ id: 't_missing', reason: 'no list has it any more' }],
+  });
   const filed = (await json('GET', '/api/focus?limit=all')).body.tasks.find(x => x.id === a.id);
   assert.equal(filed.listId, errands.id);
   assert.deepEqual(
@@ -340,4 +345,18 @@ test('M3.3 nightly filing: the focus view marks Inbox tasks, and PUT /api/tasks/
   for (const moves of ['x', [{ id: b.id }], [{ id: b.id, listId: errands.id, reason: 'r'.repeat(501) }]]) {
     assert.equal((await put({ ranks: [], moves })).status, 400, JSON.stringify(moves));
   }
+
+  // planned on a stale read: the task left the Inbox, or was sent back to it, since
+  const other = await todo(rootCanvasId, 'Elsewhere', []);
+  await json('PATCH', '/api/tasks/' + b.id, { listId: other.id }, TOKEN);
+  const fileA = { id: a.id, listId: errands.id, reason: 'x' };
+  await json('PATCH', '/api/tasks/' + a.id, { listId: inboxId }, TOKEN); // the owner sends a back
+  const stale = await put({ ranks: [], moves: [{ id: b.id, listId: errands.id, reason: 'x' }, fileA] });
+  assert.deepEqual(stale.body.movesSkipped, [
+    { id: b.id, reason: 'it left the Inbox before the move' },
+    { id: a.id, reason: 'it was moved back by api' },
+  ]);
+  assert.equal(stale.body.moved, 0);
+  const now = (await json('GET', '/api/focus?limit=all')).body.tasks;
+  assert.deepEqual([now.find(x => x.id === a.id).listId, now.find(x => x.id === b.id).listId], [inboxId, other.id]);
 });

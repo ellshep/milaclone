@@ -143,12 +143,14 @@ ids are skipped, and they lose any nudge.
 Optional `moves: [{ id, listId, reason }]` file tasks in the same transaction
 (M3.3): each task goes to the end of `listId` with `movedBy: "ranker"` and the
 reason as `moveReason`. A `listId` that isn't a live to-do list outside
-Templates refuses the whole write. The ranker sends at most 10 a night, only
-Inbox tasks, never one the owner sent back.
+Templates refuses the whole write. A move is skipped, not refused, when its
+task is gone, is no longer in the Inbox, or was last moved by anyone but the
+ranker (a task sent back to the Inbox stays there). The ranker sends at most 10
+a night.
 
 Returns `{ ranked, skipped, moved, movesSkipped }`: `skipped` is the placed ids
-and ids no list has, `movesSkipped` the moves whose task no list has. A bad body
-is a `400` and changes nothing.
+and ids no list has, `movesSkipped` is `[{ id, reason }]` for the skipped moves.
+A bad body is a `400` and changes nothing.
 
 ### `PATCH /api/tasks/:id` — mark done, pin, edit, move
 

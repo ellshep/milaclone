@@ -81,13 +81,12 @@ class TasksClient:
         return self._call("GET", "/api/tasks/priorities").get("text")
 
     def filing_log(self, title: str) -> tuple[dict | None, str]:
-        """The document card on Home titled `title` that holds `runs` (the
+        """The document card on Home titled `title` and marked `filingLog` (the
         ranker's filing log), or None; and Home's id. Board routes, not the task API."""
         home = self._call("GET", "/api/root")["rootCanvasId"]
         items = self._call("GET", f"/api/canvas/{home}").get("items", [])
         card = next((it for it in items if it.get("type") == "document" and not it.get("parentItemId")
-                     and (it.get("data") or {}).get("title") == title
-                     and isinstance(it["data"].get("runs"), list)), None)
+                     and (it.get("data") or {}).get("title") == title and it["data"].get("filingLog")), None)
         return card, home
 
     def update_item(self, item_id: str, data: dict) -> dict:

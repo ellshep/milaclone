@@ -12,7 +12,7 @@
 
 const crypto = require('crypto');
 const express = require('express');
-const { db, stmt, id, rootCanvasId, rowToItem, breadcrumb, inboxCard } = require('./db');
+const { db, stmt, id, rootCanvasId, rowToItem, breadcrumb, inboxCard, INBOX_KEY } = require('./db');
 const { isBlank, newTask, moveTask, applyRanks } = require('./tasklist');
 const { focusView, digestView, parseLimit, inTemplates, hasLabel, LIMIT_MAX } = require('./focus');
 
@@ -357,7 +357,9 @@ router.get('/api/tasks/priorities', (req, res) => {
 // The nightly ranking's write, in one transaction so it lands whole or not at
 // all. Listed tasks get their score, reason and nudge; every other task loses
 // its nudge. Placed tasks and ids no list has are skipped and returned. Then the
-// moves are filed; a move to a list that isn't one refuses the whole write.
+// moves are filed; a move to a list that isn't one refuses the whole write. A
+// move whose task has since left the Inbox, or was last moved by anyone but the
+// ranker, is skipped with its reason: the read it was planned on is stale.
 router.put(
   '/api/tasks/rank',
   handle((req, res) => {
@@ -376,22 +378,25 @@ router.put(
       for (const m of moves) targetList(cards, m.listId); // every target checked before anything moves
       let filed = 0;
       const missed = [];
+      const inbox = stmt.getMeta.get(INBOX_KEY)?.value;
       for (const m of moves) {
         const dest = targetList(cards, m.listId);
         const card = cards.find(c => tasksOf(c).some(t => t.id === m.id));
-        if (!card) {
-          missed.push(m.id);
+        const task = card && tasksOf(card).find(t => t.id === m.id);
+        const why = !card
+          ? 'no list has it any more'
+          : card.id !== inbox
+            ? 'it left the Inbox before the move'
+            : task.movedBy && task.movedBy !== 'ranker'
+              ? `it was moved back by ${task.movedBy}`
+              : card === dest
+                ? 'it is in that list already'
+                : null;
+        if (why) {
+          missed.push({ id: m.id, reason: why });
           continue;
         }
-        if (card === dest) continue;
-        moveTask(
-          card,
-          dest,
-          tasksOf(card).find(t => t.id === m.id),
-          'ranker',
-          m.reason,
-          now
-        );
+        moveTask(card, dest, task, 'ranker', m.reason, now);
         saveCard(card);
         saveCard(dest);
         filed++;
