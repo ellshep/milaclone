@@ -19,6 +19,20 @@ const slim = it => {
   return Object.assign({}, it, { data });
 };
 
+// Data keys that tie a card to other boards: re-pointing a board card would orphan
+// its child board, and a shortcut could be aimed anywhere. A line's ends must stay
+// on the line's own board.
+const TIES = ['childCanvasId', 'targetCanvasId'];
+function checkTies(data, items) {
+  for (const k of TIES) if (k in data) throw new BoardError(`${k} can't be changed: it ties the card to its board`);
+  for (const k of ['from', 'to']) {
+    const end = data[k];
+    if (end && typeof end === 'object' && end.id && !items.some(i => i.id === end.id)) {
+      throw new BoardError(`a line's ${k} must be a card on the same board, and ${end.id} isn't`);
+    }
+  }
+}
+
 const byPosition = (a, b) => (a.y || 0) - (b.y || 0) || (a.x || 0) - (b.x || 0);
 
 // A16: only the owner sets an agent's scope, so agents never make, edit or move agent cards.
@@ -193,6 +207,7 @@ export function registerTools(server, board, agent = null) {
       if (item.type === 'agent') throw new BoardError(NO_AGENTS);
       const body = placement(a);
       if (a.data) {
+        checkTies(a.data, b.items);
         const data = Object.assign({}, a.data);
         // The board rebuilds a rich card's body from `body`; a bare `text` would leave the old one showing.
         if (RICH.has(item.type) && typeof data.text === 'string') {
@@ -238,9 +253,11 @@ export function registerTools(server, board, agent = null) {
   tool('restore_item', 'Bring a deleted card back from the trash.', { item_id: z.string() }, async a => {
     const entry = (await board.call('GET', '/api/trash')).items.find(t => t.id === a.item_id);
     if (!entry) throw new BoardError(`card ${a.item_id} is not in the trash (only the card that was deleted is)`);
+    // A trashed board answers 404, so its flag can't be read: say only that it's trashed.
     if (!entry.restorable) throw new BoardError(`card ${a.item_id} can't be restored: its board is in the trash`);
     const c = await board.canvas(entry.canvasId); // readability before anything about the card itself
     if (!c.readable) throw new BoardError(blocked(c.canvas.title));
+    if (entry.type === 'agent') throw new BoardError(NO_AGENTS); // restoring one would widen access
     const out = await board.call('POST', `/api/item/${a.item_id}/restore`);
     log('restore_item', { boardId: entry.canvasId, itemId: a.item_id });
     return slim(out);
