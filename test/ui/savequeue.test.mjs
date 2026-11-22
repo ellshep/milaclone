@@ -218,28 +218,79 @@ describe('save queue', () => {
     expect(sent[1].body.baseTasks).toEqual([{ id: 't1', text: 'Milk' }]); // so Eggs isn't read as deleted
   });
 
-  it('keeps the base while edits are queued, so a task added elsewhere survives the next save', async () => {
-    // The server merges like routes.js: tasklist.merge(baseTasks, stored, mine).
-    let stored = [{ id: 't1', text: 'M' }];
+  // Save 1 lands on a server that merges like routes.js (tasklist.merge), but its
+  // reply is held; meanwhile `elsewhere` changes the stored list and the user
+  // queues save 2 (a list, or a function that edits save 1's list in place, as
+  // cards.js does), so the surface keeps its copy. Returns the stored list after save 2.
+  async function whileInFlight(start, save1, elsewhere, save2) {
+    let stored = start;
     let land;
     const send = vi.fn(async (id, body) => {
-      if (!land) await new Promise(r => (land = r)); // hold the first save in flight
       stored = tasklist.merge(body.baseTasks, stored, body.data.tasks);
+      if (!land) await new Promise(r => (land = r)); // hold the first reply
       return { id, data: { tasks: stored } };
     });
     const q = createSaveQueue({ send, delay: 400, current: () => undefined });
-    q.track('a', stored);
-    q.edit('a', { tasks: [{ id: 't1', text: 'Mi' }] });
+    q.track('a', start);
+    q.edit('a', { tasks: save1 });
     const first = q.flush('a');
     await vi.waitFor(() => expect(land).toBeTypeOf('function'));
-    stored = [...stored, { id: 'v1', text: 'Call mum' }]; // POST /api/tasks from voice meanwhile
-    q.edit('a', { tasks: [{ id: 't1', text: 'Mil' }] }); // still typing: the screen won't show the merge
+    stored = elsewhere(stored);
+    q.edit('a', { tasks: typeof save2 === 'function' ? save2(save1) : save2 });
     land();
     await first;
     await q.flush('a');
-    expect(stored).toEqual([
+    return stored;
+  }
+
+  it('a task added elsewhere while edits are queued survives the next save', async () => {
+    const out = await whileInFlight(
+      [{ id: 't1', text: 'M' }],
+      [{ id: 't1', text: 'Mi' }],
+      s => [...s, { id: 'v1', text: 'Call mum' }], // POST /api/tasks from voice
+      [{ id: 't1', text: 'Mil' }]
+    );
+    expect(out).toEqual([
       { id: 't1', text: 'Mil' },
       { id: 'v1', text: 'Call mum' },
     ]);
+  });
+
+  it('the next save does not undo an edit made elsewhere after the first one landed', async () => {
+    const out = await whileInFlight(
+      [
+        { id: 'f', text: 'Floss', done: false },
+        { id: 's', text: 'Stretch' },
+      ],
+      [
+        { id: 'f', text: 'Floss', done: true },
+        { id: 's', text: 'Stretch' },
+      ],
+      s => s.map(t => (t.id === 'f' ? { ...t, done: false } : t)), // the laptop unticks Floss
+      tasks => {
+        tasks[1].text = 'Stretch more'; // the same list, edited in place
+        return tasks;
+      }
+    );
+    expect(out).toEqual([
+      { id: 'f', text: 'Floss', done: false },
+      { id: 's', text: 'Stretch more' },
+    ]);
+  });
+
+  it('a task added by the first save and moved away meanwhile is not brought back', async () => {
+    const out = await whileInFlight(
+      [{ id: 't1', text: 'Milk' }],
+      [
+        { id: 't1', text: 'Milk' },
+        { id: 'n', text: 'Bread' },
+      ],
+      s => s.filter(t => t.id !== 'n'), // PATCH /api/tasks/n { listId } moves it to another list
+      [
+        { id: 't1', text: 'Oat milk' },
+        { id: 'n', text: 'Bread' },
+      ]
+    );
+    expect(out).toEqual([{ id: 't1', text: 'Oat milk' }]);
   });
 });

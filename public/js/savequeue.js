@@ -8,8 +8,9 @@
 // For each item: fields edited inside the debounce window go out together as
 // one PATCH; a to-do edit carries `baseTasks`, the list as this surface last
 // got it from the server, so the server can merge three ways; after a to-do
-// save with nothing else pending, the server's list becomes the new base. A
-// save that may work later goes back in the queue and is retried with backoff,
+// save the server's list becomes the new base (or, while more edits are
+// pending and the surface keeps its own copy, the list that save sent). A save
+// that may work later goes back in the queue and is retried with backoff,
 // sending each field's *current* value at that moment (never the failed one, so
 // a retry can't undo a newer edit). After `retryDelay` gives up (null) the edit
 // stays queued for the next edit or flush. A rejected save is not retried. An
@@ -66,6 +67,7 @@ export function createSaveQueue({ send, delay, current, onSaved = () => {}, retr
     stale.delete(id);
     const body = { data: patch };
     if (patch.tasks) body.baseTasks = bases.get(id) || [];
+    const sentTasks = patch.tasks && clone(patch.tasks); // surfaces edit the list in place after this
     inflight.set(id, (inflight.get(id) || 0) + 1);
     let saved;
     try {
@@ -77,11 +79,13 @@ export function createSaveQueue({ send, delay, current, onSaved = () => {}, retr
     if (saved === null) return requeue(id, patch);
     retries.delete(id);
     if (!saved) return;
-    // The base is the list the surface's copy grew from, so it moves only when the
-    // surface adopts the merged list: after a to-do save (a title or label save
-    // must not make a stale list look like deletions) with nothing else pending
-    // (the surface keeps its copy then, so a task added elsewhere would look deleted).
-    if (patch.tasks && Array.isArray(saved.data?.tasks) && !isPending(id)) bases.set(id, clone(saved.data.tasks));
+    // The base is the list the surface's copy grew from. Only a to-do save moves it
+    // (a title or label save must not make a stale list look like deletions): to
+    // the merged list, which the surface then shows, or while more edits are
+    // pending and the surface keeps its own copy, to the list this save sent.
+    if (patch.tasks && Array.isArray(saved.data?.tasks)) {
+      bases.set(id, isPending(id) ? sentTasks : clone(saved.data.tasks));
+    }
     onSaved(id, saved, patch);
   }
 
