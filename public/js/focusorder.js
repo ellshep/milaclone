@@ -28,6 +28,8 @@ export function dueLabel(task) {
  * `tasks` is the whole focus order. Placed tasks sort above every unplaced
  * one, so the drop places every movable task from the top down to the dropped
  * one (or to the lowest task already placed), which keeps the order as shown.
+ * Each id is sent once: lists made through the API can repeat a task id, and
+ * the server rejects repeats.
  */
 export function placementAfterDrop(tasks, dragId, targetId, after) {
   const movable = tasks.filter(t => !isFixed(t));
@@ -43,5 +45,5 @@ export function placementAfterDrop(tasks, dragId, targetId, after) {
   order.forEach((t, i) => {
     if (t.tier === 'placed') last = Math.max(last, i);
   });
-  return order.slice(0, last + 1).map(t => t.id);
+  return [...new Set(order.slice(0, last + 1).map(t => t.id))];
 }

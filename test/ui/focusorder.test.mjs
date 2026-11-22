@@ -46,6 +46,11 @@ describe('placementAfterDrop', () => {
     expect(placementAfterDrop(placed, 'a', 'c', true)).toEqual(['b', 'c', 'a']);
   });
 
+  it('sends a task id that two lists share only once', () => {
+    const shared = [t('a'), t('x'), t('a'), t('b'), t('c')];
+    expect(placementAfterDrop(shared, 'c', 'b', false)).toEqual(['a', 'x', 'c']);
+  });
+
   it('returns null when nothing would move or a fixed task is involved', () => {
     expect(placementAfterDrop(tasks, 'a', 'b', false)).toBeNull(); // already right above
     expect(placementAfterDrop(tasks, 'b', 'a', true)).toBeNull(); // already right below
