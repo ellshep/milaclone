@@ -6,5 +6,3 @@ commands:
   test: 'npm test && npm run test:ui'
   lint: 'npm run lint && npm run format:check && npm run check:docs'
   format: 'npm run format'
-ignore_patterns:
-  - 'package-lock.json'

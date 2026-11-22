@@ -14,7 +14,9 @@ Describe the problem you have, not only the feature you want. The app aims to st
 
 ## Shipping a change
 
-Work in a [treehouse](https://github.com/kunchenguid/treehouse) worktree (`treehouse` from the repo root; `.worktreeinclude` seeds `.env`), never in the deploy checkout. Push through the [no-mistakes](https://github.com/kunchenguid/no-mistakes) gate, `git push no-mistakes <branch>`, or let the agent run `/no-mistakes`. The gate runs the targeted commands in `.no-mistakes.yaml`, has Codex review and fix the change, then pushes and opens the PR. Codex runs `gpt-6.2-sol`; the agent starting a run sets the reviewer effort to match the risk of the change by editing `agent_config.codex.effort` in `~/.no-mistakes/config.yaml` before `axi run` (`low`, `medium` or `high`): `low` for docs and copy, `high` for `db.js`, `routes.js`, `tasklist.js`, `focus.js` and the add-ons.
+Reserve the deploy checkout for deployments.
+
+From the repo root, run `treehouse get -b <branch>` to create and check out a feature branch in a [Treehouse](https://github.com/kunchenguid/treehouse) worktree. The `.worktreeinclude` file seeds the repo-root `.env` into that worktree. Commit there, then use `git push no-mistakes <branch>` to ship through the [no-mistakes](https://github.com/kunchenguid/no-mistakes) gate, or have Claude Code run `/no-mistakes` from the same branch. The gate runs the targeted commands in `.no-mistakes.yaml`, has Codex review and fix the change, then pushes and opens the PR. Codex runs `gpt-6.2-sol`. Before starting the run, the agent sets `agent_config.codex.effort` in `~/.no-mistakes/config.yaml` to match the risk. Use `low` for docs and copy, `high` for changes to `db.js`, `routes.js`, `tasklist.js`, `focus.js` or the add-ons, and `medium` for changes between those risk levels.
 
 ## Pull requests
 
