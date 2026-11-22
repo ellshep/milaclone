@@ -4,7 +4,7 @@ import { state } from './state.js';
 import { api } from './api.js';
 import { isLocked, toast, clipMarker } from './util.js';
 import { refreshItem } from './cards.js';
-import { selectIds, selectedItems } from './editing.js';
+import { selectIds, selectedItems, flushAllSaves } from './editing.js';
 import { closeCtx } from './menus.js';
 import { reloadView } from './main.js';
 
@@ -40,6 +40,7 @@ export function copySelected(cut, viaEvent = false) {
 // to the first one, which lands at (x, y). Cards from another board, whose
 // positions we don't have here, cascade instead.
 async function placeAll(ids, cut, x, y) {
+  await flushAllSaves(false); // the server copies what it has: send edits still in the 400 ms debounce
   const src = ids.map(id => state.view.items.find(i => i.id === id));
   const anchor = src.find(s => s && !s.parentItemId);
   const placed = [];
