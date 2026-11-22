@@ -9,6 +9,7 @@ const CAPS = {
   'CLAUDE.md': 1500,
   'public/CLAUDE.md': 1500,
   'addons/voice/CLAUDE.md': 1500,
+  'addons/mcp/CLAUDE.md': 1500,
   'scripts/CLAUDE.md': 1500,
   'docs/backlog.md': 2000,
 };
