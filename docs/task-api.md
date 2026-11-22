@@ -107,6 +107,15 @@ curl -sS "https://mila.your-tailnet.ts.net/api/tasks?view=focus&limit=3" \
   -H "Authorization: Bearer $TASK_API_TOKEN"
 ```
 
+### `GET /api/tasks?view=digest` — the morning digest
+
+What Home Assistant's morning notification shows: the focus three plus every
+other overdue or due-today task, in the focus order, at most 8. Returns
+`{ tasks, more }`: tasks are shaped as in `view=focus` (a line needs `text`,
+`listTitle`, `due` and `tier`; the Done button sends `PATCH /api/tasks/:id`
+with `{ "done": true }`), and `more` counts the overdue or due-today tasks cut
+off by the cap.
+
 ### `PATCH /api/tasks/:id` — mark done, pin, edit
 
 Any of `title`, `notes`, `tags`, `dueDate`, `done`, `starred`, `priority`,
