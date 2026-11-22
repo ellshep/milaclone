@@ -9,7 +9,8 @@
   --fx-overdue: #b23a2e;
   --fx-today: #9a6200;
   --fx-done: #2f7d5b;
-  --fx-t1: clamp(2.4rem, 6.2vw, 6.5rem);
+  --fx-t1: clamp(1.9rem, 4.6vw, 4.8rem);
+  --fx-tab: clamp(52px, 5.6vw, 88px);
   color-scheme: light;
 }
 
@@ -121,7 +122,7 @@ body:hover .controls,
   color: var(--fx-ink);
 }
 
-/* ---- Three: the order reads from size, largest first ---- */
+/* ---- Three: one size for all three, each with its own done tab ---- */
 
 .three {
   display: flex;
@@ -130,42 +131,34 @@ body:hover .controls,
 }
 
 .task {
-  --size: var(--fx-t1);
-  --tone: var(--fx-ink);
-  transition: opacity 0.55s 0.4s;
-}
-
-.task[data-pos='2'] {
-  --size: calc(var(--fx-t1) * 0.68);
-  --tone: color-mix(in srgb, var(--fx-ink) 80%, var(--fx-bg));
-}
-
-.task[data-pos='3'] {
-  --size: calc(var(--fx-t1) * 0.52);
-  --tone: color-mix(in srgb, var(--fx-ink) 64%, var(--fx-bg));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(16px, 3vw, 48px);
+  max-width: 64rem;
+  transition: opacity 0.45s;
 }
 
 .task .title {
-  display: block;
+  margin: 0;
   max-width: 20ch;
-  text-align: left;
-  font-size: var(--size);
+  font-size: var(--fx-t1);
   font-weight: 800;
   font-stretch: 85%;
-  line-height: 1.02;
+  line-height: 1.04;
   letter-spacing: -0.012em;
-  color: var(--tone);
   text-wrap: balance;
+  overflow-wrap: anywhere;
   text-decoration: line-through;
   text-decoration-thickness: 0.08em;
   text-decoration-color: transparent;
   transition:
-    font-size 0.45s ease,
-    color 0.45s ease,
-    text-decoration-color 0.35s;
+    color 0.3s,
+    text-decoration-color 0.3s;
 }
 
-.task.done .title {
+.task.pending .title {
+  color: var(--fx-muted);
   text-decoration-color: currentColor;
 }
 
@@ -181,6 +174,61 @@ body:hover .controls,
   from {
     opacity: 0;
     transform: translateY(28px);
+  }
+}
+
+/* The done tab: an empty ring that fills on hover; while pending it reads
+   Undo, with a bar that runs down over UNDO_MS (focuspage.js). */
+.tab {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  min-width: var(--fx-tab);
+  height: var(--fx-tab);
+  border: 3px solid var(--fx-rule);
+  border-radius: 999px;
+  color: var(--fx-muted);
+  font-size: clamp(1rem, 1.3vw, 1.3rem);
+  font-weight: 800;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.tab svg {
+  width: 46%;
+  height: 46%;
+}
+
+.tab:hover {
+  border-color: var(--fx-done);
+  background: var(--fx-done);
+  color: var(--fx-bg);
+}
+
+.task.pending .tab {
+  padding: 0 1.1em;
+  border-color: var(--fx-ink);
+  background: none;
+  color: var(--fx-ink);
+}
+
+.task.pending .tab::after {
+  content: '';
+  position: absolute;
+  inset: auto 22% 9px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--fx-done);
+  transform-origin: left;
+  animation: countdown 4s linear both;
+}
+
+@keyframes countdown {
+  to {
+    transform: scaleX(0);
   }
 }
 
@@ -218,34 +266,7 @@ body:hover .controls,
   color: var(--fx-today);
 }
 
-.confirm {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 0.8em;
-}
-
-.confirm .ask {
-  font-size: clamp(1.1rem, 1.6vw, 1.6rem);
-  font-weight: 800;
-  margin-right: 6px;
-}
-
-.confirm button {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  font-size: 1.4rem;
-  font-weight: 800;
-}
-
-.confirm .yes {
-  background: var(--fx-done);
-  color: var(--fx-bg);
-}
-
-.confirm .no {
-  border: 2px solid var(--fx-rule);
+.queue {
   color: var(--fx-muted);
 }
 

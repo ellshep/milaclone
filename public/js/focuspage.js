@@ -1,9 +1,11 @@
 // The full-screen /focus page (next-phases M2.2), its own entry point: it never
 // imports main.js. Two modes, picked by the URL hash:
 //
-//   Three (default)  the top three of the focus order, largest first. Click a
-//                    title → "Done?" ✓ ✕ (✕ or 5 s cancels) → strike and fade →
-//                    the others move up and the next one slides in.
+//   Three (default)  the top three of the focus order, one size, each with its
+//                    own done tab (like the 3 Things Pebble app's buttons).
+//                    Tap it → struck through with Undo for 4 s → saved, faded,
+//                    and the next one slides in. "N in queue" sits in the
+//                    controls.
 //   List (#list)     every ranked task. Drag (or Alt+↑/↓) to reorder; that
 //                    saves placements (focusOrder). Reset clears them.
 //
@@ -13,18 +15,22 @@
 
 import { dueLabel, isFixed, placementAfterDrop } from './focusorder.js';
 
-const CONFIRM_MS = 5000;
-const DONE_MS = 1000; // strike, then fade (focus.css .task.done)
+const UNDO_MS = 4000; // matches the countdown bar in focus.css (.task.pending .tab::after)
+const FADE_MS = 450; // focus.css .task.done
+
+const CHECK =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 const $ = sel => document.querySelector(sel);
 const threeEl = $('#three');
 const listEl = $('#list');
 const emptyEl = $('#empty');
 const resetBtn = $('#reset');
+const queueEl = $('#queue');
 
 let tasks = [];
-let busy = false; // a Done is animating or saving: hold refetches until it ends
-let confirming = null; // { li, timer }
+const pending = new Map(); // task id → timer: struck through with Undo, not saved yet
+let saving = 0; // Done saves in flight. Refetches wait while this or `pending` is non-empty.
 
 const mode = () => (location.hash === '#list' ? 'list' : 'three');
 
@@ -41,7 +47,7 @@ function showMessage(text) {
 }
 
 async function load() {
-  if (busy) return;
+  if (pending.size || saving) return;
   try {
     const r = await fetch('/api/focus?limit=all');
     if (!r.ok) throw new Error(String(r.status));
@@ -64,6 +70,9 @@ function render() {
   threeEl.hidden = m !== 'three';
   listEl.hidden = m !== 'list';
   resetBtn.hidden = true;
+  const queued = tasks.length - 3;
+  queueEl.textContent = `${queued} in queue`;
+  queueEl.hidden = m !== 'three' || queued < 1;
   showMessage(tasks.length ? '' : 'Nothing to do. New tasks from the board show up here.');
   if (m === 'three') renderThree();
   else renderList();
@@ -82,31 +91,32 @@ function meta(task) {
 function buildTask(task) {
   const li = el('li', 'task');
   li.dataset.id = task.id;
-  const title = el('button', 'title', task.text);
-  title.type = 'button';
-  title.addEventListener('click', () => askDone(li));
-  const confirm = el('div', 'confirm');
-  confirm.hidden = true;
-  confirm.append(el('span', 'ask', 'Done?'));
-  const yes = el('button', 'yes', '✓');
-  yes.type = 'button';
-  yes.setAttribute('aria-label', 'Mark done');
-  yes.addEventListener('click', () => markDone(li));
-  const no = el('button', 'no', '✕');
-  no.type = 'button';
-  no.setAttribute('aria-label', 'Keep it');
-  no.addEventListener('click', cancelConfirm);
-  confirm.append(yes, no);
-  li.append(title, meta(task), confirm);
+  const body = el('div', 'body');
+  body.append(el('p', 'title', task.text), meta(task));
+  const tab = el('button', 'tab');
+  tab.type = 'button';
+  tab.addEventListener('click', () => (pending.has(li.dataset.id) ? undo(li) : tick(li)));
+  li.append(body, tab);
   return li;
 }
 
-// Keyed by task id, so tasks that stay just change position (and size, by CSS)
-// while a new one slides in.
+function setTab(li) {
+  const tab = li.querySelector('.tab');
+  const text = li.querySelector('.title').textContent;
+  if (pending.has(li.dataset.id)) {
+    tab.textContent = 'Undo';
+    tab.setAttribute('aria-label', `Undo: ${text}`);
+  } else {
+    tab.innerHTML = CHECK;
+    tab.setAttribute('aria-label', `Done: ${text}`);
+  }
+}
+
+// Keyed by task id, so tasks that stay keep their place and state while a new
+// one slides in.
 function renderThree() {
-  const top = tasks.slice(0, 3);
   const keep = new Map([...threeEl.children].map(li => [li.dataset.id, li]));
-  const next = top.map((task, i) => {
+  const next = tasks.slice(0, 3).map(task => {
     let li = keep.get(task.id);
     if (li) {
       li.querySelector('.title').textContent = task.text;
@@ -115,45 +125,50 @@ function renderThree() {
       li = buildTask(task);
       if (threeEl.children.length) li.classList.add('enter');
     }
-    li.dataset.pos = String(i + 1);
+    setTab(li);
     return li;
   });
   threeEl.replaceChildren(...next);
 }
 
-function askDone(li) {
-  if (busy) return;
-  cancelConfirm();
-  li.querySelector('.confirm').hidden = false;
-  li.classList.add('asking');
-  li.querySelector('.yes').focus();
-  confirming = { li, timer: setTimeout(cancelConfirm, CONFIRM_MS) };
+function tick(li) {
+  pending.set(
+    li.dataset.id,
+    setTimeout(() => save(li), UNDO_MS)
+  );
+  li.classList.add('pending');
+  setTab(li);
 }
 
-function cancelConfirm() {
-  if (!confirming) return;
-  clearTimeout(confirming.timer);
-  confirming.li.querySelector('.confirm').hidden = true;
-  confirming.li.classList.remove('asking');
-  confirming = null;
+function undo(li) {
+  clearTimeout(pending.get(li.dataset.id));
+  pending.delete(li.dataset.id);
+  li.classList.remove('pending');
+  setTab(li);
 }
 
-async function markDone(li) {
+async function save(li) {
   const id = li.dataset.id;
-  cancelConfirm();
-  busy = true;
-  li.classList.add('done');
-  const pause = new Promise(r => setTimeout(r, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : DONE_MS));
+  const tab = li.querySelector('.tab');
+  pending.delete(id);
+  saving++;
+  tab.disabled = true;
   let ok = false;
   try {
     ok = (await fetch(`/api/focus/${encodeURIComponent(id)}/done`, { method: 'POST' })).ok;
   } catch {
     ok = false;
   }
-  await pause;
-  busy = false;
+  if (ok) {
+    li.classList.add('done');
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    await new Promise(r => setTimeout(r, reduced ? 0 : FADE_MS));
+  }
+  saving--;
+  tab.disabled = false;
   if (!ok) {
-    li.classList.remove('done');
+    li.classList.remove('pending');
+    setTab(li);
     li.querySelector('.meta').replaceChildren(el('span', 'due overdue', "Couldn't mark it done. Try again."));
     return;
   }
@@ -264,9 +279,6 @@ $('#refresh').addEventListener('click', load);
 window.addEventListener('hashchange', render);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') load();
-});
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') cancelConfirm();
 });
 
 load();
