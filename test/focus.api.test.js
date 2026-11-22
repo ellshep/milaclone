@@ -225,3 +225,72 @@ test('PUT /api/focus/order places tasks across lists, and [] resets', async () =
     assert.equal((await json('PUT', '/api/focus/order', { ids })).status, 400, JSON.stringify(ids));
   }
 });
+
+test('PUT /api/tasks/rank writes scores in one go, clears old nudges and skips placed tasks', async () => {
+  const { rootCanvasId } = (await json('GET', '/api/root')).body;
+  const mk = (id, f = {}) => Object.assign({ id, text: id, done: false, createdAt: 1 }, f);
+  const list = await todo(rootCanvasId, 'Rank me', [
+    mk('r-a'),
+    mk('r-b', { rankNudge: 1, rankScore: 5 }),
+    mk('r-placed', { focusOrder: 1, rankScore: 7, rankNudge: -1 }),
+  ]);
+  const put = body => json('PUT', '/api/tasks/rank', body, TOKEN);
+  const r = await put({
+    ranks: [
+      { id: 'r-a', rankScore: 80, rankReason: 'Unblocks the rest', rankNudge: 1 },
+      { id: 'r-placed', rankScore: 99, rankReason: 'no', rankNudge: 1 },
+      { id: 'gone', rankScore: 1 },
+    ],
+  });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { ranked: 1, skipped: ['r-placed', 'gone'] });
+  const tasks = (await json('GET', '/api/canvas/' + rootCanvasId)).body.items.find(it => it.id === list.id).data.tasks;
+  const [a, b, placed] = tasks;
+  assert.deepEqual([a.rankScore, a.rankReason, a.rankNudge], [80, 'Unblocks the rest', 1]);
+  assert.equal(typeof a.rankedAt, 'number');
+  assert.equal('rankNudge' in b, false); // not listed: nudge cleared, score kept
+  assert.equal(b.rankScore, 5);
+  assert.deepEqual([placed.rankScore, 'rankNudge' in placed], [7, false]);
+
+  for (const ranks of [
+    undefined,
+    [{}],
+    [{ id: 'r-a', rankScore: 'x' }],
+    [{ id: 'r-a', rankNudge: 2 }],
+    [{ id: 'r-a', rankReason: 'x'.repeat(301) }],
+    [{ id: 'r-a' }, { id: 'r-a' }],
+  ]) {
+    assert.equal((await put({ ranks })).status, 400, JSON.stringify(ranks));
+  }
+  assert.equal((await json('PUT', '/api/tasks/rank', { ranks: [] })).status, 401);
+});
+
+test('GET /api/tasks/priorities returns the Home note headed "Focus priorities"', async () => {
+  const get = () => json('GET', '/api/tasks/priorities', undefined, TOKEN);
+  assert.deepEqual((await get()).body, { text: null });
+  const { rootCanvasId } = (await json('GET', '/api/root')).body;
+  const note = text => json('POST', '/api/item', { canvasId: rootCanvasId, type: 'note', x: 0, y: 0, data: { text } });
+  await note('Shopping\nfocus priorities');
+  const trashed = (await note('Focus priorities\nold')).body;
+  await json('DELETE', '/api/item/' + trashed.id);
+  await note('Focus priorities:\nHealth first');
+  await note('focus priorities\nnewer one');
+  assert.deepEqual((await get()).body, { text: 'Focus priorities:\nHealth first' });
+  assert.equal((await json('GET', '/api/tasks/priorities')).status, 401);
+});
+
+test('view=digest stops at the three when the rest are neither overdue nor due today', async () => {
+  const { rootCanvasId } = (await json('GET', '/api/root')).body;
+  const mk = (id, f = {}) => Object.assign({ id, text: id, done: false, createdAt: 1 }, f);
+  await todo(rootCanvasId, 'Digest mix', [mk('n-over', { due: shift(-30) }), mk('n-p1'), mk('n-p2'), mk('n-p3')]);
+  await json('PUT', '/api/focus/order', { ids: ['n-p1', 'n-p2', 'n-p3'] });
+  const focus = (await json('GET', '/api/tasks?view=focus&limit=5', undefined, TOKEN)).body.tasks;
+  const digest = (await json('GET', '/api/tasks?view=digest', undefined, TOKEN)).body;
+  // n-over and w-over, then the first placed task; later placed tasks are left out
+  assert.deepEqual(
+    focus.map(t => t.tier),
+    ['overdue', 'overdue', 'placed', 'placed', 'placed']
+  );
+  assert.deepEqual(digest, { tasks: focus.slice(0, 3), more: 0 });
+  await json('PUT', '/api/focus/order', { ids: [] });
+});

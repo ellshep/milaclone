@@ -12,9 +12,9 @@
 
 const crypto = require('crypto');
 const express = require('express');
-const { db, stmt, id, rootCanvasId, rowToItem } = require('./db');
-const { isBlank, newTask } = require('./tasklist');
-const { focusView, parseLimit, LIMIT_MAX } = require('./focus');
+const { db, stmt, id, rootCanvasId, rowToItem, breadcrumb } = require('./db');
+const { isBlank, newTask, applyRanks } = require('./tasklist');
+const { focusView, digestView, parseLimit, inTemplates, hasLabel, LIMIT_MAX } = require('./focus');
 
 const router = express.Router();
 
@@ -24,6 +24,8 @@ const SOURCE_MAX = 40;
 const TAG_MAX = 60;
 const TAGS_MAX = 30;
 const IMPORT_ID_MAX = 200;
+const RANK_REASON_MAX = 300;
+const MOVE_REASON_MAX = 500;
 const INBOX_KEY = 'inboxItemId';
 
 // ---- Auth --------------------------------------------------------------------
@@ -112,11 +114,11 @@ function starFrom(b) {
   return b.priority.toLowerCase() === 'high';
 }
 
-function cleanSource(v) {
+function cleanSource(v, name = 'source') {
   if (v == null || v === '') return 'api';
-  if (typeof v !== 'string') bad('source must be a string');
+  if (typeof v !== 'string') bad(`${name} must be a string`);
   const s = v.trim();
-  if (!s || s.length > SOURCE_MAX) bad(`source must be 1 to ${SOURCE_MAX} characters`);
+  if (!s || s.length > SOURCE_MAX) bad(`${name} must be 1 to ${SOURCE_MAX} characters`);
   return s;
 }
 
@@ -124,6 +126,28 @@ function cleanImportId(v) {
   if (v == null || v === '') return null;
   if (typeof v !== 'string' || v.length > IMPORT_ID_MAX) bad(`importId must be a string up to ${IMPORT_ID_MAX} chars`);
   return v;
+}
+
+// The nightly ranking's batch: [{ id, rankScore, rankReason, rankNudge }] →
+// Map id → fields. Score a finite number or null, reason a short string or
+// null, nudge -1, 0 or 1 (null counts as 0).
+function cleanRanks(v) {
+  if (!Array.isArray(v) || v.length > LIMIT_MAX) bad(`ranks must be an array of at most ${LIMIT_MAX}`);
+  const out = new Map();
+  for (const r of v) {
+    if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id) bad('each rank needs an id');
+    if (out.has(r.id)) bad(`task ${r.id} is ranked twice`);
+    const rankScore = r.rankScore ?? null;
+    if (rankScore !== null && !Number.isFinite(rankScore)) bad('rankScore must be a number or null');
+    const rankReason = r.rankReason ?? null;
+    if (rankReason !== null && (typeof rankReason !== 'string' || rankReason.length > RANK_REASON_MAX)) {
+      bad(`rankReason must be a string up to ${RANK_REASON_MAX} characters or null`);
+    }
+    const rankNudge = r.rankNudge ?? 0;
+    if (![-1, 0, 1].includes(rankNudge)) bad('rankNudge must be -1, 0, 1 or null');
+    out.set(r.id, { rankScore, rankReason, rankNudge });
+  }
+  return out;
 }
 
 const normTitle = s =>
@@ -277,7 +301,8 @@ router.get(
   '/api/tasks',
   handle((req, res) => {
     if (req.query.view !== undefined) {
-      if (req.query.view !== 'focus') bad('view must be focus');
+      if (req.query.view === 'digest') return res.json(digestView());
+      if (req.query.view !== 'focus') bad('view must be focus or digest');
       const limit = parseLimit(req.query.limit);
       if (limit === null) bad(`limit must be 1 to ${LIMIT_MAX} or all`);
       return res.json(focusView({ limit }));
@@ -300,6 +325,64 @@ router.get(
   })
 );
 
+// The to-do lists carrying a label (Filing, for voice capture: M3.2), live and
+// outside Templates, each with its board's title.
+router.get(
+  '/api/tasks/lists',
+  handle((req, res) => {
+    const label = req.query.label;
+    if (typeof label !== 'string' || !label.trim()) bad('label is required');
+    const lists = [];
+    for (const card of todoCards()) {
+      if (!hasLabel(card, label)) continue;
+      const trail = breadcrumb(card.canvasId);
+      if (inTemplates(trail)) continue;
+      lists.push({ id: card.id, title: card.data.title || 'To-do', boardTitle: trail.at(-1)?.title || 'Board' });
+    }
+    res.json({ lists });
+  })
+);
+
+// The text of the note on Home whose first line is "Focus priorities" (the
+// oldest, if there are several), for the nightly ranking; null when none.
+router.get('/api/tasks/priorities', (req, res) => {
+  const note = stmt.itemsByCanvas
+    .all(rootCanvasId())
+    .map(rowToItem)
+    .filter(
+      it =>
+        it.type === 'note' &&
+        typeof it.data.text === 'string' &&
+        /^focus priorities:?$/i.test(it.data.text.split('\n')[0].trim())
+    )
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))[0];
+  res.json({ text: note ? note.data.text : null });
+});
+
+// The nightly ranking's write, in one transaction so it lands whole or not at
+// all. Listed tasks get their score, reason and nudge; every other task loses
+// its nudge. Placed tasks and ids no list has are skipped and returned.
+router.put(
+  '/api/tasks/rank',
+  handle((req, res) => {
+    const b = req.body && typeof req.body === 'object' ? req.body : {};
+    const ranks = cleanRanks(b.ranks);
+    const now = Date.now();
+    const written = db.transaction(() => {
+      const out = new Set();
+      for (const card of todoCards()) {
+        const r = applyRanks(tasksOf(card), ranks, now);
+        if (r.changed) saveCard(card);
+        for (const taskId of r.written) out.add(taskId);
+      }
+      return out;
+    })();
+    const skipped = [...ranks.keys()].filter(taskId => !written.has(taskId));
+    log('task.rank', { ranked: written.size, skipped: skipped.length });
+    res.json({ ranked: written.size, skipped });
+  })
+);
+
 router.patch(
   '/api/tasks/:id',
   handle((req, res) => {
@@ -313,19 +396,48 @@ router.patch(
     if (b.pinned !== undefined) patch.pinned = cleanBool(b.pinned, 'pinned');
     const star = starFrom(b);
     if (star !== undefined) patch.starred = star;
-    if (!Object.keys(patch).length) bad('nothing to update');
+    // A move (M3.1): `movedBy` names the client, like `source` on create.
+    let move = null;
+    if (b.listId !== undefined) {
+      if (typeof b.listId !== 'string') bad('listId must be a string');
+      if (b.moveReason != null && (typeof b.moveReason !== 'string' || b.moveReason.length > MOVE_REASON_MAX)) {
+        bad(`moveReason must be a string up to ${MOVE_REASON_MAX} characters`);
+      }
+      move = { listId: b.listId, movedBy: cleanSource(b.movedBy, 'movedBy'), moveReason: b.moveReason?.trim() || null };
+    }
+    if (!Object.keys(patch).length && !move) bad('nothing to update');
 
     const out = db.transaction(() => {
+      let dest = null;
+      if (move) {
+        dest = todoCards().find(c => c.id === move.listId);
+        if (!dest || inTemplates(breadcrumb(dest.canvasId))) bad('listId is not a to-do list');
+      }
       const found = findTask(req.params.id);
       if (!found) return null;
       const { card, task } = found;
       Object.assign(task, patch);
+      if (!dest || dest.id === card.id) {
+        saveCard(card);
+        return { task: listView(task, card) };
+      }
+      Object.assign(task, {
+        movedFrom: card.id,
+        movedAt: Date.now(),
+        movedBy: move.movedBy,
+        moveReason: move.moveReason,
+      });
+      card.data.tasks = tasksOf(card).filter(t => t !== task);
+      dest.data.tasks = tasksOf(dest).concat([task]);
       saveCard(card);
-      return listView(task, card);
+      saveCard(dest);
+      return { task: listView(task, dest), moved: true };
     })();
     if (!out) return res.status(404).json({ error: 'not found' });
-    log('task.update', { taskId: out.id, listId: out.listId, fields: Object.keys(patch) });
-    res.json({ task: out });
+    const t = out.task;
+    if (out.moved) log('task.move', { taskId: t.id, from: t.movedFrom, listId: t.listId, by: t.movedBy });
+    if (Object.keys(patch).length) log('task.update', { taskId: t.id, listId: t.listId, fields: Object.keys(patch) });
+    res.json({ task: t });
   })
 );
 

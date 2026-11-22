@@ -107,10 +107,54 @@ curl -sS "https://mila.your-tailnet.ts.net/api/tasks?view=focus&limit=3" \
   -H "Authorization: Bearer $TASK_API_TOKEN"
 ```
 
-### `PATCH /api/tasks/:id` — mark done, pin, edit
+### `GET /api/tasks?view=digest` — the morning digest
+
+What Home Assistant's morning notification shows: the focus three plus every
+other overdue or due-today task, in the focus order, at most 8. Returns
+`{ tasks, more }`: tasks are shaped as in `view=focus` (a line needs `text`,
+`listTitle`, `due` and `tier`; the Done button sends `PATCH /api/tasks/:id`
+with `{ "done": true }`), and `more` counts the overdue or due-today tasks cut
+off by the cap. `limit` doesn't apply here.
+
+### `GET /api/tasks/priorities` — the Focus priorities note
+
+Returns `{ text }`: the whole text of the note on Home whose first line is
+"Focus priorities" (the oldest, if there are several; trashed notes don't
+count), or `null` when there is none. The nightly ranking sends it to the model
+as written.
+
+### `GET /api/tasks/lists?label=Filing` — lists with a label
+
+Returns `{ lists: [{ id, title, boardTitle }] }`: every live to-do list carrying
+that card label (matched ignoring case and spaces), except lists under the
+Templates board. `label` is required. Voice capture reads the **Filing** lists
+so a task can be posted straight to one with `listId`.
+
+### `PUT /api/tasks/rank` — write the nightly ranking
+
+`{ ranks: [{ id, rankScore, rankReason, rankNudge }] }`, up to 1000. `rankScore`
+is a number or `null`, `rankReason` a string up to 300 characters or `null`,
+`rankNudge` `-1`, `0` or `1` (`null` counts as `0`). One transaction: every
+listed task gets its fields and `rankedAt` (ms), and **every task not listed
+loses its `rankNudge`** (its score and reason stay), so moves never pile up
+night after night. Tasks placed by hand (`focusOrder`) are never ranked: their
+ids are skipped, and they lose any nudge. Returns `{ ranked, skipped }`,
+`skipped` being the placed ids and ids no list has. A bad body is a `400` and
+changes nothing.
+
+### `PATCH /api/tasks/:id` — mark done, pin, edit, move
 
 Any of `title`, `notes`, `tags`, `dueDate`, `done`, `starred`, `priority`,
 `pinned`. Returns `{ task }`, or `404` if no list has that task.
+
+`listId` moves the task to the end of another to-do list (`400` if it isn't a
+live to-do card, or sits under the Templates board). The move is recorded on the
+task as `movedFrom` (the old list id), `movedAt` (ms), `movedBy` (from the body,
+1–40 characters such as `ranker`, `voice` or `owner`; default `api`, like
+`source`) and `moveReason` (optional, up to 500 characters). Naming the list the
+task is already in moves nothing and leaves the record as it was. A device still holding the
+old list loses any edit it saves to a moved task, by the same rule as a task
+deleted elsewhere (the three-way merge).
 
 ```bash
 curl -sS -X PATCH https://mila.your-tailnet.ts.net/api/tasks/t_abc123 \
@@ -128,13 +172,17 @@ Stored on each task next to the fields the app already uses (`id`, `text`,
 | ------------ | ------------------------- | ---------------------------------------------- |
 | `source`     | create                    | Who created the task                           |
 | `pinned`     | `PATCH`                   | Locks the task into the focus three (Phase 4)  |
-| `stale`      | nightly ranking (Phase 4) | Looks abandoned; hidden from the focus view    |
-| `rankNudge`  | nightly ranking (Phase 4) | `1`/`-1`: move one tier up/down in the order   |
+| `stale`      | stale rule (not built)    | Looks abandoned; hidden from the focus view    |
+| `rankNudge`  | `PUT /api/tasks/rank`     | `1`/`-1`: move one tier up/down in the order   |
 | `focusOrder` | focus page (List mode)    | Placed by hand; ranks above the model's order  |
-| `rankScore`  | nightly ranking (Phase 4) | Model score used within a deterministic tier   |
-| `rankReason` | nightly ranking (Phase 4) | One-line reason for the score                  |
-| `rankedAt`   | nightly ranking (Phase 4) | When it was last scored                        |
+| `rankScore`  | `PUT /api/tasks/rank`     | Model score used within a deterministic tier   |
+| `rankReason` | `PUT /api/tasks/rank`     | One-line reason for the score                  |
+| `rankedAt`   | `PUT /api/tasks/rank`     | When it was last scored (ms)                   |
 | `importId`   | create (e.g. a migration) | Unique id from another system, for idempotency |
+| `movedFrom`  | `PATCH` with `listId`     | The list the task was last moved out of        |
+| `movedAt`    | `PATCH` with `listId`     | When it was last moved (ms)                    |
+| `movedBy`    | `PATCH` with `listId`     | Who moved it                                   |
+| `moveReason` | `PATCH` with `listId`     | Why, if the mover said                         |
 
 They were added now so the later phases need no data migration. Tasks made in
 the app don't have them until something sets them, and readers treat a missing
@@ -142,7 +190,7 @@ field as its default.
 
 ## Logging
 
-Each create, skip and update writes one JSON line to the server log, for
+Each create, skip, update, ranking and move writes one JSON line to the server log, for
 example `{"event":"task.create","source":"voice-note","taskId":"t_…","listId":"i_…"}`.
 With Docker: `docker compose logs app | grep task.`
 

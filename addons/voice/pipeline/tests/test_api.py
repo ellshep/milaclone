@@ -3,6 +3,7 @@ import threading
 import time
 
 from ingest.config import Settings
+from ingest.extract import Extraction, ExtractedTask
 from ingest.llm import LLMError
 import ingest.main as main
 from ingest.main import create_app
@@ -78,14 +79,44 @@ def test_extraction_runs_without_tags_when_the_task_api_is_down(client, env):
     assert r.json()["status"] == "error"  # creating the tasks then fails as before
 
 
+def test_a_task_naming_a_filing_list_is_filed_there(client, env):
+    env.app_api.lists = [{"id": "i_err", "title": "Errands", "boardTitle": "Home"},
+                         {"id": "i_g1", "title": "Garden", "boardTitle": "House"},
+                         {"id": "i_g2", "title": "garden", "boardTitle": "Allotment"}]
+    env.deps.extractor.result = Extraction(summary="s", tasks=[
+        ExtractedTask(title="Post the parcel", listName="Errands"), ExtractedTask(title="Call mum")])
+    assert client.post("/ingest/text", headers=env.auth, json={"text": "x"}).status_code == 200
+    assert env.deps.extractor.lists[-1] == ("Errands",)  # two lists called Garden: naming it can't pick one
+    sent = env.app_api.requests
+    assert sent[0]["listId"] == "i_err"
+    assert "listId" not in sent[1]  # no list named: the Inbox
+
+
+def test_a_filing_list_gone_since_it_was_read_sends_the_task_to_the_inbox(client, env, capsys):
+    env.app_api.lists = [{"id": "i_err", "title": "Errands", "boardTitle": "Home"}]
+    env.app_api.gone_lists = {"i_err"}
+    env.deps.extractor.result = Extraction(summary="s", tasks=[ExtractedTask(title="Post it", listName="Errands")])
+    body = client.post("/ingest/text", headers=env.auth, json={"text": "x"}).json()
+    assert body["status"] == "done"
+    assert [c["title"] for c in body["created"]] == ["Post it"]
+    assert [r.get("listId") for r in env.app_api.requests] == ["i_err", None]
+    assert '"ingest.list_gone"' in capsys.readouterr().out
+
+
+def test_extraction_runs_without_filing_lists_when_they_cannot_be_read(client, env):
+    env.app_api.lists = None  # the app answers 500
+    assert client.post("/ingest/text", headers=env.auth, json={"text": "Buy milk"}).status_code == 200
+    assert env.deps.extractor.lists[-1] == ()
+
+
 def test_text_ingest_does_not_block_other_requests(client, env):
     started, release = threading.Event(), threading.Event()
     slow = env.deps.extractor
 
-    def blocking(transcript, tags=()):
+    def blocking(transcript, tags=(), lists=()):
         started.set()
         release.wait(5)
-        return slow(transcript, tags)
+        return slow(transcript, tags, lists)
 
     env.deps.extractor = blocking
     result = {}

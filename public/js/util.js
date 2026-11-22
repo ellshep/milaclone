@@ -72,14 +72,14 @@ export function zRange(items) {
   return [Math.min(0, ...zs), Math.max(0, ...zs)];
 }
 
-// A text field or rich-text body has the keyboard: canvas shortcuts stand down.
+// A text field, dropdown or rich-text body has the keyboard: canvas shortcuts stand down.
 // A rich body counts while its editor is still loading, so early keys don't arm tools.
 export function isTyping() {
   const ae = document.activeElement;
   return (
     !!ae &&
     (ae.isContentEditable ||
-      (/^(INPUT|TEXTAREA)$/.test(ae.tagName) && !ae.readOnly) ||
+      (/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && !ae.readOnly) ||
       !!ae.closest('.editing [data-rich]'))
   );
 }

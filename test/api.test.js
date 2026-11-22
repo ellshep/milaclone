@@ -391,6 +391,48 @@ test('move: cut/paste relocates a board with its contents and refuses a cycle', 
   assert.equal(cycle.status, 400);
 });
 
+test('AU9 moving one end of a line away leaves a free point where that card was', async () => {
+  const board = (await send('POST', '/api/item', { canvasId: await root(), type: 'board' })).body;
+  const c = board.data.childCanvasId;
+  const other = (await send('POST', '/api/item', { canvasId: await root(), type: 'board' })).body.data.childCanvasId;
+  const add = async body => (await send('POST', '/api/item', { canvasId: c, ...body })).body;
+  const a = await add({ type: 'note', x: 100, y: 50 });
+  const b = await add({ type: 'note', x: 400, y: 50 });
+  const col = await add({ type: 'column', x: 300, y: 40 });
+  const k = await add({ type: 'note', parentItemId: col.id });
+  const j = await add({ type: 'note', parentItemId: col.id });
+  const line = async (from, to) => (await add({ type: 'line', data: { from: { id: from }, to: { id: to } } })).id;
+  const ab = await line(a.id, b.id);
+  const bk = await line(b.id, k.id);
+  const bj = await line(b.id, j.id);
+  const ends = async id => {
+    const l = (await get('/api/canvas/' + c)).body.items.find(i => i.id === id);
+    return [l.data.from, l.data.to];
+  };
+  const move = id => send('POST', `/api/item/${id}/move`, { canvasId: other, x: 0, y: 0 });
+
+  await move(a.id);
+  assert.deepEqual(await ends(ab), [{ x: 100, y: 50 }, { id: b.id }]);
+  await move(j.id); // a card cut out of a column frees its end at the column
+  assert.deepEqual(await ends(bj), [{ id: b.id }, { x: 300, y: 40 }]);
+  await move(col.id); // and so does a card that leaves inside its column
+  assert.deepEqual(await ends(bk), [{ id: b.id }, { x: 300, y: 40 }]);
+});
+
+test('AU9 a card whose column is gone frees its line end at its own spot', async () => {
+  const { db } = require('../db');
+  const c = (await send('POST', '/api/item', { canvasId: await root(), type: 'board' })).body.data.childCanvasId;
+  const other = (await send('POST', '/api/item', { canvasId: await root(), type: 'board' })).body.data.childCanvasId;
+  const add = async body => (await send('POST', '/api/item', { canvasId: c, ...body })).body;
+  const a = await add({ type: 'note', x: 100, y: 50 });
+  const b = await add({ type: 'note', x: 400, y: 70 });
+  const ab = (await add({ type: 'line', data: { from: { id: a.id }, to: { id: b.id } } })).id;
+  db.prepare("UPDATE items SET parentItemId = 'i_gone' WHERE id = ?").run(b.id); // an old row with an odd parent
+  assert.equal((await send('POST', `/api/item/${b.id}/move`, { canvasId: other, x: 0, y: 0 })).status, 200);
+  const l = (await get('/api/canvas/' + c)).body.items.find(i => i.id === ab);
+  assert.deepEqual(l.data.to, { x: 400, y: 70 });
+});
+
 test('tasks: concurrent edits from two devices merge instead of overwriting', async () => {
   const canvasId = await root();
   const base = [
@@ -769,9 +811,10 @@ test('F1.3 a card can only be parented to a live column on its own canvas', asyn
   assert.equal((await send('PATCH', '/api/items', { updates: [{ id: note.id, parentItemId: col.id }] })).status, 200);
 });
 
-test('F1.3 the parent rule also holds on create, on a canvas move, and for columns', async () => {
+test('F1.3 the parent rule also holds on create and for columns; PATCH never changes canvas', async () => {
   const canvasId = await root();
-  const other = (await send('POST', '/api/item', { canvasId, type: 'board' })).body.data.childCanvasId;
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board' })).body;
+  const other = board.data.childCanvasId;
   const col = (await send('POST', '/api/item', { canvasId, type: 'column' })).body;
   const col2 = (await send('POST', '/api/item', { canvasId, type: 'column' })).body;
 
@@ -780,10 +823,11 @@ test('F1.3 the parent rule also holds on create, on a canvas move, and for colum
   const inCol = (await send('POST', '/api/item', { canvasId, type: 'note', parentItemId: col.id })).body;
   assert.equal(inCol.parentItemId, col.id);
 
-  // moving canvases without clearing the parent would strand the card
-  assert.equal((await send('PATCH', '/api/item/' + inCol.id, { canvasId: other })).status, 400);
-  const moved = await send('PATCH', '/api/item/' + inCol.id, { canvasId: other, parentItemId: null });
-  assert.equal(moved.body.canvasId, other);
+  // canvasId is ignored: moving is POST /move, which refuses a board inside itself
+  const stay = await send('PATCH', '/api/item/' + inCol.id, { canvasId: other, parentItemId: null });
+  assert.equal(stay.body.canvasId, canvasId);
+  assert.equal((await send('PATCH', '/api/item/' + board.id, { canvasId: other })).body.canvasId, canvasId);
+  assert.ok((await send('GET', '/api/canvas/' + canvasId)).body.items.some(i => i.id === board.id));
 
   const cycle = await send('PATCH', '/api/items', {
     updates: [
@@ -939,4 +983,44 @@ test('U2.2 the service worker is served no-cache so updates land on the next lau
     srv.kill();
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ---- W1.3 board access flag (docs/agent-addon.md A3) -----------------------------
+test('agentAccess is off by default, toggles through PATCH /api/canvas and shows on the board card', async () => {
+  const canvasId = await root();
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Private' } })).body;
+  assert.equal(board._childAgentAccess, false);
+  const childId = board.data.childCanvasId;
+  assert.equal((await get('/api/canvas/' + childId)).body.canvas.agentAccess, false);
+
+  const on = await send('PATCH', '/api/canvas/' + childId, { agentAccess: true });
+  assert.equal(on.body.agentAccess, true);
+  assert.equal((await get('/api/canvas/' + childId)).body.canvas.agentAccess, true);
+  const card = (await get('/api/canvas/' + canvasId)).body.items.find(i => i.id === board.id);
+  assert.equal(card._childAgentAccess, true);
+  // a non-boolean is ignored, a rename leaves the flag alone
+  await send('PATCH', '/api/canvas/' + childId, { agentAccess: 'yes', title: 'Still private' });
+  const after = (await get('/api/canvas/' + childId)).body.canvas;
+  assert.equal(after.agentAccess, true);
+  assert.equal(after.title, 'Still private');
+  assert.equal((await send('PATCH', '/api/canvas/' + childId, { agentAccess: false })).body.agentAccess, false);
+  await send('DELETE', '/api/item/' + board.id);
+});
+
+test('an agent card exports its name and persona like the other text-bearing cards', async () => {
+  const canvasId = await root();
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Agent export' } })).body;
+  const cid = board.data.childCanvasId;
+  const agent = (
+    await send('POST', '/api/item', {
+      canvasId: cid,
+      type: 'agent',
+      data: { name: 'Clock bot', persona: 'Finds parts', provider: 'local', text: 'Clock bot\nFinds parts' },
+    })
+  ).body;
+  assert.equal(agent.data.provider, 'local'); // stored as sent: core only keeps the card
+  const md = await (await fetch(base + `/api/canvas/${cid}/export.md`)).text();
+  assert.match(md, /## Clock bot\nFinds parts/);
+  assert.doesNotMatch(md, /local/); // settings stay out of the Markdown
+  await send('DELETE', '/api/item/' + board.id);
 });

@@ -100,6 +100,45 @@ services:
           cpus: '0.50'
           memory: 256M
 
+  # Nightly ranking for the focus page (addons/voice/docs/voice-capture.md),
+  # from the pipeline image, voice profile only. Sends the open tasks' titles
+  # and the Home "Focus priorities" note to the RANK_* model (each unset RANK_*
+  # falls back to EXTRACT_*), then writes scores through the task API. Exits
+  # at once unless RANK_SCHEDULE=on; try `docker compose run --rm ranker
+  # python -m ingest.rank --dry-run` first.
+  ranker:
+    build: ./addons/voice/pipeline
+    image: milaclone-pipeline:local
+    container_name: milaclone-ranker
+    profiles: ['voice']
+    # Exiting 0 (schedule off) leaves it stopped; a crash restarts it.
+    restart: on-failure
+    command: ['python', '-m', 'ingest.rank']
+    # The image's healthcheck probes the pipeline's web server, which this doesn't run.
+    healthcheck:
+      disable: true
+    environment:
+      - TASK_API_TOKEN=${TASK_API_TOKEN:-}
+      - APP_URL=http://app:4321
+      - TASK_TZ=${TASK_TZ:-UTC}
+      - RANK_SCHEDULE=${RANK_SCHEDULE:-off}
+      - RANK_NUDGE=${RANK_NUDGE:-one-tier}
+      - RANK_PROVIDER=${RANK_PROVIDER:-}
+      - RANK_MODEL=${RANK_MODEL:-}
+      - RANK_API_KEY=${RANK_API_KEY:-}
+      - RANK_BASE_URL=${RANK_BASE_URL:-}
+      - EXTRACT_PROVIDER=${EXTRACT_PROVIDER:-anthropic}
+      - EXTRACT_MODEL=${EXTRACT_MODEL:-}
+      - EXTRACT_API_KEY=${EXTRACT_API_KEY:-}
+      - EXTRACT_BASE_URL=${EXTRACT_BASE_URL:-}
+    depends_on:
+      - app
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+
   # Alexa part of the voice add-on (addons/voice/docs/alexa.md): an
   # outbound-only Cloudflare Tunnel so the Alexa skill's Worker can reach the
   # pipeline's /ingest/text. Off unless COMPOSE_PROFILES=alexa is set in .env.
@@ -115,6 +154,29 @@ services:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
     depends_on:
       - pipeline
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+  # ---- Optional board agents: MCP server (addons/mcp/README.md) --------------
+  # Off unless COMPOSE_PROFILES includes agent. Talks only to the app over the
+  # compose network; sends nothing anywhere else. The Tailscale sidecar serves
+  # /mcp, behind MCP_TOKEN (unset = every request gets 503).
+  mcp:
+    build: ./addons/mcp
+    image: milaclone-mcp:local
+    container_name: milaclone-mcp
+    profiles: ['agent']
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8184:8787'
+    environment:
+      - MCP_TOKEN=${MCP_TOKEN:-}
+      - BOARD_URL=http://app:4321
+    depends_on:
+      - app
     deploy:
       resources:
         limits:
@@ -140,8 +202,8 @@ services:
       # single-file mount would keep showing the old copy. Tailscale watches
       # this folder and applies a changed serve.json without a restart.
       - ./tailscale:/config:ro
-    # serve.json also routes /ingest/ to the voice add-on; without the add-on
-    # that path just answers 502.
+    # serve.json also routes /ingest/ to the voice add-on and /mcp to the MCP
+    # add-on; without an add-on its path just answers 502.
     depends_on:
       - app
     deploy:

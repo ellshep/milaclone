@@ -299,6 +299,97 @@ test('PATCH marks done, pins and edits fields', async () => {
   assert.equal((await patch(t.id, { title: '' })).status, 400);
 });
 
+test('M3.1 PATCH listId moves a task to another list and records the move', async () => {
+  const canvasId = (await plain('/api/root')).rootCanvasId;
+  const item = b =>
+    fetch(base + '/api/item', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(b),
+    }).then(r => r.json());
+  const dest = await item({ canvasId, type: 'todo', data: { title: 'Errands', tasks: [] } });
+  const t = (await post({ title: 'Post the parcel' })).body.task;
+  const from = t.listId;
+  const stale = (await plain('/api/todos')).lists.find(l => l.id === from).tasks;
+
+  const r = await patch(t.id, { listId: dest.id, movedBy: 'ranker', moveReason: 'an errand', starred: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.task.listId, dest.id);
+  assert.equal(r.body.task.listTitle, 'Errands');
+  assert.equal(r.body.task.movedFrom, from);
+  assert.equal(r.body.task.movedBy, 'ranker');
+  assert.equal(r.body.task.moveReason, 'an errand');
+  assert.ok(Date.now() - r.body.task.movedAt < 5000);
+  assert.equal(r.body.task.starred, true); // other fields patch in the same call
+  const lists = (await plain('/api/todos')).lists;
+  assert.ok(!lists.find(l => l.id === from).tasks.some(x => x.id === t.id), 'gone from the old list');
+  assert.deepEqual(
+    lists.find(l => l.id === dest.id).tasks.map(x => x.id),
+    [t.id]
+  );
+  assert.ok(logs.some(l => l.includes('"task.move"')));
+
+  // a client saving its stale copy of the old list doesn't bring the task back there
+  const saved = await fetch(base + '/api/item/' + from, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { tasks: stale }, baseTasks: stale }),
+  }).then(r => r.json());
+  assert.ok(!saved.data.tasks.some(x => x.id === t.id));
+
+  // moving back defaults movedBy to "api"; the same list is a no-op that keeps the record
+  const back = (await patch(t.id, { listId: from })).body.task;
+  assert.equal(back.movedFrom, dest.id);
+  assert.equal(back.movedBy, 'api');
+  assert.equal(back.moveReason, null);
+  const same = await patch(t.id, { listId: from, movedBy: 'owner' });
+  assert.equal(same.status, 200);
+  assert.equal(same.body.task.movedBy, 'api');
+
+  // the target must be a live to-do list outside Templates
+  const tpl = await item({ canvasId, type: 'board', data: { title: 'Templates' } });
+  const inner = await item({ canvasId: tpl.data.childCanvasId, type: 'board', data: { title: 'Trip' } });
+  const tplList = await item({ canvasId: inner.data.childCanvasId, type: 'todo', data: { title: 'Pack', tasks: [] } });
+  const note = await item({ canvasId, type: 'note', data: { title: 'not a list' } });
+  for (const listId of [tplList.id, note.id, 'i_missing', 42]) {
+    assert.equal((await patch(t.id, { listId })).status, 400, String(listId));
+  }
+  assert.equal((await patch(t.id, { listId: dest.id, moveReason: 7 })).status, 400);
+  assert.equal((await patch(t.id, { listId: dest.id, movedBy: '' })).status, 200); // blank = "api", like source
+  const longBy = await patch(t.id, { listId: from, movedBy: 'x'.repeat(41) });
+  assert.equal(longBy.status, 400);
+  assert.match(longBy.body.error, /^movedBy /);
+  assert.equal((await patch('t_missing', { listId: dest.id })).status, 404);
+});
+
+test('M3.2 GET /api/tasks/lists?label= lists the live labelled lists outside Templates', async () => {
+  const canvasId = (await plain('/api/root')).rootCanvasId;
+  const item = b =>
+    fetch(base + '/api/item', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(b),
+    }).then(r => r.json());
+  const board = await item({ canvasId, type: 'board', data: { title: 'Garden' } });
+  const filing = await item({
+    canvasId: board.data.childCanvasId,
+    type: 'todo',
+    data: { title: 'Seeds', labels: [' filing '], tasks: [] },
+  });
+  await item({ canvasId, type: 'todo', data: { title: 'Not filing', labels: ['Reference'], tasks: [] } });
+  const gone = await item({ canvasId, type: 'todo', data: { title: 'Trashed', labels: ['Filing'], tasks: [] } });
+  await fetch(base + '/api/item/' + gone.id, { method: 'DELETE' });
+  const tpl = await item({ canvasId, type: 'board', data: { title: 'Templates' } });
+  await item({ canvasId: tpl.data.childCanvasId, type: 'todo', data: { title: 'Tpl', labels: ['Filing'], tasks: [] } });
+  await item({ canvasId, type: 'note', data: { title: 'A note', labels: ['Filing'] } });
+
+  const r = await call('GET', '/api/tasks/lists?label=Filing');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.lists, [{ id: filing.id, title: 'Seeds', boardTitle: 'Garden' }]);
+  assert.equal((await call('GET', '/api/tasks/lists')).status, 400);
+  assert.equal((await call('GET', '/api/tasks/lists?label=Filing', undefined, null)).status, 401);
+});
+
 test('a client edit from a stale copy keeps tasks the API added', async () => {
   const t = (await post({ title: 'Merge base' })).body.task;
   const cardRow = (await plain('/api/todos')).lists.find(l => l.id === t.listId);
@@ -317,4 +408,68 @@ test('a client edit from a stale copy keeps tasks the API added', async () => {
   const kept = saved.data.tasks.find(x => x.id === t.id);
   assert.equal(kept.done, true);
   assert.equal(kept.source, 'api');
+});
+
+test('a client edit from a stale copy keeps the nightly ranking written since', async () => {
+  const t = (await post({ title: 'Rank base' })).body.task;
+  const baseTasks = (await plain('/api/todos')).lists.find(l => l.id === t.listId).tasks;
+  const ranked = await call('PUT', '/api/tasks/rank', {
+    ranks: [{ id: t.id, rankScore: 77, rankReason: 'Matters', rankNudge: 1 }],
+  });
+  assert.deepEqual(ranked.body, { ranked: 1, skipped: [] });
+  // the client still has the copy from before the ranking (rankScore: null) and renames the task
+  const mine = baseTasks.map(x => (x.id === t.id ? Object.assign({}, x, { text: 'Renamed' }) : x));
+  const saved = await fetch(base + '/api/item/' + t.listId, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { tasks: mine }, baseTasks }),
+  }).then(r => r.json());
+  const kept = saved.data.tasks.find(x => x.id === t.id);
+  assert.deepEqual([kept.text, kept.rankScore, kept.rankReason, kept.rankNudge], ['Renamed', 77, 'Matters', 1]);
+  assert.equal(typeof kept.rankedAt, 'number');
+});
+
+test('view=digest: the focus three plus overdue and due today, at most 8 lines', async () => {
+  const digest = async () => (await list('?view=digest')).body;
+  const three = (await list('?view=focus&limit=3')).body.tasks.map(t => t.id);
+  const before = await digest();
+  assert.deepEqual(
+    before.tasks.slice(0, 3).map(t => t.id),
+    three
+  );
+  assert.ok(before.tasks.slice(3).every(t => t.tier === 'overdue' || t.tier === 'today'));
+
+  const root = (await plain('/api/root')).rootCanvasId;
+  const item = async (canvasId, type, data) =>
+    (
+      await fetch(base + '/api/item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canvasId, type, data }),
+      })
+    ).json();
+  const task = (id, due, f = {}) => ({ id, text: id, done: false, createdAt: 1, due, ...f });
+  // Nine tasks more overdue than anything else here; decoys more overdue still, all left out.
+  const late = Array.from({ length: 9 }, (_, i) => task(`dg-${i + 1}`, `2000-01-0${i + 1}`));
+  await item(root, 'todo', {
+    title: 'Late',
+    tasks: [...late, task('dg-stale', '1999-01-01', { stale: true }), task('dg-done', '1999-01-01', { done: true })],
+  });
+  await item(root, 'todo', { title: 'Ref', labels: ['Reference'], tasks: [task('dg-ref', '1999-01-01')] });
+  const tpl = await item(root, 'board', { title: 'Templates' });
+  await item(tpl.data.childCanvasId, 'todo', { title: 'Tpl', tasks: [task('dg-tpl', '1999-01-01')] });
+
+  const d = await digest();
+  assert.deepEqual(
+    d.tasks.map(t => t.id),
+    late.slice(0, 8).map(t => t.id)
+  );
+  assert.ok(d.more >= 1); // dg-9 and any other overdue task
+  const first = d.tasks[0];
+  assert.deepEqual([first.text, first.listTitle, first.due, first.tier], ['dg-1', 'Late', '2000-01-01', 'overdue']);
+
+  // the Done button: PATCH done, and the next one moves up
+  assert.equal((await patch('dg-1', { done: true })).status, 200);
+  assert.equal((await digest()).tasks.at(-1).id, 'dg-9');
+  assert.equal((await call('GET', '/api/tasks?view=digest', undefined, null)).status, 401);
 });

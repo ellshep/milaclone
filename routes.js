@@ -135,22 +135,27 @@ function badParent(parentItemId, canvasId, selfId, selfType) {
 }
 
 // ---- Canvas ----------------------------------------------------------------
+// A board card shows its child canvas's title, colour, icon, card count and
+// whether agents may read it (`agentAccess`, off by default: docs/agent-addon.md A3).
+function childFields(it) {
+  const child = stmt.getCanvas.get(it.data.childCanvasId);
+  return {
+    _childTitle: child ? child.title : 'Board',
+    _childCount: stmt.childCount.get(it.data.childCanvasId).c,
+    _childColor: child ? child.color : 'slate',
+    _childIcon: child ? child.icon || 'layout-grid' : 'layout-grid',
+    _childAgentAccess: !!(child && child.agentAccess),
+  };
+}
+const canvasOut = c => Object.assign({}, c, { agentAccess: !!c.agentAccess });
+
 router.get('/api/root', (req, res) => res.json({ rootCanvasId: rootCanvasId() }));
 
 router.get('/api/canvas/:id', (req, res) => {
   const canvas = stmt.getCanvas.get(req.params.id);
   if (!canvas) return res.status(404).json({ error: 'not found' });
   const items = itemsForCanvas(canvas.id).map(it => {
-    if (it.type === 'board' && it.data && it.data.childCanvasId) {
-      const child = stmt.getCanvas.get(it.data.childCanvasId);
-      const count = stmt.childCount.get(it.data.childCanvasId).c;
-      return Object.assign({}, it, {
-        _childTitle: child ? child.title : 'Board',
-        _childCount: count,
-        _childColor: child ? child.color : 'slate',
-        _childIcon: child ? child.icon || 'layout-grid' : 'layout-grid',
-      });
-    }
+    if (it.type === 'board' && it.data && it.data.childCanvasId) return Object.assign({}, it, childFields(it));
     // A shortcut shows its target board, or null once that board is trashed.
     if (it.type === 'shortcut') {
       const t = it.data && stmt.getCanvas.get(it.data.targetCanvasId);
@@ -160,18 +165,19 @@ router.get('/api/canvas/:id', (req, res) => {
     }
     return it;
   });
-  res.json({ canvas, items, breadcrumb: breadcrumb(canvas.id) });
+  res.json({ canvas: canvasOut(canvas), items, breadcrumb: breadcrumb(canvas.id) });
 });
 
 router.patch('/api/canvas/:id', (req, res) => {
   const canvas = stmt.getCanvas.get(req.params.id);
   if (!canvas) return res.status(404).json({ error: 'not found' });
-  const { title, color, icon } = req.body || {};
+  const { title, color, icon, agentAccess } = req.body || {};
   if (typeof title === 'string') canvas.title = title.slice(0, 200);
   if (typeof color === 'string') canvas.color = color;
   if (typeof icon === 'string') canvas.icon = icon;
+  if (typeof agentAccess === 'boolean') canvas.agentAccess = agentAccess ? 1 : 0;
   stmt.updateCanvas.run(canvas);
-  res.json(canvas);
+  res.json(canvasOut(canvas));
 });
 
 // ---- Items -----------------------------------------------------------------
@@ -220,15 +226,7 @@ router.post('/api/item', (req, res) => {
     stmt.insertItem.run(Object.assign({}, item, { data: JSON.stringify(item.data) }));
   })();
 
-  if (item.type === 'board' && item.data.childCanvasId) {
-    const child = stmt.getCanvas.get(item.data.childCanvasId);
-    Object.assign(item, {
-      _childTitle: child ? child.title : 'Board',
-      _childCount: 0,
-      _childColor: child ? child.color : 'slate',
-      _childIcon: child ? child.icon || 'layout-grid' : 'layout-grid',
-    });
-  }
+  if (item.type === 'board' && item.data.childCanvasId) Object.assign(item, childFields(item));
 
   res.json(item);
 });
@@ -245,11 +243,9 @@ router.patch('/api/item/:id', (req, res) => {
   // The one type change: a note whose text is a hex colour becomes a swatch.
   if (b.type === 'swatch' && it.type === 'note') it.type = 'swatch';
   if (b.parentItemId !== undefined) it.parentItemId = b.parentItemId;
-  if (b.canvasId && stmt.getCanvas.get(b.canvasId)) it.canvasId = b.canvasId;
-  // Checked only when the parent or canvas changes, so an old row with an odd
-  // parent can still be edited.
-  const moved = b.parentItemId !== undefined || it.canvasId !== row.canvasId;
-  if (moved && badParent(it.parentItemId, it.canvasId, it.id, it.type)) {
+  // Checked only when the parent changes, so an old row with an odd parent can
+  // still be edited. Moving to another canvas is POST /move, never PATCH.
+  if (b.parentItemId !== undefined && badParent(it.parentItemId, it.canvasId, it.id, it.type)) {
     return res.status(400).json({ error: 'bad parentItemId' });
   }
   if (b.data && typeof b.data === 'object') {

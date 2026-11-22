@@ -5,6 +5,7 @@ import { api } from './api.js';
 import { rid } from './util.js';
 import { render } from './cards.js';
 import { select, enterEdit } from './editing.js';
+import { agentDefaults } from './agentcard.js';
 
 // Default shapes for each card type and the toolbar "place a new card" flow.
 
@@ -39,6 +40,8 @@ export function defaultsFor(type) {
       return { w: 320, data: { strokes: [] } };
     case 'document':
       return { w: 220, data: { title: '' } };
+    case 'agent':
+      return { w: 320, data: agentDefaults() };
     default:
       return { w: 240, data: {} };
   }

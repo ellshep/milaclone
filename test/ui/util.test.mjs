@@ -242,13 +242,16 @@ describe('rich text', () => {
 
   it('isTyping: text fields and an edited rich body have the keyboard', () => {
     const card = document.createElement('div');
-    card.innerHTML = '<input id="i"><input id="ro" readonly><div data-rich tabindex="-1" id="r"></div>';
+    card.innerHTML =
+      '<input id="i"><input id="ro" readonly><select id="s"><option>a</option></select><div data-rich tabindex="-1" id="r"></div>';
     document.body.appendChild(card);
     const focus = id => document.getElementById(id).focus();
     focus('i');
     expect(isTyping()).toBe(true);
     focus('ro');
     expect(isTyping()).toBe(false);
+    focus('s');
+    expect(isTyping()).toBe(true); // a dropdown's type-to-select letters aren't shortcuts
     focus('r');
     expect(isTyping()).toBe(false); // a static body isn't being edited
     card.classList.add('editing');

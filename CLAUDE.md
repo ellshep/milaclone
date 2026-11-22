@@ -41,7 +41,7 @@ Test isolation: `test/api.test.js` points `DATA_DIR` at a fresh `mkdtemp` before
 Node backend (`server.js` → `routes.js` → `db.js`, plus `tasks-api.js` and `export-md.js`) and a vanilla ES-module frontend. The only build step: `server.js` runs esbuild `buildSync` at boot, bundling `public/js/editor.js` (TipTap) into the gitignored `public/vendor/editor.js`. `esbuild` and `@tiptap/*` are exact-pinned runtime `dependencies` because the Docker image builds the bundle on start.
 
 - `db.js` opens `better-sqlite3` in WAL mode, creates the schema, seeds a root `Home` canvas and exports prepared statements (`stmt.*`). **Routes call the prepared statements directly**; there is no repository layer.
-- Schema: `canvases` (tree via `parentCanvasId`), `items` (belong to a `canvasId`, may nest under `parentItemId` for cards in a column), `meta` (key/value: `rootCanvasId`, the task API's `inboxItemId`).
+- Schema: `canvases` (tree via `parentCanvasId`; `agentAccess` = agents may read the board, off by default, `docs/agent-addon.md` A3), `items` (belong to a `canvasId`, may nest under `parentItemId` for cards in a column), `meta` (key/value: `rootCanvasId`, the task API's `inboxItemId`).
 - `items.data` is a JSON string in SQLite but always an object at the API boundary — `rowToItem` parses on read, routes `JSON.stringify` on write.
 - **Rich text:** `note` and `comment` items keep `data.doc` (TipTap JSON) plus `data.text` (its plain text; search and labels read `text`). `db.js` `toRich` converts plain-text writes on POST; `migrateRichText` converts old rows once at boot after a `VACUUM INTO` backup.
 - `GET /api/search` matches live rows only, with LIKE wildcards escaped.

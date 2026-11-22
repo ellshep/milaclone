@@ -49,25 +49,26 @@ to a chat column, plus the agents' threads and receipts.
 
 ## W1 · Core: the generic pieces
 
-- [ ] **W1.2 `agent` item type.** A form card with `name`, `persona`,
+- [x] **W1.2 `agent` item type.** A form card with `name`, `persona`,
       `boardNotes`, `provider`, `model`, `effort`, `scope` (this board, or this
-      board plus listed boards), `createBoards`, `writes`, `memory`, `runtime`.
+      board plus listed boards), `createBoards`, `writes`, `memory`. The
+      `runtime` field arrives with the second runtime (W6).
       Dropdown lists live in the card module. `data.text` holds name plus
       persona so search finds it.
   - Acceptance: Vitest renders the card and round-trips each field; the e2e
     suite creates one from the add menu and edits the provider.
-- [ ] **W1.3 Board access flag.** `canvases.agentAccess` (default off), toggled
+- [x] **W1.3 Board access flag.** `canvases.agentAccess` (default off), toggled
       from the board card menu and written through PATCH `/api/canvas/:id`;
       `GET /api/canvas/:id` returns it.
   - Acceptance: API test toggles it; e2e flips it from the menu.
-- [ ] **W1.4 Selection hook.** When `window.parent !== window`, the board posts
+- [x] **W1.4 Selection hook.** When `window.parent !== window`, the board posts
       `milaclone:selection` with the selected ids on every change. Nothing is
       posted when not framed.
   - Acceptance: a Vitest test on the selection module.
 
 ## W2 · `addons/mcp/`
 
-- [ ] **W2.1 Server.** Node, streamable HTTP behind a bearer token, stdio for
+- [x] **W2.1 Server.** Node, streamable HTTP behind a bearer token, stdio for
       local use. Tools: `get_root`, `list_boards`, `get_board_outline`,
       `get_board`, `get_item`, `search`, `create_item`, `create_items`,
       `update_item`, `move_item`, `delete_item`, `restore_item`,
@@ -75,7 +76,7 @@ to a chat column, plus the agents' threads and receipts.
       tool respects A3: a blocked board returns a refusal naming the flag.
   - Acceptance: a test boots the board on a temp `DATA_DIR`, runs every tool
     against it, and checks a blocked board is refused.
-- [ ] **W2.2 Docs.** `addons/mcp/README.md` with Claude Code and Claude Desktop
+- [x] **W2.2 Docs.** `addons/mcp/README.md` with Claude Code and Claude Desktop
       config, and what leaves the house (nothing: it is local).
 
 ## W3 · `addons/agent/`: one agent on one board
