@@ -157,7 +157,7 @@ body:hover .controls,
     text-decoration-color 0.3s;
 }
 
-.task.pending .title {
+.task.charged .title {
   color: var(--fx-muted);
   text-decoration-color: currentColor;
 }
@@ -177,59 +177,173 @@ body:hover .controls,
   }
 }
 
-/* The done tab: an empty ring that fills on hover; while pending it reads
-   Undo, with a bar that runs down over UNDO_MS (focuspage.js). */
+/* The done ring. Hold it and the green arc charges round over --hold (set from
+   focuspage.js HOLD_MS); let go early and it drains back. Full: the circle
+   floods green, the check draws in and a ring pulses out (.charged). */
+.act {
+  position: relative;
+}
+
 .tab {
   position: relative;
-  overflow: hidden;
   display: grid;
   place-items: center;
-  min-width: var(--fx-tab);
+  width: var(--fx-tab);
   height: var(--fx-tab);
-  border: 3px solid var(--fx-rule);
-  border-radius: 999px;
+  border-radius: 50%;
   color: var(--fx-muted);
-  font-size: clamp(1rem, 1.3vw, 1.3rem);
-  font-weight: 800;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   transition:
-    background-color 0.2s,
-    border-color 0.2s,
+    transform 0.15s,
     color 0.2s;
 }
 
-.tab svg {
+.tab:focus-visible {
+  border-radius: 50%;
+}
+
+.tab > svg {
+  position: relative;
+  grid-area: 1 / 1;
+}
+
+.ring {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotate(-90deg);
+}
+
+.ring circle {
+  fill: none;
+  stroke-width: 5;
+}
+
+.ring .track {
+  stroke: var(--fx-rule);
+}
+
+.ring .charge {
+  stroke: var(--fx-done);
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  transition: stroke-dashoffset 0.3s ease-out;
+}
+
+.check {
   width: 46%;
   height: 46%;
 }
 
-.tab:hover {
-  border-color: var(--fx-done);
-  background: var(--fx-done);
-  color: var(--fx-bg);
+.check path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.task.pending .tab {
-  padding: 0 1.1em;
-  border-color: var(--fx-ink);
-  background: none;
-  color: var(--fx-ink);
+.tab:hover,
+.task.holding .tab {
+  color: var(--fx-done);
 }
 
-.task.pending .tab::after {
+.task.holding .tab {
+  transform: scale(0.94);
+}
+
+.task.holding .charge,
+.task.charged .charge {
+  stroke-dashoffset: 0;
+}
+
+.task.holding .charge {
+  transition: stroke-dashoffset var(--hold) linear;
+}
+
+/* The flood and the pulse sit behind the SVGs. */
+.tab::before,
+.tab::after {
   content: '';
   position: absolute;
-  inset: auto 22% 9px;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--fx-done);
-  transform-origin: left;
-  animation: countdown 4s linear both;
+  inset: 0;
+  border-radius: 50%;
 }
 
-@keyframes countdown {
-  to {
-    transform: scaleX(0);
+.tab::before {
+  background: var(--fx-done);
+  transform: scale(0);
+  transition: transform 0.3s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+
+.tab::after {
+  border: 3px solid var(--fx-done);
+  opacity: 0;
+}
+
+.task.charged .tab {
+  color: var(--fx-bg);
+  animation: pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.task.charged .tab::before {
+  transform: scale(1);
+}
+
+.task.charged .tab::after {
+  animation: pulse 0.7s ease-out;
+}
+
+.task.charged .check path {
+  stroke-dasharray: 1;
+  animation: draw 0.35s 0.1s ease-out both;
+}
+
+@keyframes pop {
+  50% {
+    transform: scale(1.12);
   }
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.hint {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  translate: -50% 0;
+  white-space: nowrap;
+  font-size: clamp(0.85rem, 1vw, 1rem);
+  color: var(--fx-muted);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.task.hinting .hint {
+  opacity: 1;
 }
 
 .meta {
@@ -349,5 +463,10 @@ body:hover .controls,
   * {
     transition: none !important;
     animation: none !important;
+  }
+
+  /* The charge shows how long is left to hold, so it stays. */
+  .task.holding .charge {
+    transition: stroke-dashoffset var(--hold) linear !important;
   }
 }

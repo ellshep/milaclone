@@ -67,8 +67,9 @@ with every add-on off. A box is ticked when its acceptance test lands.
       lots of space, no chrome.
   - **Three** (default): titles only, all one size, a small muted line when
     due or overdue, the model's reason on hover. Each task has its own done
-    tab (like the 3 Things Pebble app) → struck through with Undo for 4 s →
-    saved and faded → the next task slides in. "N in queue" in the controls.
+    ring (like the 3 Things Pebble app): press and hold → it charges round
+    and floods green → saved and faded → the next task slides in. A tap only
+    shows a hint. "N in queue" in the controls.
   - **List**: every ranked task, scrollable, drag to reorder; overdue and due
     today marked. **Reset** clears placements.
   - The Stale and Filed modes come with the data they show (M2.3, M3.3).

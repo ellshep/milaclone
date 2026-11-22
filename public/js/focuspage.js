@@ -2,9 +2,10 @@
 // imports main.js. Two modes, picked by the URL hash:
 //
 //   Three (default)  the top three of the focus order, one size, each with its
-//                    own done tab (like the 3 Things Pebble app's buttons).
-//                    Tap it → struck through with Undo for 4 s → saved, faded,
-//                    and the next one slides in. "N in queue" sits in the
+//                    own done ring (like the 3 Things Pebble app's buttons).
+//                    Press and hold it: the ring charges, floods green, the
+//                    task is saved as done, fades, and the next one slides in.
+//                    A quick tap only shows a hint. "N in queue" sits in the
 //                    controls.
 //   List (#list)     every ranked task. Drag (or Alt+↑/↓) to reorder; that
 //                    saves placements (focusOrder). Reset clears them.
@@ -15,11 +16,14 @@
 
 import { dueLabel, isFixed, placementAfterDrop } from './focusorder.js';
 
-const UNDO_MS = 4000; // matches the countdown bar in focus.css (.task.pending .tab::after)
+const HOLD_MS = 900; // the ring's charge; focus.css reads it as --hold
+const TAP_MS = 300; // let go sooner than this and it was a tap: show the hint
+const CHEER_MS = 700; // green flood, check and pulse (focus.css .task.charged)
 const FADE_MS = 450; // focus.css .task.done
 
-const CHECK =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const TAB =
+  '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle class="track" cx="50" cy="50" r="46" /><circle class="charge" cx="50" cy="50" r="46" pathLength="100" /></svg>' +
+  '<svg class="check" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11" pathLength="1" /></svg>';
 
 const $ = sel => document.querySelector(sel);
 const threeEl = $('#three');
@@ -29,8 +33,8 @@ const resetBtn = $('#reset');
 const queueEl = $('#queue');
 
 let tasks = [];
-const pending = new Map(); // task id → timer: struck through with Undo, not saved yet
-let saving = 0; // Done saves in flight. Refetches wait while this or `pending` is non-empty.
+const holds = new Map(); // task id → { at, timer } while its ring is held down
+let saving = 0; // Done saves in flight. Refetches wait while this or `holds` is non-empty.
 
 const mode = () => (location.hash === '#list' ? 'list' : 'three');
 
@@ -47,7 +51,7 @@ function showMessage(text) {
 }
 
 async function load() {
-  if (pending.size || saving) return;
+  if (holds.size || saving) return;
   try {
     const r = await fetch('/api/focus?limit=all');
     if (!r.ok) throw new Error(String(r.status));
@@ -91,25 +95,42 @@ function meta(task) {
 function buildTask(task) {
   const li = el('li', 'task');
   li.dataset.id = task.id;
+  li.style.setProperty('--hold', `${HOLD_MS}ms`);
   const body = el('div', 'body');
   body.append(el('p', 'title', task.text), meta(task));
   const tab = el('button', 'tab');
   tab.type = 'button';
-  tab.addEventListener('click', () => (pending.has(li.dataset.id) ? undo(li) : tick(li)));
-  li.append(body, tab);
+  tab.innerHTML = TAB;
+  tab.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    tab.setPointerCapture(e.pointerId);
+    startHold(li);
+  });
+  tab.addEventListener('pointerup', () => stopHold(li));
+  tab.addEventListener('pointercancel', () => stopHold(li));
+  tab.addEventListener('keydown', e => {
+    if (e.key !== ' ' && e.key !== 'Enter') return;
+    e.preventDefault();
+    if (!e.repeat) startHold(li);
+  });
+  tab.addEventListener('keyup', e => {
+    if (e.key !== ' ' && e.key !== 'Enter') return;
+    e.preventDefault();
+    stopHold(li);
+  });
+  tab.addEventListener('blur', () => stopHold(li));
+  tab.addEventListener('contextmenu', e => e.preventDefault()); // a long press is ours
+  // Screen readers activate with a click that no pointer or key made (detail 0):
+  // there's no way to hold, so finish at once.
+  tab.addEventListener('click', e => {
+    if (e.detail === 0 && !holds.has(li.dataset.id)) finish(li);
+  });
+  const hint = el('span', 'hint', 'Hold to finish');
+  hint.setAttribute('aria-hidden', 'true');
+  const act = el('div', 'act');
+  act.append(tab, hint);
+  li.append(body, act);
   return li;
-}
-
-function setTab(li) {
-  const tab = li.querySelector('.tab');
-  const text = li.querySelector('.title').textContent;
-  if (pending.has(li.dataset.id)) {
-    tab.textContent = 'Undo';
-    tab.setAttribute('aria-label', `Undo: ${text}`);
-  } else {
-    tab.innerHTML = CHECK;
-    tab.setAttribute('aria-label', `Done: ${text}`);
-  }
 }
 
 // Keyed by task id, so tasks that stay keep their place and state while a new
@@ -125,50 +146,60 @@ function renderThree() {
       li = buildTask(task);
       if (threeEl.children.length) li.classList.add('enter');
     }
-    setTab(li);
+    li.querySelector('.tab').setAttribute('aria-label', `Hold to finish: ${task.text}`);
     return li;
   });
   threeEl.replaceChildren(...next);
 }
 
-function tick(li) {
-  pending.set(
-    li.dataset.id,
-    setTimeout(() => save(li), UNDO_MS)
-  );
-  li.classList.add('pending');
-  setTab(li);
-}
-
-function undo(li) {
-  clearTimeout(pending.get(li.dataset.id));
-  pending.delete(li.dataset.id);
-  li.classList.remove('pending');
-  setTab(li);
-}
-
-async function save(li) {
+function startHold(li) {
   const id = li.dataset.id;
-  const tab = li.querySelector('.tab');
-  pending.delete(id);
+  if (holds.has(id) || li.classList.contains('charged')) return;
+  li.classList.remove('hinting');
+  li.classList.add('holding');
+  const timer = setTimeout(() => {
+    holds.delete(id);
+    finish(li);
+  }, HOLD_MS);
+  holds.set(id, { at: performance.now(), timer });
+}
+
+// Let go early: the ring drains back. A tap shows "Hold to finish" for a moment.
+function stopHold(li) {
+  const hold = holds.get(li.dataset.id);
+  if (!hold) return;
+  clearTimeout(hold.timer);
+  holds.delete(li.dataset.id);
+  li.classList.remove('holding');
+  if (performance.now() - hold.at < TAP_MS) {
+    li.classList.add('hinting');
+    setTimeout(() => li.classList.remove('hinting'), 1800);
+  }
+}
+
+const pause = ms => new Promise(r => setTimeout(r, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : ms));
+
+async function finish(li) {
+  const id = li.dataset.id;
+  li.classList.remove('holding', 'hinting');
+  li.classList.add('charged');
+  navigator.vibrate?.(20);
   saving++;
-  tab.disabled = true;
+  const cheer = pause(CHEER_MS);
   let ok = false;
   try {
     ok = (await fetch(`/api/focus/${encodeURIComponent(id)}/done`, { method: 'POST' })).ok;
   } catch {
     ok = false;
   }
+  await cheer;
   if (ok) {
     li.classList.add('done');
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    await new Promise(r => setTimeout(r, reduced ? 0 : FADE_MS));
+    await pause(FADE_MS);
   }
   saving--;
-  tab.disabled = false;
   if (!ok) {
-    li.classList.remove('pending');
-    setTab(li);
+    li.classList.remove('charged');
     li.querySelector('.meta').replaceChildren(el('span', 'due overdue', "Couldn't mark it done. Try again."));
     return;
   }
