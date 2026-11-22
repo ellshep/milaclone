@@ -171,10 +171,8 @@ board works the same without them.
 | Backup  | **Export → Download database backup**, or `GET /api/backup` |
 
 You can set these environment variables: `PORT` (default 4321), `HOST`
-(default `0.0.0.0`), `DATA_DIR` (default `./data`), `API_KEY` (unset = the API
-is open; set, every `/api/*` call needs an `X-API-Key` header, which the page
-handles for you), and for the task API `TASK_API_TOKEN` (unset = off) and
-`TASK_TZ` (default `UTC`).
+(default `0.0.0.0`), `DATA_DIR` (default `./data`), and for the task API
+`TASK_API_TOKEN` (unset = off) and `TASK_TZ` (default `UTC`).
 `.env.example` lists them.
 
 ## Development

@@ -5,7 +5,6 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const crypto = require('crypto');
 
 const {
   db,
@@ -74,38 +73,6 @@ const ALLOWED_UPLOAD = mime =>
   mime === 'application/json';
 
 const router = express.Router();
-
-// ---- API key ----------------------------------------------------------------
-// With API_KEY set, every /api/* route wants `X-API-Key: <key>`. The browser
-// gets the same key as a cookie when it loads the page, so the key gates machine
-// clients and cross-site requests, not people who can already reach the page
-// (the tailnet does that). Unset = open, as before. Read on every request so a
-// change in .env needs only a restart. Exempt: /api/health (health checks) and
-// /api/tasks (its own bearer token, docs/task-api.md).
-const KEY_COOKIE = 'milaclone_key';
-const apiKey = () => process.env.API_KEY || '';
-const sameKey = (given, want) => {
-  const a = Buffer.from(String(given || ''));
-  const b = Buffer.from(want);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-};
-const cookieKey = req => {
-  const m = new RegExp('(?:^|;\\s*)' + KEY_COOKIE + '=([^;]*)').exec(req.get('cookie') || '');
-  return m ? decodeURIComponent(m[1]) : '';
-};
-router.use((req, res, next) => {
-  const key = apiKey();
-  if (!key) return next();
-  if (!req.path.startsWith('/api/')) {
-    // Each page load refreshes the browser's copy (a rotated key takes effect on reload).
-    if (req.method === 'GET') res.cookie(KEY_COOKIE, key, { httpOnly: true, sameSite: 'strict', maxAge: 365 * 864e5 });
-    return next();
-  }
-  if (req.path === '/api/health' || req.path.startsWith('/api/tasks')) return next();
-  if (sameKey(req.get('x-api-key'), key) || sameKey(cookieKey(req), key)) return next();
-  res.status(401).json({ error: 'unauthorized' });
-});
-
 // No client sends compressed bodies, so refuse them (415) rather than inflate:
 // the gzip path is where body-parser < 1.20.9 can be stalled (GHSA-27r3-jxmh-p828).
 router.use(express.json({ limit: '5mb', inflate: false }));

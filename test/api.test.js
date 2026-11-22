@@ -941,40 +941,6 @@ test('U2.2 the service worker is served no-cache so updates land on the next lau
   }
 });
 
-// ---- W1.1 API key (docs/agent-addon.md A10) --------------------------------------
-test('API_KEY set: /api/* wants the header or the page cookie; health and tasks are exempt', async t => {
-  process.env.API_KEY = 'k-secret';
-  t.after(() => delete process.env.API_KEY);
-  assert.equal((await get('/api/root')).status, 401);
-  assert.equal((await fetch(base + '/api/root', { headers: { 'X-API-Key': 'k-wrong' } })).status, 401);
-  assert.equal((await fetch(base + '/api/root', { headers: { 'X-API-Key': 'k-secret' } })).status, 200);
-  // loading the page hands the browser the key as a cookie, and that cookie passes
-  const page = await fetch(base + '/');
-  assert.equal(page.status, 200);
-  const cookie = page.headers.get('set-cookie');
-  assert.match(cookie, /^milaclone_key=k-secret;/);
-  assert.match(cookie, /HttpOnly/);
-  assert.match(cookie, /SameSite=Strict/);
-  const r = await fetch(base + '/api/root', { headers: { cookie: 'other=1; ' + cookie.split(';')[0] } });
-  assert.equal(r.status, 200);
-  assert.equal((await fetch(base + '/api/root', { headers: { cookie: 'milaclone_key=nope' } })).status, 401);
-  assert.equal((await get('/api/health')).status, 200);
-  assert.equal((await get('/api/tasks')).status, 503); // its own token decides, not the key
-  // a write without the key is refused before the body is parsed
-  assert.equal((await send('POST', '/api/item', { canvasId: await rootWith('k-secret'), type: 'note' })).status, 401);
-});
-
-async function rootWith(key) {
-  return (await (await fetch(base + '/api/root', { headers: { 'X-API-Key': key } })).json()).rootCanvasId;
-}
-
-test('API_KEY unset: no cookie is set and every route is open', async () => {
-  delete process.env.API_KEY;
-  const page = await fetch(base + '/');
-  assert.equal(page.headers.get('set-cookie'), null);
-  assert.equal((await get('/api/root')).status, 200);
-});
-
 // ---- W1.3 board access flag (docs/agent-addon.md A3) -----------------------------
 test('agentAccess is off by default, toggles through PATCH /api/canvas and shows on the board card', async () => {
   const canvasId = await root();
