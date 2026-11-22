@@ -14,8 +14,8 @@ with every add-on off. A box is ticked when its acceptance test lands.
 
 | #   | Question                   | Decision                                                                                                                                                                                                    |
 | --- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| N1  | Order                      | Backlog import, then ranking and the focus page, then filing, then the board agents (`docs/agent-addon.md`), then the watch app, then the morning digest                                                    |
-| N2  | Who ranks                  | Fixed tiers first; the model orders within a tier and may move a task one tier up or down (at most 3 a night, a setting turns this off or lifts the cap)                                                    |
+| N1  | Order                      | Backlog import, then ranking and the focus page, then filing, then the board agents (`docs/agent-addon.md`), then F1–F3 of `docs/focus-redesign.md`, then the watch app, then the digest, then F4–F8        |
+| N2  | Who ranks                  | Replaced by the four bands of `docs/focus-redesign.md` (R8, R9) once F2 ships. Until then: fixed tiers first; the model orders within a tier and may move a task one tier up or down (at most 3 a night)    |
 | N3  | Which tasks are ranked     | Every open task, except lists labelled **Reference** and the Templates board                                                                                                                                |
 | N4  | Stale                      | A fixed rule, never the model's call; stale tasks stay on their lists, hidden from the focus three                                                                                                          |
 | N5  | Pinning                    | No pin button. The owner drags tasks in the focus page's List mode; the top three are the focus three                                                                                                       |
@@ -35,7 +35,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
 | N19 | Focus priorities           | A note on Home whose first line is "Focus priorities", sent to the model as written. Board content, so it stays put if ranking moves                                                                        |
 | N20 | Ranker settings            | Each unset `RANK_*` setting falls back to its `EXTRACT_*` one, so ranking reuses the voice key                                                                                                              |
 | N21 | First run                  | The ranker has a dry run; the owner sees its output once before the 03:00 schedule is turned on                                                                                                             |
-| N22 | Stale                      | Waits for the owner's focus page redesign (backlog V5), which has no Stale mode yet; ranking ships without it                                                                                               |
+| N22 | Stale                      | Settled by `docs/focus-redesign.md` (R15–R17): no Stale mode; stale tasks show in the done history. Built as F6                                                                                             |
 
 ## M1 · Backlog import
 
@@ -88,10 +88,9 @@ with every add-on off. A box is ticked when its acceptance test lands.
       (`RANK_NUDGE=off|one-tier|free`). `--dry-run` prints what it would write.
   - Writes through the task API. Logs tokens, cost and the top three before and
     after. Failure leaves the fixed order in place.
-  - The stale rule and its focus page view wait for V5 (N22). The rule as
-    planned: more than 30 days old with no upcoming due date and not starred,
-    or more than 14 days overdue, with the reason saved.
-- [ ] **M2.4 Recording retention.** Audio deleted 7 days after `done`;
+  - The stale rule and where stale tasks show are F6 of
+    `docs/focus-redesign.md` (N22).
+- [x] **M2.4 Recording retention.** Audio deleted 7 days after `done`;
       failed ingests keep theirs.
 
 ## M3 · Filing into lists
@@ -102,9 +101,18 @@ with every add-on off. A box is ticked when its acceptance test lands.
       tags) and files a task only when the speaker names one; ambiguous names
       go to the Inbox.
 - [ ] **M3.3 Nightly.** The ranking pass may move Inbox tasks into exactly one
-      clearly fitting Filing list, with a reason. The focus page gains a
-      **Filed** mode: the last 7 days of nightly moves, each with Back to
-      Inbox.
+      clearly fitting Filing list, with a reason. No Filed mode on the focus
+      page (`docs/focus-redesign.md` R26).
+  - Each run writes a filing log the owner and the Home orchestrator (W4) can
+    read: the run's time, and for every Inbox task it considered, the decision
+    (moved to which list, or left in the Inbox) and the reason. It is board
+    content, written through the board's HTTP API: a document card on Home
+    titled "Filing log", newest run first, the last 30 runs kept.
+  - Undo is "Back to Inbox" in the focus page's row menu (F4.3); until that
+    ships, the owner drags the task back.
+  - Acceptance: a run that moves one task and leaves one writes both to the
+    log with their reasons; a second run adds an entry above the first; the
+    31st run drops the oldest.
 
 ## M4 · Pebble watch app
 
@@ -134,10 +142,10 @@ with every add-on off. A box is ticked when its acceptance test lands.
 
 ## Risks
 
-| Risk                                                 | Mitigation                                                            |
-| ---------------------------------------------------- | --------------------------------------------------------------------- |
-| Ranking hides something that matters                 | Overdue and due today always on top; stale only by fixed rule; logs   |
-| A filed task is never seen again                     | Filing lists are opt-in; Filed mode with undo; filed tasks still rank |
-| The browser doesn't report a display wake as visible | Refresh control; tested on the owner's Mac                            |
-| The watch can't reach the server through the phone   | First spike in M4.2; stop and re-plan if it fails                     |
-| Duplicates from the backlog import                   | Cleanup before import, `importId`, `--dry-run`                        |
+| Risk                                                 | Mitigation                                                                  |
+| ---------------------------------------------------- | --------------------------------------------------------------------------- |
+| Ranking hides something that matters                 | Overdue and due today always on top; stale only by fixed rule; logs         |
+| A filed task is never seen again                     | Filing lists are opt-in; the filing log and Back to Inbox; filed tasks rank |
+| The browser doesn't report a display wake as visible | Refresh control; tested on the owner's Mac                                  |
+| The watch can't reach the server through the phone   | First spike in M4.2; stop and re-plan if it fails                           |
+| Duplicates from the backlog import                   | Cleanup before import, `importId`, `--dry-run`                              |

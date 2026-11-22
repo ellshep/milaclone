@@ -1,0 +1,9 @@
+# no-mistakes gate config (https://kunchenguid.github.io/no-mistakes/reference/repo-config/).
+# Commands here are read from main only. CI stays the full regression run.
+commands:
+  prepare: 'npm ci --prefer-offline'
+  test: 'npm test && npm run test:ui'
+  lint: 'npm run lint && npm run format:check && npm run check:docs'
+  format: 'npm run format'
+review:
+  max_fix_rounds: 3
