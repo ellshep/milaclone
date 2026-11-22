@@ -3,8 +3,17 @@
 # PR creation so every change ships through the no-mistakes gate. See
 # CONTRIBUTING.md "Shipping a change".
 if jq -e '
+  def push_remote:
+    if length == 0 then null
+    elif .[0] == "--" then .[1]
+    elif .[0] | test("^(--(repo|push-option|receive-pack|exec|recurse-submodules)|-[vqdnfu46]*o)$") then
+      .[2:] | push_remote
+    elif .[0] | startswith("-") then .[1:] | push_remote
+    else .[0]
+    end;
+
   def blocked:
-    (.[0:2] == ["git", "push"] and .[2] != "no-mistakes")
+    (.[0:2] == ["git", "push"] and (.[2:] | push_remote) != "no-mistakes")
     or .[0:3] == ["gh", "pr", "create"];
 
   (.tool_input.command // "")
@@ -12,7 +21,7 @@ if jq -e '
       {words: [], denied: false};
       if $token | test("^[;&|()\n]$") then
         {words: [], denied: (.denied or (.words | blocked))}
-      elif ($token | startswith("#")) or (.words | length >= 3) then
+      elif $token | startswith("#") then
         .
       else
         .words += [$token | sub("^[\u0027\"](?<literal>[a-z-]+)[\u0027\"]$"; "\(.literal)")]
