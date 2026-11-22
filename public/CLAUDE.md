@@ -10,6 +10,7 @@ Loaded when you work under `public/`. Rules and invariants only; feature detail 
 - `main.js` boots the app, wires the global keyboard/pointer handlers and owns `openCanvas(id)`, the single navigation primitive (fetch, reset selection, update `location.hash`, reset the label filter).
 - **Selection** is a set: `state.selection` holds every selected id and `state.selectedId` is the primary one. Go through `select` / `selectIds` / `toggleSelect` in `editing.js`; never assign either field directly. `selectedItems()` drops cards whose column is also selected. Copy/cut/duplicate/delete/colour act on the whole selection.
 - Left-drag on empty canvas draws the selection box (`tools.js`); space-drag, middle-drag and touch pan (decision D2).
+- When the board is framed by a same-origin page, `embed.js` posts the selected ids to it on every change (`selectIds` and the delete path call `postSelection`); standalone it posts nothing.
 
 ## Keyboard
 
@@ -25,7 +26,7 @@ Loaded when you work under `public/`. Rules and invariants only; feature detail 
 - `drag.js`: dragging a card out of a column reparents it to `#world` mid-drag and clears `in-column`; dropping onto a `.col-body` reparents and reorders siblings via `api.patchMany`. Collapsed columns aren't drop targets. Drags snap the lead card to `GRID` (shift = free).
 - **Never `innerHTML` user content.** Note bodies render with `util.js` `docToDom` (DOM-built, links limited to http(s)/mailto). `rich.js` mounts TipTap in `enterEdit` and destroys it in `exitEdit`, `import()`ing the bundle the first time any card is edited.
 - Link cards render an iframe built from the URL alone for what `util.js` `embedUrl` recognises; the server never fetches URLs (decision D4).
-- **Plain text beside rich fields:** swatch, table and document cards keep `data.text` next to their own fields so search and Markdown export need no per-type code. Keep it in sync when you add a card type.
+- **Plain text beside rich fields:** swatch, table, document and agent cards keep `data.text` next to their own fields so search and Markdown export need no per-type code. Keep it in sync when you add a card type.
 - A note whose whole text is a hex code becomes a swatch when its edit ends (`editing.js` `exitEdit`); `PATCH /api/item` allows exactly that one type change.
 - `document.js` (`#docDialog`) closes on Escape itself because TipTap swallows the key.
 - Lucide icons come from a CDN `<script>`; call `refreshIcons()` after DOM changes (it no-ops if the CDN failed).
@@ -38,6 +39,7 @@ Loaded when you work under `public/`. Rules and invariants only; feature detail 
 
 - A `shortcut` item (`data.targetCanvasId`) is an alias card; GET `/api/canvas/:id` adds `_target`, which is `null` once the board is trashed (renders as broken).
 - Templates are boards inside a board named "Templates" on Home; `/copy` deep-copies one.
+- An `agent` card (`agentcard.js`, `docs/agent-addon.md` A4–A8) is a form the agent add-on reads through the API; core only stores it. A board card's menu toggles its child canvas's `agentAccess` (`_childAgentAccess` on the card).
 - `data.labels` is a list of names on any card but a line; `util.js` `labelColor` derives each colour, so there's no label registry. The filter isn't saved.
 
 ## Quick notes (`quicknotes.js`)

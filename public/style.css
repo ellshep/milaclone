@@ -566,6 +566,83 @@ textarea {
   text-transform: lowercase;
 }
 
+/* ---------- agent ---------- */
+.agent {
+  padding: 10px 12px 12px;
+}
+.agent .ag-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+.agent .ag-head svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--ink-soft);
+}
+.agent .ag-name {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--ink);
+  font: 600 14px var(--sans);
+}
+.agent .ag-form {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.agent .ag-row {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: start;
+  gap: 8px;
+  font: 12px var(--sans);
+  color: var(--ink-soft);
+}
+.agent .ag-row[hidden] {
+  display: none;
+}
+.agent .ag-row > span {
+  padding-top: 5px;
+}
+.agent .ag-row textarea,
+.agent .ag-row input[type='text'],
+.agent .ag-row input:not([type]),
+.agent .ag-row select {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--ink-body);
+  font: 13px var(--sans);
+  resize: none;
+}
+.agent .ag-row textarea {
+  overflow: hidden;
+}
+.agent .ag-row select {
+  cursor: pointer;
+}
+.agent.editing [data-edit]:focus {
+  border-color: var(--select);
+  outline: none;
+}
+.agent .ag-check {
+  align-items: center;
+}
+.agent .ag-check input {
+  justify-self: start;
+  margin: 0;
+  cursor: pointer;
+}
+
 /* ---------- table ---------- */
 .table {
   padding: 10px;

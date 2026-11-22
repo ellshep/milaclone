@@ -18,6 +18,7 @@ const ICONS = {
   image: 'image',
   file: 'file',
   comment: 'message-square',
+  agent: 'bot',
 };
 const el = id => document.getElementById(id);
 const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });

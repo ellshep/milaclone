@@ -41,6 +41,8 @@ const colsOf = t =>
     .all()
     .map(c => c.name);
 if (!colsOf('canvases').includes('icon')) db.exec('ALTER TABLE canvases ADD COLUMN icon TEXT');
+// 1 = agents may read the board (docs/agent-addon.md A3); NULL/0 = blocked, the default.
+if (!colsOf('canvases').includes('agentAccess')) db.exec('ALTER TABLE canvases ADD COLUMN agentAccess INTEGER');
 for (const t of ['canvases', 'items']) {
   if (!colsOf(t).includes('trashedBy')) db.exec(`ALTER TABLE ${t} ADD COLUMN trashedBy TEXT`);
   if (!colsOf(t).includes('trashedAt')) db.exec(`ALTER TABLE ${t} ADD COLUMN trashedAt INTEGER`);
@@ -56,7 +58,9 @@ const stmt = {
   getCanvas: db.prepare(`SELECT * FROM canvases WHERE id = ? AND ${LIVE}`),
   insertCanvas: db.prepare(`INSERT INTO canvases (id, title, parentCanvasId, color, icon, createdAt)
                             VALUES (@id, @title, @parentCanvasId, @color, @icon, @createdAt)`),
-  updateCanvas: db.prepare(`UPDATE canvases SET title = @title, color = @color, icon = @icon WHERE id = @id`),
+  updateCanvas: db.prepare(
+    `UPDATE canvases SET title = @title, color = @color, icon = @icon, agentAccess = @agentAccess WHERE id = @id`
+  ),
   setCanvasParent: db.prepare(`UPDATE canvases SET parentCanvasId = ? WHERE id = ?`),
   trashCanvas: db.prepare(`UPDATE canvases SET trashedBy = ?, trashedAt = ? WHERE id = ?`),
   getItem: db.prepare(`SELECT * FROM items WHERE id = ? AND ${LIVE}`),

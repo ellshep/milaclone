@@ -984,3 +984,43 @@ test('U2.2 the service worker is served no-cache so updates land on the next lau
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---- W1.3 board access flag (docs/agent-addon.md A3) -----------------------------
+test('agentAccess is off by default, toggles through PATCH /api/canvas and shows on the board card', async () => {
+  const canvasId = await root();
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Private' } })).body;
+  assert.equal(board._childAgentAccess, false);
+  const childId = board.data.childCanvasId;
+  assert.equal((await get('/api/canvas/' + childId)).body.canvas.agentAccess, false);
+
+  const on = await send('PATCH', '/api/canvas/' + childId, { agentAccess: true });
+  assert.equal(on.body.agentAccess, true);
+  assert.equal((await get('/api/canvas/' + childId)).body.canvas.agentAccess, true);
+  const card = (await get('/api/canvas/' + canvasId)).body.items.find(i => i.id === board.id);
+  assert.equal(card._childAgentAccess, true);
+  // a non-boolean is ignored, a rename leaves the flag alone
+  await send('PATCH', '/api/canvas/' + childId, { agentAccess: 'yes', title: 'Still private' });
+  const after = (await get('/api/canvas/' + childId)).body.canvas;
+  assert.equal(after.agentAccess, true);
+  assert.equal(after.title, 'Still private');
+  assert.equal((await send('PATCH', '/api/canvas/' + childId, { agentAccess: false })).body.agentAccess, false);
+  await send('DELETE', '/api/item/' + board.id);
+});
+
+test('an agent card exports its name and persona like the other text-bearing cards', async () => {
+  const canvasId = await root();
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Agent export' } })).body;
+  const cid = board.data.childCanvasId;
+  const agent = (
+    await send('POST', '/api/item', {
+      canvasId: cid,
+      type: 'agent',
+      data: { name: 'Clock bot', persona: 'Finds parts', provider: 'local', text: 'Clock bot\nFinds parts' },
+    })
+  ).body;
+  assert.equal(agent.data.provider, 'local'); // stored as sent: core only keeps the card
+  const md = await (await fetch(base + `/api/canvas/${cid}/export.md`)).text();
+  assert.match(md, /## Clock bot\nFinds parts/);
+  assert.doesNotMatch(md, /local/); // settings stay out of the Markdown
+  await send('DELETE', '/api/item/' + board.id);
+});

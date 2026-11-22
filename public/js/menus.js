@@ -131,7 +131,12 @@ export function openCtx(e, it) {
             : [{ label: 'Rename', hint: 'Return', fn: () => renameSelected() }]),
           { label: locked ? 'Unlock Position' : 'Lock Position', fn: () => toggleLock() },
           { label: 'Labels…', fn: () => openLabels() },
-          ...(it.type === 'board' && !many ? [{ label: 'Create Shortcut', fn: () => createShortcut(it) }] : []),
+          ...(it.type === 'board' && !many
+            ? [
+                { label: 'Create Shortcut', fn: () => createShortcut(it) },
+                { label: it._childAgentAccess ? 'Block Agents' : 'Allow Agents', fn: () => toggleAgentAccess(it) },
+              ]
+            : []),
           ...(it.type === 'image'
             ? [
                 {
@@ -202,6 +207,16 @@ function toggleTransparent(it) {
 export function closeCtx() {
   dom.ctxmenu.classList.remove('open');
   dom.ctxmenu.innerHTML = '';
+}
+
+// Whether agents may read the board (docs/agent-addon.md A3): off by default,
+// stored on the child canvas, shown on the card as `_childAgentAccess`.
+async function toggleAgentAccess(board) {
+  const agentAccess = !board._childAgentAccess;
+  const c = await api.patchCanvas(board.data.childCanvasId, { agentAccess });
+  if (!c) return;
+  board._childAgentAccess = c.agentAccess;
+  toast(c.agentAccess ? 'Agents may read this board' : 'Agents are blocked from this board');
 }
 
 // F7.5: an alias card for `board`, placed beside it; cut/paste it to any board.

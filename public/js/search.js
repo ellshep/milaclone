@@ -19,6 +19,7 @@ const ICONS = {
   todo: 'list-checks',
   link: 'link',
   comment: 'message-circle',
+  agent: 'bot',
 };
 let seq = 0;
 let results = [];
