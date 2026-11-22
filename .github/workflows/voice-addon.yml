@@ -70,7 +70,7 @@ jobs:
           TS_AUTHKEY: ci-dummy
         run: |
           test "$(docker compose config --services | sort | tr '\n' ' ')" = "app tailscale "
-          test "$(COMPOSE_PROFILES=voice docker compose config --services | sort | tr '\n' ' ')" = "app pipeline tailscale "
+          test "$(COMPOSE_PROFILES=voice docker compose config --services | sort | tr '\n' ' ')" = "app pipeline ranker tailscale "
           test "$(COMPOSE_PROFILES=alexa docker compose config --services | sort | tr '\n' ' ')" = "app cloudflared pipeline tailscale "
       # `compose config` accepts some mistakes the daemon rejects (an empty
       # extra_hosts IP), so create the real containers without starting them.
@@ -82,7 +82,7 @@ jobs:
           docker tag milaclone:ci milaclone:local
           docker tag milaclone-pipeline:ci milaclone-pipeline:local
           docker compose config -q
-          docker compose create --no-build --pull never app pipeline
+          docker compose create --no-build --pull never app pipeline ranker
           docker compose down
       - name: Voice text to task, end to end
         run: |
@@ -97,6 +97,11 @@ jobs:
           curl -fs -H 'Authorization: Bearer task-token' http://127.0.0.1:4321/api/tasks \
             | grep -q '"text":"Buy printer ink"'
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4321/api/tasks)" = 401
+      - name: Ranker dry run against the app
+        run: |
+          docker run --rm --network smoke -e TASK_API_TOKEN=task-token -e APP_URL=http://app:4321 \
+            -e RANK_PROVIDER=fake -e FAKE_LLM_RESPONSE='{"tasks":[{"n":1,"score":70,"reason":"Smoke","move":"none"}]}' \
+            milaclone-pipeline:ci python -m ingest.rank --dry-run | tee /dev/stderr | grep -q '"rank.done"'
       - name: Container logs
         if: ${{ failure() }}
         run: docker logs app; docker logs pipeline

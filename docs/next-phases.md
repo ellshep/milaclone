@@ -82,7 +82,7 @@ with every add-on off. A box is ticked when its acceptance test lands.
     `visibilitychange` and refresh; no timers.
   - Mac setup in the docs: app-mode browser window, open at login, display
     sleep left on overnight.
-- [ ] **M2.3 Ranking service** (add-on). Nightly at 03:00: reads open tasks,
+- [x] **M2.3 Ranking service** (add-on). Nightly at 03:00: reads open tasks,
       the Focus priorities note (N19) if there is one, and asks the `RANK_*`
       model for a score, a one-line reason and at most 3 one-tier moves
       (`RANK_NUDGE=off|one-tier|free`). `--dry-run` prints what it would write.

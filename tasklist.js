@@ -112,4 +112,31 @@ function merge(base, server, mine) {
   return out;
 }
 
-module.exports = { normTask, isBlank, withIds, copyTasks, newTask, merge };
+// The nightly ranking's write (PUT /api/tasks/rank) to one list. `ranks` maps a
+// task id to { rankScore, rankReason, rankNudge }; a listed task gets those and
+// `rankedAt`. Every other task loses `rankNudge`, so last night's moves never
+// pile up. A task the owner placed (`focusOrder`) is never ranked and loses any
+// nudge (N6). Returns the ids written and whether the list changed.
+function applyRanks(tasks, ranks, now) {
+  const written = [];
+  let changed = false;
+  for (const t of tasks) {
+    if (!isObj(t)) continue;
+    const r = Number.isFinite(t.focusOrder) ? undefined : ranks.get(t.id);
+    if (r) {
+      t.rankScore = r.rankScore;
+      t.rankReason = r.rankReason;
+      t.rankedAt = now;
+      written.push(t.id);
+      changed = true;
+    }
+    if (r && r.rankNudge) t.rankNudge = r.rankNudge;
+    else if ('rankNudge' in t) {
+      delete t.rankNudge;
+      changed = true;
+    }
+  }
+  return { written, changed };
+}
+
+module.exports = { normTask, isBlank, withIds, copyTasks, newTask, merge, applyRanks };
