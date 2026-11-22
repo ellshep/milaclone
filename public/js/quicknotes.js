@@ -2,6 +2,7 @@
 
 import { state } from './state.js';
 import { api, retryDelay } from './api.js';
+import { createSaveQueue } from './savequeue.js';
 import { autoGrow, colorVar, lucideEl, refreshIcons, toast, rid, daysUntil, dueInfo } from './util.js';
 import { screenToWorld } from './viewport.js';
 import { createAt, defaultsFor } from './create.js';
@@ -110,16 +111,10 @@ function normTask(t) {
   };
 }
 
-// The base sent with an edit is built exactly like the edited copy (normTask,
-// same ids), so filled-in defaults such as `starred: false` don't count as
-// edits and overwrite a star or due date set on another device.
-const clone = v => JSON.parse(JSON.stringify(v));
-const withBase = tasks => ({ tasks, baseTasks: clone(tasks) });
-
 async function load() {
   const r = await api.todos();
   qn.rootCanvasId = r.rootCanvasId;
-  if (savePending.size) return; // a local edit is still in flight — keep ours
+  if (saves.pending()) return; // a local edit is still in flight — keep ours
   qn.lists = (r.lists || []).map(l => ({
     id: l.id,
     canvasId: l.canvasId,
@@ -127,87 +122,49 @@ async function load() {
     title: l.title || 'To-do',
     color: l.color || null,
     tags: Array.isArray(l.tags) ? l.tags : [],
-    ...withBase((l.tasks || []).map(normTask)),
+    tasks: (l.tasks || []).map(normTask),
     createdAt: l.createdAt,
   }));
+  for (const l of r.lists || []) saves.track(l.id, l.tasks);
   qn.loaded = true;
   updateBadge();
   render();
 }
 
-const saveTimers = new Map();
-const savePending = new Map();
+// Writes are debounced while typing and go out through the shared save queue
+// (savequeue.js: retries, task-list bases); anything still queued is sent as
+// soon as the user closes a sheet or leaves Quick notes, so nothing is lost.
+const saves = createSaveQueue({
+  send: api.patch,
+  delay: 200,
+  retryDelay,
+  current: (id, key) => listById(id)?.[key],
+  // The server merges task edits with changes made elsewhere (the canvas card,
+  // another device); show its result if it differs.
+  onSaved(id, saved) {
+    const list = listById(id);
+    if (!list || !Array.isArray(saved.data.tasks)) return;
+    const merged = saved.data.tasks.map(normTask);
+    if (saves.pending(id) || JSON.stringify(merged) === JSON.stringify(list.tasks)) return;
+    list.tasks = merged;
+    render();
+  },
+});
 function save(list, body) {
   qn.dirty = true;
-  clearTimeout(saveTimers.get(list.id));
-  savePending.set(list.id, Object.assign(savePending.get(list.id) || {}, body));
-  saveTimers.set(
-    list.id,
-    setTimeout(() => flushSaves(list.id), 200)
-  );
-}
-
-// Writes are debounced while typing; anything still queued goes out as soon as
-// the user closes a sheet or leaves Quick notes, so nothing is lost.
-function flushSaves(only, keepalive = false) {
-  const sent = [];
-  for (const [id, body] of savePending) {
-    if (only && id !== only) continue;
-    clearTimeout(saveTimers.get(id));
-    saveTimers.delete(id);
-    savePending.delete(id);
-    const list = listById(id);
-    const req = { data: body };
-    if (body.tasks && list) req.baseTasks = list.baseTasks || [];
-    sent.push(
-      api.patch(id, req, keepalive).then(saved => (saved === null ? requeue(list, body) : adoptMerged(list, saved)))
-    );
-  }
-  return sent;
-}
-
-// A save that may work later goes back in the queue with the list's current
-// values (never the failed ones, so a retry can't undo a newer edit) and is
-// retried with backoff, or as soon as the network returns.
-const retryCount = new Map();
-function requeue(list, body) {
-  if (!list) return;
-  const newer = savePending.has(list.id); // a newer edit keeps its own, sooner timer
-  const p = savePending.get(list.id) || {};
-  for (const k of Object.keys(body)) if (!(k in p)) p[k] = list[k];
-  savePending.set(list.id, p);
-  const n = (retryCount.get(list.id) || 0) + 1;
-  retryCount.set(list.id, n);
-  const wait = retryDelay(n);
-  if (newer || wait === null) return;
-  saveTimers.set(
-    list.id,
-    setTimeout(() => flushSaves(list.id), wait)
-  );
-}
-
-// The server merges task edits with changes made elsewhere (the canvas card,
-// another device); take its result as the new base and show it if it differs.
-function adoptMerged(list, saved) {
-  if (list) retryCount.delete(list.id);
-  if (!saved || !list || !Array.isArray(saved.data.tasks)) return;
-  const merged = saved.data.tasks.map(normTask);
-  list.baseTasks = clone(merged);
-  if (savePending.has(list.id) || JSON.stringify(merged) === JSON.stringify(list.tasks)) return;
-  list.tasks = merged;
-  render();
+  saves.edit(list.id, body);
 }
 // Queued edits go out before the tab closes or the phone backgrounds the app.
 // …and coming back, pick up edits made elsewhere once ours have landed.
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState === 'hidden') flushSaves(null, true);
+  if (document.visibilityState === 'hidden') saves.flush(undefined, { keepalive: true });
   else if (qn.loaded) {
-    await Promise.all(flushSaves(null));
+    await saves.flush();
     load().catch(() => {});
   }
 });
-window.addEventListener('pagehide', () => flushSaves(null, true));
-window.addEventListener('online', () => flushSaves(null));
+window.addEventListener('pagehide', () => saves.flush(undefined, { keepalive: true }));
+window.addEventListener('online', () => saves.flush());
 const saveTasks = list => save(list, { tasks: list.tasks });
 const saveMeta = list => save(list, { title: list.title, tags: list.tags });
 
@@ -328,7 +285,7 @@ export function openQuickNotes(opts) {
 }
 
 function closeQuickNotes() {
-  const sent = flushSaves();
+  const sent = saves.flush();
   qn.open = false;
   qn.desk = false;
   qn.searchOpen = false;
@@ -347,8 +304,8 @@ function closeQuickNotes() {
   if (qn.dirty && state.view.canvas) {
     const id = state.view.canvas.id;
     // a save that failed is still queued: keep the board as it is until it lands
-    Promise.all(sent).then(() => {
-      if (savePending.size) return;
+    sent.then(() => {
+      if (saves.pending()) return;
       qn.dirty = false;
       openCanvas(id);
     });
@@ -783,7 +740,7 @@ function drawSheet() {
   refreshIcons();
 }
 function hideSheet() {
-  flushSaves();
+  saves.flush();
   sheetBuilder = null;
   el('qnSheet').classList.remove('open');
   el('qnDim').classList.remove('open');
@@ -1010,7 +967,7 @@ async function deleteList(list) {
   qn.lists = qn.lists.filter(l => l.id !== list.id);
   qn.dirty = true;
   goHome();
-  flushSaves(list.id);
+  saves.flush(list.id);
   try {
     await api.remove(list.id);
   } catch {

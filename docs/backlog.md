@@ -12,7 +12,7 @@ Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-c
 
 ## Now
 
-- **DM2** One client save queue shared by the canvas and Quick notes (`editing.js:117-170`, `quicknotes.js:132-182`): pending edits, base tracking, flush, retry, adopt. The PATCH is the seam (`api.js` + an in-memory adapter for Vitest). Puts the AU1/AU2 retry and keepalive logic, now duplicated in both files, in one place.
+Nothing in progress: pick from Next.
 
 ## Next
 
@@ -32,6 +32,10 @@ Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-c
 - **AU15** `api.create`/`api.remove` throw instead of toasting when offline.
 - **AU16** `deleteList` in Quick notes flushes a save without `baseTasks`.
 - **AU17** File cards link `data.src` without checking the URL scheme.
+- **AU18** Typing a hex colour into a note right after its text save failed folds the retry into the swatch PATCH; if that fails too, the text edit is dropped (`editing.js` exitEdit).
+- **AU19** Deleting a card while its save waits to retry: the retry gets 404 and toasts "rejected", and Undo brings the card back without that edit.
+- **AU20** Quick notes `deleteList` removes the list before flushing its save, so a queued edit goes out empty and Undo restores the list without it.
+- **AU21** `flush(id)` doesn't wait for a save already in flight, so `deleteItems` or closing Quick notes can act before the last save lands.
 - **U1.1, U1.4, U1.5** Milanote migration: backup and inventory, staged import, reconciliation report. Specs in `docs/next-updates.md`.
 
 ## Needs a decision
@@ -40,6 +44,7 @@ Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-c
 
 ## Closed
 
+- **DM2** `public/js/savequeue.js` is the one client save protocol (debounce, base, retry, adopt) for the canvas and Quick notes, unit-tested in Vitest.
 - **AU5** Copied to-do cards get fresh task ids; the boot repair makes ids unique across cards (#71).
 - **DM1** `tasklist.js` owns the task shape, blank rule, ids and the merge; the merge compares with defaults filled in.
 - **AU1, AU2, AU3, AU11** Failed saves now retry, big background saves skip `keepalive`, Quick notes' base no longer erases stars and due dates; `e2e/saves.spec.js` covers all three.
