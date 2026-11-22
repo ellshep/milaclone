@@ -28,7 +28,7 @@ async function addList(request, title, tasks) {
 const task = (text, extra = {}) =>
   Object.assign({ id: `${text}-${Date.now()}-${Math.random()}`, text, done: false, createdAt: 1 }, extra);
 
-test('Three: the top three, then Done? ✓ marks one done and the next slides in', async ({ page, request }) => {
+test('Three: three tasks at one size, each with a done tab; Undo keeps a task', async ({ page, request }) => {
   await addList(request, 'Focus three', [
     task('Renew passport', { due: '2000-01-01', rankReason: 'Blocks the trip' }),
     task('Call the plumber', { due: '2000-01-02' }),
@@ -39,6 +39,9 @@ test('Three: the top three, then Done? ✓ marks one done and the next slides in
   const titles = page.locator('#three .title');
   await expect(titles).toHaveText(['Renew passport', 'Call the plumber', 'Pay the electric bill']);
   await expect(page.locator('#three .task').first().locator('.due')).toContainText('days overdue');
+  const sizes = await titles.evaluateAll(ns => ns.map(n => getComputedStyle(n).fontSize));
+  expect(new Set(sizes).size).toBe(1);
+  await expect(page.locator('#queue')).toHaveText(/^\d+ in queue$/);
 
   // the model's reason shows on hover only
   const reason = page.locator('#three .task').first().locator('.reason');
@@ -46,13 +49,17 @@ test('Three: the top three, then Done? ✓ marks one done and the next slides in
   await titles.first().hover();
   await expect(reason).toHaveText('Blocks the trip');
 
-  // ✕ keeps it
-  await titles.first().click();
-  await page.getByRole('button', { name: 'Keep it' }).click();
-  await expect(page.locator('.confirm:visible')).toHaveCount(0);
+  // Undo keeps it, and nothing is saved
+  await page.getByRole('button', { name: 'Done: Renew passport' }).click();
+  await expect(page.locator('#three .task.pending')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Undo: Renew passport' }).click();
+  await expect(page.locator('#three .task.pending')).toHaveCount(0);
+  await page.waitForTimeout(4500);
+  await expect(titles.first()).toHaveText('Renew passport');
 
-  await titles.first().click();
-  await page.getByRole('button', { name: 'Mark done' }).click();
+  const saved = page.waitForResponse(r => r.url().endsWith('/done'));
+  await page.getByRole('button', { name: 'Done: Renew passport' }).click();
+  expect((await saved).ok()).toBe(true);
   await expect(titles).toHaveText(['Call the plumber', 'Pay the electric bill', 'Book the dentist']);
   const lists = (await (await request.get('/api/todos')).json()).lists;
   const done = lists.flatMap(l => l.tasks).find(t => t.id === added[0]);
