@@ -80,6 +80,27 @@ class TasksClient:
         """The Home note headed "Focus priorities", or None."""
         return self._call("GET", "/api/tasks/priorities").get("text")
 
-    def write_ranks(self, ranks: list[dict]) -> dict:
-        """One transaction on the app's side: all of it lands or none does."""
-        return self._call("PUT", "/api/tasks/rank", json={"ranks": ranks})
+    def filing_log(self, title: str) -> tuple[dict | None, str]:
+        """The document card on Home titled `title` and marked `filingLog` (the
+        ranker's filing log), or None; and Home's id. Board routes, not the task API."""
+        home = self._call("GET", "/api/root")["rootCanvasId"]
+        items = self._call("GET", f"/api/canvas/{home}").get("items", [])
+        card = next((it for it in items if it.get("type") == "document" and not it.get("parentItemId")
+                     and (it.get("data") or {}).get("title") == title and it["data"].get("filingLog")), None)
+        return card, home
+
+    def update_item(self, item_id: str, data: dict) -> dict:
+        return self._call("PATCH", f"/api/item/{item_id}", json={"data": data})
+
+    def add_card(self, canvas_id: str, kind: str, data: dict) -> dict:
+        """A new card on a board, to the right of its cards so it covers none."""
+        items = self._call("GET", f"/api/canvas/{canvas_id}").get("items", [])
+        right = max([(it.get("x") or 0) + (it.get("w") or 240) for it in items if not it.get("parentItemId")] or [20])
+        return self._call("POST", "/api/item", json={"canvasId": canvas_id, "type": kind, "x": right + 40, "y": 60,
+                                                      "w": 320, "data": data})
+
+    def write_ranks(self, ranks: list[dict], moves: list[dict] | None = None) -> dict:
+        """One transaction on the app's side: all of it lands or none does,
+        the Inbox tasks filed by `moves` (M3.3) included."""
+        body = {"ranks": ranks, **({"moves": moves} if moves else {})}
+        return self._call("PUT", "/api/tasks/rank", json=body)

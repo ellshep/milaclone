@@ -383,7 +383,36 @@ function migrateTaskIds() {
 }
 migrateTaskIds();
 
+const INBOX_KEY = 'inboxItemId'; // meta key: the task API's Inbox card
+
+// The Inbox card, made on Home if it doesn't exist or was trashed. Call inside
+// a transaction.
+function inboxCard() {
+  const known = stmt.getMeta.get(INBOX_KEY)?.value;
+  const row = known && stmt.getItem.get(known);
+  if (row && row.type === 'todo') return rowToItem(row);
+  const card = {
+    id: id('i_'),
+    canvasId: rootCanvasId(),
+    parentItemId: null,
+    type: 'todo',
+    x: 60,
+    y: 60,
+    w: 240,
+    h: null,
+    z: Math.max(0, stmt.maxZ.get().m || 0) + 1,
+    color: null,
+    data: { title: 'Inbox', tasks: [] },
+    createdAt: Date.now(),
+  };
+  stmt.insertItem.run(Object.assign({}, card, { data: JSON.stringify(card.data) }));
+  stmt.setMeta.run(INBOX_KEY, card.id);
+  return card;
+}
+
 module.exports = {
+  INBOX_KEY,
+  inboxCard,
   DB_FILE,
   RICH_TYPES,
   toRich,

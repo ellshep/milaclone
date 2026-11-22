@@ -271,6 +271,53 @@ export function registerTools(server, board, agent = null) {
   );
 
   tool(
+    'write_brief',
+    'Write a Claude Code brief (goal, files, acceptance, repo) as a note in the "Briefs" column of a board, for the owner to run.',
+    {
+      board_id: z.string().describe('The board asking for the work'),
+      goal: z.string().min(1).describe('What the change should achieve'),
+      repo: z.string().min(1).describe('The repository, e.g. "owner/name" or a URL'),
+      files: z.array(z.string().min(1)).default([]).describe('Files to read or change'),
+      acceptance: z.array(z.string().min(1)).min(1).describe('How to tell it is done, one check each'),
+    },
+    async a => {
+      const b = await board.readable(a.board_id);
+      // One line per value: the board's Markdown export trims lines and drops blank ones.
+      const one = v => v.replace(/\s+/g, ' ').trim();
+      // A leading [ ] or [x] would turn "- …" into a task, and the importer into a to-do card.
+      const item = v => '- ' + one(v).replace(/^\[[ xX]\]\s*/, '');
+      const lines = ['Goal: ' + one(a.goal), 'Repo: ' + one(a.repo)];
+      if (a.files.length) lines.push('Files:', ...a.files.map(item));
+      lines.push('Acceptance:', ...a.acceptance.map(item));
+      let col = b.items.find(
+        it => it.type === 'column' && !it.parentItemId && /^briefs$/i.test(String(it.data?.title || '').trim())
+      );
+      // shortcut: two briefs written at once may each make a column; merge them by hand if it happens.
+      if (!col) {
+        const top = b.items.filter(it => !it.parentItemId && it.type !== 'line');
+        const right = Math.max(0, ...top.map(it => (it.x || 0) + (it.w || 240)));
+        col = await board.call('POST', '/api/item', {
+          canvasId: b.canvas.id,
+          type: 'column',
+          x: top.length ? right + 40 : 60, // beside the board's cards, not on top of them
+          y: top.length ? Math.min(...top.map(it => it.y || 0)) : 60,
+          data: { title: 'Briefs' },
+        });
+      }
+      const below = b.items.filter(it => it.parentItemId === col.id).map(it => it.y || 0);
+      const note = await board.call('POST', '/api/item', {
+        canvasId: b.canvas.id,
+        type: 'note',
+        parentItemId: col.id,
+        y: Math.max(0, ...below) + 1, // a column orders its cards by y: last in the column
+        data: { text: lines.join('\n') },
+      });
+      log('write_brief', { boardId: b.canvas.id, itemId: note.id, columnId: col.id });
+      return slim(note);
+    }
+  );
+
+  tool(
     'add_todo_task',
     'Add a task to a to-do list card.',
     {

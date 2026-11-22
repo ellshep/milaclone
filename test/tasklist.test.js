@@ -35,6 +35,10 @@ test('normTask fills every known field and passes unknown ones through', () => {
     noteStyle: {},
     createdAt: null,
     indent: 0,
+    movedFrom: null,
+    movedAt: null,
+    movedBy: null,
+    moveReason: null,
   });
   // wrong types fall back to the defaults
   const t = normTask({

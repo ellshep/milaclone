@@ -98,7 +98,7 @@ to a chat column, plus the agents' threads and receipts.
 
 ## W4 · The orchestrator
 
-- [ ] **W4.1 Home agent.** Same service, scope is the tree: titles of every
+- [x] **W4.1 Home agent.** Same service, scope is the tree: titles of every
       board, content only of readable ones (A3). Two extra tools:
       `delegate(agent, message, kind)` writes a comment card on the target
       board (A16), and `list_agents`.
@@ -107,7 +107,7 @@ to a chat column, plus the agents' threads and receipts.
 
 ## W5 · Claude Code hand-off
 
-- [ ] **W5.1 Brief cards.** `write_brief` makes a note card with goal, files,
+- [x] **W5.1 Brief cards.** `write_brief` makes a note card with goal, files,
       acceptance and the repo, in a "Briefs" column on the asking board.
   - Acceptance: the card's text round-trips through `export.md`.
 
