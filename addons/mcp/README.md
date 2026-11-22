@@ -1,7 +1,7 @@
 # MCP add-on
 
 An [MCP](https://modelcontextprotocol.io) server that lets agents read and edit
-your boards: the board agents (`addons/agent/`, coming next), Claude Code and
+your boards: the [board agents](../agent/README.md), Claude Code and
 Claude Desktop all use it. It is one Node process that talks to the board's
 own HTTP API, the same API the web page uses.
 

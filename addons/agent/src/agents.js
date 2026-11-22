@@ -4,6 +4,7 @@
 import { orchestratorScope } from './orchestrator.js';
 
 const WRITES = ['chat', 'propose', 'direct'];
+const MEMORY = ['ephemeral', 'thread', 'persistent'];
 export const DEFAULT_MODEL = 'claude-opus-5-5';
 const key = title => String(title).trim().toLowerCase();
 const log = (event, fields) => console.error(JSON.stringify({ event, at: new Date().toISOString(), ...fields }));
@@ -65,6 +66,7 @@ export async function agentConfig({ card, board, boards, rootId }, mcp) {
     model: String(d.model || '').trim() || DEFAULT_MODEL,
     effort: d.effort || 'medium',
     writes: WRITES.includes(d.writes) ? d.writes : 'propose',
+    memory: MEMORY.includes(d.memory) ? d.memory : 'thread',
     scope,
     orchestrator,
   };

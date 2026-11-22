@@ -15,6 +15,9 @@
         },
         "/mcp": {
           "Proxy": "http://mcp:8787/mcp"
+        },
+        "/agent/": {
+          "Proxy": "http://agent:8788/agent/"
         }
       }
     }

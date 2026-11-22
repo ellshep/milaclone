@@ -12,6 +12,10 @@
       "globals": { "lucide": "readonly" }
     },
     {
+      "files": ["addons/agent/public/**"],
+      "env": { "browser": true, "node": false }
+    },
+    {
       "files": ["public/sw.js"],
       "env": { "serviceworker": true, "node": false }
     },

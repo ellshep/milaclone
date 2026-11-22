@@ -1,7 +1,8 @@
 name: Agent add-on
 
 # The optional board agents service (addons/agent/). Not a required check: it
-# runs only when the add-on, the MCP add-on it calls, or the board API changes.
+# runs only when the add-on, the MCP add-on it calls, the board API, the
+# selection hook its page relies on, or the Compose/Tailscale wiring changes.
 on:
   pull_request:
     paths:
@@ -10,6 +11,9 @@ on:
       - 'routes.js'
       - 'db.js'
       - 'server.js'
+      - 'public/js/embed.js'
+      - 'docker-compose.yml'
+      - 'tailscale/serve.json'
       - '.github/workflows/agent-addon.yml'
   push:
     branches: [main]
@@ -19,6 +23,9 @@ on:
       - 'routes.js'
       - 'db.js'
       - 'server.js'
+      - 'public/js/embed.js'
+      - 'docker-compose.yml'
+      - 'tailscale/serve.json'
       - '.github/workflows/agent-addon.yml'
 
 concurrency:
@@ -29,7 +36,7 @@ jobs:
   test:
     name: Agent tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,3 +55,21 @@ jobs:
         working-directory: addons/agent
       - run: npm test
         working-directory: addons/agent
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        working-directory: addons/agent
+      # The image boots (node:sqlite on alpine) and serves the page, even with no MCP to reach.
+      - name: Image serves the page
+        run: |
+          docker build -t milaclone-agent:ci addons/agent
+          docker run -d --name agent -p 8788:8788 -e AGENT_PROVIDER=fake milaclone-agent:ci
+          for i in $(seq 30); do curl -fsS http://127.0.0.1:8788/agent/ | grep -q '<title>Board agent</title>' && exit 0; sleep 1; done
+          docker logs agent
+          exit 1
+      # Opt-in: only the agent profile starts it, next to the MCP server.
+      - name: Off unless enabled
+        env:
+          TS_AUTHKEY: ci-dummy
+        run: |
+          test "$(docker compose config --services | sort | tr '\n' ' ')" = "app tailscale "
+          test "$(COMPOSE_PROFILES=agent docker compose config --services | sort | tr '\n' ' ')" = "agent app mcp tailscale "
