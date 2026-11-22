@@ -1,0 +1,50 @@
+name: Agent add-on
+
+# The optional board agents service (addons/agent/). Not a required check: it
+# runs only when the add-on, the MCP add-on it calls, or the board API changes.
+on:
+  pull_request:
+    paths:
+      - 'addons/agent/**'
+      - 'addons/mcp/**'
+      - 'routes.js'
+      - 'db.js'
+      - 'server.js'
+      - '.github/workflows/agent-addon.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'addons/agent/**'
+      - 'addons/mcp/**'
+      - 'routes.js'
+      - 'db.js'
+      - 'server.js'
+      - '.github/workflows/agent-addon.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Agent tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            addons/mcp/package-lock.json
+            addons/agent/package-lock.json
+      # The tests start the real board and the real MCP add-on.
+      - run: npm ci
+      - run: npm ci
+        working-directory: addons/mcp
+      - run: npm ci
+        working-directory: addons/agent
+      - run: npm test
+        working-directory: addons/agent
