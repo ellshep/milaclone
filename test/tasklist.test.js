@@ -176,15 +176,17 @@ test('merge: a base with missing or repeated ids lets the client list win', () =
   assert.deepEqual(merge([null], server, mine), mine);
 });
 
-test('upgradeTask folds the old done flag into status and drops stale', () => {
+test('upgradeTask folds the old done flag into status, unless a status is there, and drops stale', () => {
   assert.deepEqual(upgradeTask({ id: 'a', text: 'Milk', done: true }), {
     id: 'a',
     text: 'Milk',
     status: 'done',
     statusAt: null,
   });
-  assert.deepEqual(upgradeTask({ id: 'b', done: false, stale: true }), { id: 'b' });
-  // an old tab sends done: false on a task the server has as done: it stays done
+  assert.deepEqual(upgradeTask({ id: 'b', done: false, stale: true }), { id: 'b', status: 'open' });
+  assert.deepEqual(upgradeTask({ id: 'e', done: 1 }), { id: 'e', status: 'done', statusAt: null });
+  assert.deepEqual(upgradeTask({ id: 'f', stale: true }), { id: 'f', status: 'open' });
+  // an old tab loaded after the deploy sends done: false on a task it has as done: it stays done
   assert.deepEqual(upgradeTask({ id: 'c', status: 'done', statusAt: 5, done: false }), {
     id: 'c',
     status: 'done',

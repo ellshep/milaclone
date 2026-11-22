@@ -344,9 +344,10 @@ function migrateRichText() {
 }
 migrateRichText();
 
-// Tasks from before `status` (focus-redesign F1): `done: true` becomes
-// `status: "done"` with `statusAt` null (when it was done is unknown); `done`
-// and `stale` are dropped. Every to-do card, trashed ones too.
+// Tasks from before `status` (focus-redesign F1): a truthy `done` becomes
+// `status: "done"` with `statusAt` null (when it was done is unknown), any other
+// `status: "open"`; `done` and `stale` are dropped. Every to-do card, trashed
+// ones too.
 function migrateTaskStatus() {
   const rows = db
     .prepare(

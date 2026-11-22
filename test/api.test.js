@@ -535,7 +535,7 @@ test('tasks: the server stamps statusAt on a status change, and old tabs and imp
   const list = (await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: seeded } })).body;
   assert.deepEqual(list.data.tasks, [
     { id: 'a', text: 'Milk', status: 'done', statusAt: null },
-    { id: 'b', text: 'Eggs' },
+    { id: 'b', text: 'Eggs', status: 'open' },
   ]);
   const base = list.data.tasks;
   // ticking Eggs: the server's clock, not the client's
@@ -555,7 +555,8 @@ test('tasks: the server stamps statusAt on a status change, and old tabs and imp
     data: { tasks: [base2[0], { ...base2[1], text: 'Free-range eggs' }] },
   });
   assert.deepEqual(r.body.data.tasks[1], { ...eggs, text: 'Free-range eggs' });
-  // an old tab sends done: false on every task (its normTask filled it in): nothing reopens
+  // (c) an old tab loaded after the deploy sends done: false on every task (its
+  // normTask filled it in) next to the status it got: nothing reopens
   const oldTab = r.body.data.tasks.map(t => ({ ...t, done: false }));
   r = await send('PATCH', '/api/item/' + list.id, { baseTasks: oldTab, data: { tasks: oldTab } });
   assert.deepEqual(
@@ -565,6 +566,41 @@ test('tasks: the server stamps statusAt on a status change, and old tabs and imp
       ['done', false],
     ]
   );
+});
+
+test('tasks: a tab loaded before the status deploy can untick, and never reopens what it did not touch', async () => {
+  const { db } = require('../db');
+  const canvasId = await root();
+  // tasks as an old tab holds them: `done` flags, no `status`
+  const old = [
+    { id: 'o1', text: 'Milk', done: true },
+    { id: 'o2', text: 'Eggs', done: false },
+    { id: 'o3', text: 'Bread', done: false },
+  ];
+  db.prepare(
+    "INSERT INTO items (id, canvasId, type, x, y, w, z, data, createdAt) VALUES ('old-tab', ?, 'todo', 0, 0, 240, 0, ?, 1)"
+  ).run(canvasId, JSON.stringify({ tasks: old }));
+  require('../db').migrateTaskStatus(); // the deploy restarts the server; the tab keeps `old`
+  // another device, loaded after the deploy, completes Bread
+  const fresh = (await get('/api/todos')).body.lists.find(l => l.id === 'old-tab').tasks;
+  await send('PATCH', '/api/item/old-tab', {
+    baseTasks: fresh,
+    data: { tasks: fresh.map(t => (t.id === 'o3' ? { ...t, status: 'done' } : t)) },
+  });
+  // (a) the old tab unticks Milk and (b) saves Bread untouched, still `done: false` in its copy
+  const r = await send('PATCH', '/api/item/old-tab', {
+    baseTasks: old,
+    data: { tasks: [{ ...old[0], done: false }, old[1], old[2]] },
+  });
+  assert.deepEqual(
+    r.body.data.tasks.map(t => [t.id, t.status, 'done' in t]),
+    [
+      ['o1', 'open', false],
+      ['o2', 'open', false],
+      ['o3', 'done', false],
+    ]
+  );
+  assert.ok(Math.abs(r.body.data.tasks[0].statusAt - Date.now()) < 5000, 'the untick is stamped');
 });
 
 test('tasks: every task gets a unique id when written', async () => {

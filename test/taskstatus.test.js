@@ -25,15 +25,17 @@ test.after(() => {
 const OLD_TASKS = [
   { id: 'a', text: 'Done long ago', done: true, starred: true },
   { id: 'b', text: 'Still open', done: false },
+  { id: 'h', text: 'Truthy done', done: 1 },
   { id: 'c', text: 'From the task API', done: false, stale: false, source: 'voice' },
   { id: 'g', text: 'stale: true (nothing ever wrote it)', stale: true },
   { id: 'd', text: 'Never had flags' },
 ];
 const NEW_TASKS = [
   { id: 'a', text: 'Done long ago', starred: true, status: 'done', statusAt: null },
-  { id: 'b', text: 'Still open' },
-  { id: 'c', text: 'From the task API', source: 'voice' },
-  { id: 'g', text: 'stale: true (nothing ever wrote it)' },
+  { id: 'b', text: 'Still open', status: 'open' },
+  { id: 'h', text: 'Truthy done', status: 'done', statusAt: null },
+  { id: 'c', text: 'From the task API', source: 'voice', status: 'open' },
+  { id: 'g', text: 'stale: true (nothing ever wrote it)', status: 'open' },
   { id: 'd', text: 'Never had flags' },
 ];
 

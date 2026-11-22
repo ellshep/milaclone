@@ -53,13 +53,15 @@ const isOpen = t => normTask(t).status === 'open';
 const isDone = t => normTask(t).status === 'done';
 
 // A task written with the flags from before `status` (old rows at boot, a tab
-// still running old code, an importer): `done: true` becomes `status: "done"`
-// (when unknown, `statusAt` null); `done: false` and `stale` are dropped, so an
-// old client that sends `done: false` for every task never reopens one.
+// still running old code, an importer). With no `status`, `done` decides: done
+// (`statusAt` null when unknown) or open. With a `status` (an old tab that
+// loaded after the deploy fills in `done: false` on every task), `done` is
+// ignored. `stale` is dropped either way.
 function upgradeTask(t) {
   if (!isObj(t) || !('done' in t || 'stale' in t)) return t;
   const { done, stale, ...rest } = t; // oxlint-disable-line no-unused-vars -- dropped on purpose
-  return done === true ? { ...rest, status: 'done', statusAt: rest.statusAt ?? null } : rest;
+  if ('status' in rest) return rest;
+  return done ? { ...rest, status: 'done', statusAt: rest.statusAt ?? null } : { ...rest, status: 'open' };
 }
 
 // `statusAt` and `statusReason` belong to the server: a write that changes a
