@@ -49,23 +49,25 @@ to a chat column, plus the agents' threads and receipts.
 
 ## W1 · Core: the generic pieces
 
-- [ ] **W1.1 API key.** `API_KEY` set → every `/api/*` route requires
-      `X-API-Key`; unset → unchanged. The frontend sends it from a `meta` tag
-      when the server has one.
+- [x] **W1.1 API key.** `API_KEY` set → every `/api/*` route but `/api/health`
+      and `/api/tasks` requires `X-API-Key`; unset → unchanged. The page hands
+      the browser the key as a `SameSite=Strict` cookie, so no client code
+      changed and a rotated key takes effect on reload.
   - Acceptance: with the key set, a request without the header gets 401 and
     the page still works; unset, `test/api.test.js` passes as today.
-- [ ] **W1.2 `agent` item type.** A form card with `name`, `persona`,
+- [x] **W1.2 `agent` item type.** A form card with `name`, `persona`,
       `boardNotes`, `provider`, `model`, `effort`, `scope` (this board, or this
-      board plus listed boards), `createBoards`, `writes`, `memory`, `runtime`.
+      board plus listed boards), `createBoards`, `writes`, `memory`. The
+      `runtime` field arrives with the second runtime (W6).
       Dropdown lists live in the card module. `data.text` holds name plus
       persona so search finds it.
   - Acceptance: Vitest renders the card and round-trips each field; the e2e
     suite creates one from the add menu and edits the provider.
-- [ ] **W1.3 Board access flag.** `canvases.agentAccess` (default off), toggled
+- [x] **W1.3 Board access flag.** `canvases.agentAccess` (default off), toggled
       from the board card menu and written through PATCH `/api/canvas/:id`;
       `GET /api/canvas/:id` returns it.
   - Acceptance: API test toggles it; e2e flips it from the menu.
-- [ ] **W1.4 Selection hook.** When `window.parent !== window`, the board posts
+- [x] **W1.4 Selection hook.** When `window.parent !== window`, the board posts
       `milaclone:selection` with the selected ids on every change. Nothing is
       posted when not framed.
   - Acceptance: a Vitest test on the selection module.

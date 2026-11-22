@@ -22,7 +22,7 @@ Nothing in progress: pick from Next.
 - **AU9** Cut-and-paste leaves an invisible, unselectable line on the old board when one end stays behind (`db.js:248`, `lines.js:109`). Fix: in `moveItemDeep`, turn that end into a free point at the card's old position.
 - **AU10** Copy/duplicate within 400 ms of an edit miss the last words (`clipboard.js:42`). Fix: `await flushAllSaves(false)` at the start of `placeAll`.
 - **V1** Next phases, planned with the owner on 2026-11-20 (decisions N1–N17, work items M1–M5 in `docs/next-phases.md`): Microsoft To Do import (M1), focus order, `/focus` page, nightly ranking and retention (M2), filing into lists (M3), Pebble watch app (M4), morning digest at 7:30 on weekdays, which settles V3 (M5). Replaces V2.
-- **AG1** Board agents, planned with the owner on 2026-11-22 (decisions A1–A22, work items W1–W6 in `docs/agent-addon.md`): API key, `agent` card and board access flag (W1), the MCP server (W2), the agent service and page (W3), the Home orchestrator (W4), Claude Code briefs (W5). Start with W1.
+- **AG1** Board agents, planned with the owner on 2026-11-22 (decisions A1–A22, work items W1–W6 in `docs/agent-addon.md`): API key, `agent` card and board access flag (W1), the MCP server (W2), the agent service and page (W3), the Home orchestrator (W4), Claude Code briefs (W5). W1 shipped; next is W2.
 
 ## Later
 

@@ -940,3 +940,77 @@ test('U2.2 the service worker is served no-cache so updates land on the next lau
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---- W1.1 API key (docs/agent-addon.md A10) --------------------------------------
+test('API_KEY set: /api/* wants the header or the page cookie; health and tasks are exempt', async t => {
+  process.env.API_KEY = 'k-secret';
+  t.after(() => delete process.env.API_KEY);
+  assert.equal((await get('/api/root')).status, 401);
+  assert.equal((await fetch(base + '/api/root', { headers: { 'X-API-Key': 'k-wrong' } })).status, 401);
+  assert.equal((await fetch(base + '/api/root', { headers: { 'X-API-Key': 'k-secret' } })).status, 200);
+  // loading the page hands the browser the key as a cookie, and that cookie passes
+  const page = await fetch(base + '/');
+  assert.equal(page.status, 200);
+  const cookie = page.headers.get('set-cookie');
+  assert.match(cookie, /^milaclone_key=k-secret;/);
+  assert.match(cookie, /HttpOnly/);
+  assert.match(cookie, /SameSite=Strict/);
+  const r = await fetch(base + '/api/root', { headers: { cookie: 'other=1; ' + cookie.split(';')[0] } });
+  assert.equal(r.status, 200);
+  assert.equal((await fetch(base + '/api/root', { headers: { cookie: 'milaclone_key=nope' } })).status, 401);
+  assert.equal((await get('/api/health')).status, 200);
+  assert.equal((await get('/api/tasks')).status, 503); // its own token decides, not the key
+  // a write without the key is refused before the body is parsed
+  assert.equal((await send('POST', '/api/item', { canvasId: await rootWith('k-secret'), type: 'note' })).status, 401);
+});
+
+async function rootWith(key) {
+  return (await (await fetch(base + '/api/root', { headers: { 'X-API-Key': key } })).json()).rootCanvasId;
+}
+
+test('API_KEY unset: no cookie is set and every route is open', async () => {
+  delete process.env.API_KEY;
+  const page = await fetch(base + '/');
+  assert.equal(page.headers.get('set-cookie'), null);
+  assert.equal((await get('/api/root')).status, 200);
+});
+
+// ---- W1.3 board access flag (docs/agent-addon.md A3) -----------------------------
+test('agentAccess is off by default, toggles through PATCH /api/canvas and shows on the board card', async () => {
+  const canvasId = await root();
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Private' } })).body;
+  assert.equal(board._childAgentAccess, false);
+  const childId = board.data.childCanvasId;
+  assert.equal((await get('/api/canvas/' + childId)).body.canvas.agentAccess, false);
+
+  const on = await send('PATCH', '/api/canvas/' + childId, { agentAccess: true });
+  assert.equal(on.body.agentAccess, true);
+  assert.equal((await get('/api/canvas/' + childId)).body.canvas.agentAccess, true);
+  const card = (await get('/api/canvas/' + canvasId)).body.items.find(i => i.id === board.id);
+  assert.equal(card._childAgentAccess, true);
+  // a non-boolean is ignored, a rename leaves the flag alone
+  await send('PATCH', '/api/canvas/' + childId, { agentAccess: 'yes', title: 'Still private' });
+  const after = (await get('/api/canvas/' + childId)).body.canvas;
+  assert.equal(after.agentAccess, true);
+  assert.equal(after.title, 'Still private');
+  assert.equal((await send('PATCH', '/api/canvas/' + childId, { agentAccess: false })).body.agentAccess, false);
+  await send('DELETE', '/api/item/' + board.id);
+});
+
+test('an agent card exports its name and persona like the other text-bearing cards', async () => {
+  const canvasId = await root();
+  const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Agent export' } })).body;
+  const cid = board.data.childCanvasId;
+  const agent = (
+    await send('POST', '/api/item', {
+      canvasId: cid,
+      type: 'agent',
+      data: { name: 'Clock bot', persona: 'Finds parts', provider: 'local', text: 'Clock bot\nFinds parts' },
+    })
+  ).body;
+  assert.equal(agent.data.provider, 'local'); // stored as sent: core only keeps the card
+  const md = await (await fetch(base + `/api/canvas/${cid}/export.md`)).text();
+  assert.match(md, /## Clock bot\nFinds parts/);
+  assert.doesNotMatch(md, /local/); // settings stay out of the Markdown
+  await send('DELETE', '/api/item/' + board.id);
+});

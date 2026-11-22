@@ -17,6 +17,8 @@ services:
     environment:
       - PORT=4321
       - DATA_DIR=/data
+      # Optional X-API-Key for /api/* (docs/agent-addon.md A10). Unset = open.
+      - API_KEY=${API_KEY:-}
       # Bearer token for the task API (/api/tasks). Unset = the API answers 503.
       - TASK_API_TOKEN=${TASK_API_TOKEN:-}
       # Time zone used to turn an ISO datetime into a task's due date.
