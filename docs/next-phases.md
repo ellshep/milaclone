@@ -12,25 +12,30 @@ with every add-on off. A box is ticked when its acceptance test lands.
 
 ## Decisions
 
-| #   | Question                   | Decision                                                                                                                                                       |
-| --- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| N1  | Order                      | Backlog import, then ranking and the focus page, then filing, then the watch app, then the morning digest                                                      |
-| N2  | Who ranks                  | Fixed tiers first; the model orders within a tier and may move a task one tier up or down (at most 3 a night, a setting turns this off or lifts the cap)       |
-| N3  | Which tasks are ranked     | Every open task, except lists labelled **Reference** and the Templates board                                                                                   |
-| N4  | Stale                      | A fixed rule, never the model's call; stale tasks stay on their lists, hidden from the focus three                                                             |
-| N5  | Pinning                    | No pin button. The owner drags tasks in the focus page's List mode; the top three are the focus three                                                          |
-| N6  | Owner order vs ranking     | A task the owner placed keeps its place and the model never moves it. Only overdue and due-today tasks rise above it. **Reset** clears all placements          |
-| N7  | Ranking model              | Opus 5.5 at low effort by default (`RANK_MODEL`); about $1 a month for one call a night                                                                        |
-| N8  | Where ranking runs         | Its own Compose service built from the pipeline image, behind the voice profile, nightly at 03:00 in `TASK_TZ`                                                 |
-| N9  | Focus page updates         | No polling. It refetches when it becomes visible again and from a refresh control. No "re-rank now" (the board never calls an add-on)                          |
-| N10 | Switches                   | Card labels, not new settings: **Reference** (left out of ranking), **Filing** (may receive filed tasks)                                                       |
-| N11 | Filing                     | At capture, only when a Filing list is named. Nightly, only Inbox tasks, only when exactly one Filing list clearly fits, every move recorded and undoable      |
-| N12 | Watch app                  | `addons/pebble/`, following the owner's watch handoff. Raw audio is the main capture, dictation a setting. Own code only (the reference repos have no licence) |
-| N13 | Narrow tokens              | The watch and Home Assistant each get their own token, limited to what they use                                                                                |
-| N14 | Digest                     | Run by Home Assistant: a phone notification on weekday mornings with Done buttons, then a later Echo announcement when someone is home. No evening reminder    |
-| N15 | Recordings                 | Audio deleted 7 days after it is processed; transcripts and results kept                                                                                       |
-| N16 | "Tasks added" notification | Not built; failure alerts stay                                                                                                                                 |
-| N17 | Microsoft To Do backlog    | Exported and cleaned up by the owner outside this repo; this repo gets a generic importer for the cleaned file                                                 |
+| #   | Question                   | Decision                                                                                                                                                                                                    |
+| --- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| N1  | Order                      | Backlog import, then ranking and the focus page, then filing, then the board agents (`docs/agent-addon.md`), then the watch app, then the morning digest                                                    |
+| N2  | Who ranks                  | Fixed tiers first; the model orders within a tier and may move a task one tier up or down (at most 3 a night, a setting turns this off or lifts the cap)                                                    |
+| N3  | Which tasks are ranked     | Every open task, except lists labelled **Reference** and the Templates board                                                                                                                                |
+| N4  | Stale                      | A fixed rule, never the model's call; stale tasks stay on their lists, hidden from the focus three                                                                                                          |
+| N5  | Pinning                    | No pin button. The owner drags tasks in the focus page's List mode; the top three are the focus three                                                                                                       |
+| N6  | Owner order vs ranking     | A task the owner placed keeps its place and the model never moves it. Only overdue and due-today tasks rise above it. **Reset** clears all placements                                                       |
+| N7  | Ranking model              | Opus 5.5 at low effort by default (`RANK_MODEL`); about $1 a month for one call a night                                                                                                                     |
+| N8  | Where ranking runs         | Its own Compose service built from the pipeline image, behind the voice profile, nightly at 03:00 in `TASK_TZ`                                                                                              |
+| N9  | Focus page updates         | No polling. It refetches when it becomes visible again and from a refresh control. No "re-rank now" (the board never calls an add-on)                                                                       |
+| N10 | Switches                   | Card labels, not new settings: **Reference** (left out of ranking), **Filing** (may receive filed tasks)                                                                                                    |
+| N11 | Filing                     | At capture, only when a Filing list is named. Nightly, only Inbox tasks, only when exactly one Filing list clearly fits, every move recorded and undoable                                                   |
+| N12 | Watch app                  | `addons/pebble/`, following the owner's watch handoff. Raw audio is the main capture, dictation a setting. Own code only (the reference repos have no licence)                                              |
+| N13 | Narrow tokens              | The watch and Home Assistant each get their own token, limited to what they use                                                                                                                             |
+| N14 | Digest                     | Run by Home Assistant: a phone notification on weekday mornings with Done buttons, then a later Echo announcement when someone is home. No evening reminder                                                 |
+| N15 | Recordings                 | Audio deleted 7 days after it is processed; transcripts and results kept                                                                                                                                    |
+| N16 | "Tasks added" notification | Not built; failure alerts stay                                                                                                                                                                              |
+| N17 | Microsoft To Do backlog    | Exported and cleaned up by the owner outside this repo; this repo gets a generic importer for the cleaned file                                                                                              |
+| N18 | Ranker's shape             | Its own nightly job, not a board agent: it reads every open task, which agents' per-board access (A3) never allows, and it needs no agent service. Ranking may move into an agent once scheduled runs exist |
+| N19 | Focus priorities           | A note on Home whose first line is "Focus priorities", sent to the model as written. Board content, so it stays put if ranking moves                                                                        |
+| N20 | Ranker settings            | Each unset `RANK_*` setting falls back to its `EXTRACT_*` one, so ranking reuses the voice key                                                                                                              |
+| N21 | First run                  | The ranker has a dry run; the owner sees its output once before the 03:00 schedule is turned on                                                                                                             |
+| N22 | Stale                      | Waits for the owner's focus page redesign (backlog V5), which has no Stale mode yet; ranking ships without it                                                                                               |
 
 ## M1 · Backlog import
 
@@ -72,23 +77,20 @@ with every add-on off. A box is ticked when its acceptance test lands.
     shows a hint. "N in queue" in the controls.
   - **List**: every ranked task, scrollable, drag to reorder; overdue and due
     today marked. **Reset** clears placements.
-  - The Stale and Filed modes come with the data they show (M2.3, M3.3).
+  - The Filed mode comes with the data it shows (M3.3).
   - Mode switch and refresh appear only on hover. Refetch on
     `visibilitychange` and refresh; no timers.
   - Mac setup in the docs: app-mode browser window, open at login, display
     sleep left on overnight.
 - [ ] **M2.3 Ranking service** (add-on). Nightly at 03:00: reads open tasks,
-      the **Focus priorities** note on Home if there is one, and asks the
-      `RANK_*` model for a score, a one-line reason and at most 3 one-tier
-      moves (`RANK_NUDGE=off|one-tier|free`).
-  - Stale rule: more than 30 days old with no upcoming due date and not
-    starred, or more than 14 days overdue; reason saved ("added Oct 12, no
-    date", "overdue since Nov 3"). Age counts from `createdAt`, or from the
-    first night the ranker saw the task.
+      the Focus priorities note (N19) if there is one, and asks the `RANK_*`
+      model for a score, a one-line reason and at most 3 one-tier moves
+      (`RANK_NUDGE=off|one-tier|free`). `--dry-run` prints what it would write.
   - Writes through the task API. Logs tokens, cost and the top three before and
     after. Failure leaves the fixed order in place.
-  - The focus page gains a **Stale** mode: stale tasks with their reason;
-    select several → Keep or Delete (Delete goes to Trash).
+  - The stale rule and its focus page view wait for V5 (N22). The rule as
+    planned: more than 30 days old with no upcoming due date and not starred,
+    or more than 14 days overdue, with the reason saved.
 - [ ] **M2.4 Recording retention.** Audio deleted 7 days after `done`;
       failed ingests keep theirs.
 

@@ -56,7 +56,7 @@ Every edit fires a PATCH through **`savequeue.js`**, the one save protocol: `edi
 
 ## PWA
 
-`manifest.webmanifest` + `icons/` (PNGs rendered once from `icon.svg`) make it installable. `sw.js` is network-first: same-origin GETs (and the Lucide/Google Fonts CDNs) go to the network and refresh the cache; the cache answers only when the network fails; writes and `/api/backup` bypass it; no offline editing. `server.js` serves `/sw.js` `no-cache`. Bump `CACHE` only to drop old entries. `playwright.config.js` blocks service workers so they can't cache API reads under other tests; `e2e/pwa.spec.js` opts back in.
+`manifest.webmanifest` + `icons/` (PNGs rendered once from `icon.svg`) make it installable. `sw.js` is network-first: same-origin GETs (and the Lucide/Google Fonts CDNs) go to the network and refresh the cache; the cache answers only when the network fails; writes, `/api/backup` and same-origin URLs with a query string bypass it; no offline editing. `server.js` serves `/sw.js` `no-cache`. Bump `CACHE` only to drop old entries. `playwright.config.js` blocks service workers so they can't cache API reads under other tests; `e2e/pwa.spec.js` opts back in.
 
 ## Focus page
 
