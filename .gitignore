@@ -43,4 +43,3 @@ __pycache__/
 .wrangler/
 .dev.vars
 .coverage
-!.claude/settings.json

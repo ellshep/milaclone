@@ -1,7 +1,7 @@
 #!/bin/sh
-# Claude Code PreToolUse hook (.claude/settings.json): blocks direct pushes and
-# PR creation so every change ships through the no-mistakes gate. See
-# CONTRIBUTING.md "Shipping a change".
+# Claude Code PreToolUse hook (.claude/settings.json). The scanner checks
+# leading words in shell segments to catch direct pushes and PR creation.
+# See CONTRIBUTING.md "Shipping a change" for the shipping rule.
 if jq -e '
   def push_remote:
     if length == 0 then null
