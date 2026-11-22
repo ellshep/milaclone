@@ -360,6 +360,24 @@ function migrateTaskStatus() {
 }
 migrateTaskStatus();
 
+// Orderings from before `place` and `rank` (focus-redesign F2): `focusOrder`
+// becomes `place: { band: "top", order }`, `rankScore`/`rankReason`/`rankedAt`
+// become `rank: { score, reason, at }`, and `rankNudge` is dropped (tasklist.js
+// upgradeTask). Every to-do card, trashed ones too.
+function migrateTaskOrder() {
+  const rows = db
+    .prepare(
+      `SELECT id, data FROM items WHERE type = 'todo' AND json_type(data, '$.tasks') = 'array'
+        AND EXISTS (SELECT 1 FROM json_each(items.data, '$.tasks') AS t WHERE t.type = 'object'
+          AND (json_type(t.value, '$.focusOrder') IS NOT NULL OR json_type(t.value, '$.rankScore') IS NOT NULL
+            OR json_type(t.value, '$.rankReason') IS NOT NULL OR json_type(t.value, '$.rankedAt') IS NOT NULL
+            OR json_type(t.value, '$.rankNudge') IS NOT NULL))`
+    )
+    .all();
+  return migrateRows('order', rows, data => ({ ...data, tasks: data.tasks.map(upgradeTask) }));
+}
+migrateTaskOrder();
+
 // Older rows (imports, early canvas cards, copied cards) can hold tasks with no
 // id, or an id another task also has, in the same list or another card. The
 // merge, PATCH /api/tasks/:id and /focus can't address those. Give them fresh
@@ -418,6 +436,7 @@ module.exports = {
   toRich,
   migrateRichText,
   migrateTaskStatus,
+  migrateTaskOrder,
   migrateTaskIds,
   db,
   stmt,

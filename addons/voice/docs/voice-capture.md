@@ -115,16 +115,16 @@ Inbox.
 The `ranker` service (voice profile, same image) orders the focus page's open
 tasks once a night at 03:00 in `TASK_TZ`. It reads the focus order and the Home
 note whose first line is "Focus priorities" through the task API, asks the
-model for a score (0–100), a one-line reason and a few one-tier moves for each
-task in the soon, starred and rest tiers, and writes them back in one
-`PUT /api/tasks/rank`. Overdue, due-today and hand-placed tasks are never sent
-or changed. Only the first 200 of those tasks, in the current order, are sent,
-so the answer fits the model's output limit; the rest keep their last score
-(their moves are cleared). If anything fails, nothing is written and the fixed
-order stays.
+model for a score (0–100) and a one-line reason for each task in the
+"everything else" band, and writes them back in one `PUT /api/tasks/rank`. The
+scores order only that band: due-now tasks and tasks you placed (at the top or
+sent to the bottom) are never sent or changed. Only the first 200 of those
+tasks, in the current order, are sent, so the answer fits the model's output
+limit; the rest keep their last score. If anything fails, nothing is written
+and the order stays.
 
-It sends the model each ranked task's title, due date, list and board titles,
-plus the whole Focus priorities note.
+It sends the model each ranked task's title, due date, whether it is starred,
+and its list and board titles, plus the whole Focus priorities note.
 
 Nightly filing: when there are lists labelled **Filing** (see Filing above), the
 same model call may file Inbox tasks into the one Filing list that clearly
@@ -156,14 +156,13 @@ curl -sS -X PATCH "https://mila.<tailnet>.ts.net/api/tasks/<task id>" \
 | Variable        | Default                                             | Purpose                                                                 |
 | --------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
 | `RANK_SCHEDULE` | `off`                                               | `on` ranks nightly; off, the service exits at once                      |
-| `RANK_NUDGE`    | `one-tier`                                          | `off` (no moves), `one-tier` (at most 3 a night), `free`                |
 | `RANK_PROVIDER` | `EXTRACT_PROVIDER`                                  | Same choices as extraction                                              |
 | `RANK_MODEL`    | `claude-opus-5-5` (Anthropic), else `EXTRACT_MODEL` | Asked at low effort; roughly $3 a month per 100 ranked tasks (estimate) |
 | `RANK_API_KEY`  | `EXTRACT_API_KEY`                                   | Provider key                                                            |
 | `RANK_BASE_URL` | `EXTRACT_BASE_URL`                                  | For `openai_compatible`                                                 |
 
 See what it would do first. The dry run calls the model once and prints each
-score, reason and move with the top three before and after, and writes nothing:
+score and reason with the top three before and after, and writes nothing:
 
 ```bash
 docker compose run --rm ranker python -m ingest.rank --dry-run

@@ -60,7 +60,7 @@ class FakeClient:
 
 def answer(monkeypatch, *rows):
     monkeypatch.setenv("FAKE_LLM_RESPONSE", json.dumps({"tasks": [
-        {"n": n, "score": s, "reason": r, "move": m} for n, s, r, m in rows]}))
+        {"n": n, "score": s, "reason": r} for n, s, r in rows]}))
 
 
 def capture():
@@ -74,68 +74,59 @@ def capture():
 
 BOARD = [
     task("late", "overdue", dueIn=-2, due="2026-11-20"),
-    task("placed", "placed", focusOrder=1),
-    task("soon", "soon", dueIn=2, due="2026-11-24"),
+    task("placed", "top", place={"band": "top", "order": 1}),
+    task("soon", "rest", dueIn=2, due="2026-11-24"),
     task("chore", "rest"),
-    task("big", "starred", starred=True, createdAt=5),
+    task("big", "rest", starred=True, createdAt=5),
+    task("sunk", "bottom", place={"band": "bottom", "order": 1}),
 ]
 
 
-def test_writes_scores_for_ranked_tiers_only_and_sends_priorities(monkeypatch):
+def test_writes_scores_for_everything_else_only_and_sends_priorities(monkeypatch):
     client = FakeClient(BOARD, priorities="Focus priorities\nHealth first")
-    answer(monkeypatch, (1, 40, "Due Tuesday", "none"), (3, 90, "  Unblocks\n everything ", "up"),
-           (2, 120, "Small", "none"), (9, 50, "no such task", "none"), (3, 10, "repeat", "none"))
+    answer(monkeypatch, (1, 40, "Due Tuesday"), (3, 90, "  Unblocks\n everything "),
+           (2, 120, "Small"), (9, 50, "no such task"), (3, 10, "repeat"))
     prompts, complete = capture()
-    assert rank.run(FAKE, client, "one-tier", complete=complete) == 0
+    assert rank.run(FAKE, client, complete=complete) == 0
     assert client.writes == [[
-        {"id": "soon", "rankScore": 40.0, "rankReason": "Due Tuesday", "rankNudge": 0},
-        {"id": "big", "rankScore": 90.0, "rankReason": "Unblocks everything", "rankNudge": 1},
-        {"id": "chore", "rankScore": 100.0, "rankReason": "Small", "rankNudge": 0},
+        {"id": "soon", "score": 40.0, "reason": "Due Tuesday"},
+        {"id": "big", "score": 90.0, "reason": "Unblocks everything"},
+        {"id": "chore", "score": 100.0, "reason": "Small"},
     ]]
     prompt = prompts[0]
-    assert "Health first" in prompt and "| Big" in prompt
-    assert "Late" not in prompt and "Placed" not in prompt  # fixed and placed tasks are never sent (N6)
+    assert "Health first" in prompt and "| starred | L | Big" in prompt and "| - | L | Chore" in prompt
+    # due-now, placed and sent-to-bottom tasks are never sent (R9: the model orders one band)
+    assert "Late" not in prompt and "Placed" not in prompt and "Sunk" not in prompt
 
 
-def test_moves_are_capped_and_never_leave_the_tiers(monkeypatch):
-    tasks = [task("soon", "soon", dueIn=1)] + [task(f"t{i}", "rest") for i in range(6)]
-    answer(monkeypatch, *[(n, 50, "r", "up") for n in range(1, 8)])
-    nudges = {}
-    for mode in ("one-tier", "free", "off"):
-        client = FakeClient(tasks)
-        assert rank.run(FAKE, client, mode) == 0
-        nudges[mode] = [r["rankNudge"] for r in client.writes[0]]
-    assert nudges["one-tier"] == [0, 1, 1, 1, 0, 0, 0]  # "up" from soon can't move; then the first 3
-    assert nudges["free"] == [0, 1, 1, 1, 1, 1, 1]
-    assert nudges["off"] == [0] * 7
-    answer(monkeypatch, (1, 50, "r", "down"))
-    client = FakeClient([task("rest", "rest")])
-    rank.run(FAKE, client, "free")
-    assert client.writes[0][0]["rankNudge"] == 0  # already the bottom tier
+def test_no_nudges_left():
+    """R5: the ranking only scores; it never moves a task between bands."""
+    assert set(rank.SCHEMA["properties"]["tasks"]["items"]["properties"]) == {"n", "score", "reason"}
+    assert not hasattr(rank, "MOVE_RULES") and "tier" not in rank.build_prompt(BOARD[2:5], "2026-11-22", None)
 
 
 @pytest.mark.parametrize("fail", ["model", "empty", "priorities", "focus"])
 def test_any_failure_writes_nothing(monkeypatch, fail):
     client = FakeClient(BOARD)
-    answer(monkeypatch, (9, 50, "out of range", "none"))
+    answer(monkeypatch, (9, 50, "out of range"))
     if fail == "model":
         monkeypatch.setenv("FAKE_LLM_RESPONSE", "not json")
     elif fail in ("priorities", "focus"):
         client.fail = fail
-    assert rank.run(FAKE, client, "one-tier") == 1
+    assert rank.run(FAKE, client) == 1
     assert client.writes == []
 
 
 def test_dry_run_prints_and_writes_nothing(monkeypatch, capsys):
     client = FakeClient(BOARD)
-    answer(monkeypatch, (1, 10, "Can wait", "none"), (2, 30, "Meh", "none"), (3, 90, "Matters", "up"))
-    assert rank.run(FAKE, client, "one-tier", dry_run=True) == 0
+    answer(monkeypatch, (1, 10, "Can wait"), (2, 30, "Meh"), (3, 90, "Matters"))
+    assert rank.run(FAKE, client, dry_run=True) == 0
     assert client.writes == []
     out = capsys.readouterr().out
-    assert " 90.0 up   Big - Matters" in out
+    assert " 90.0 Big - Matters" in out
     done = json.loads([line for line in out.splitlines() if '"rank.done"' in line][0])
     assert done["before"] == ["Late", "Placed", "Soon"]
-    assert done["after"] == ["Late", "Placed", "Big"]  # nudged up into soon, above Soon's score
+    assert done["after"] == ["Late", "Placed", "Big"]  # the top score leads everything else
     assert done["dry_run"] is True
 
 
@@ -143,7 +134,7 @@ def files(monkeypatch, *rows):
     """A ranking answer for len(rows) tasks; row i (1-based) is task i's filing
     answer (list or None, reason), or None for no filing answer."""
     monkeypatch.setenv("FAKE_LLM_RESPONSE", json.dumps({
-        "tasks": [{"n": n, "score": 50, "reason": "r", "move": "none"} for n in range(1, len(rows) + 1)],
+        "tasks": [{"n": n, "score": 50, "reason": "r"} for n in range(1, len(rows) + 1)],
         "filing": [{"n": n, "list": f[0], "reason": f[1]} for n, f in enumerate(rows, 1) if f]}))
 
 
@@ -158,7 +149,7 @@ def test_files_inbox_tasks_into_one_named_filing_list(monkeypatch):
     files(monkeypatch, ("garden", "  Garden  shopping "), ("Garden", "sent back"), ("Errands", "not Inbox"),
           ("Garage", "no such list"), None, ("Garden", "already there"))
     prompts, complete = capture()
-    assert rank.run(FAKE, client, "one-tier", complete=complete) == 0
+    assert rank.run(FAKE, client, complete=complete) == 0
     assert client.moves == [[{"id": "seeds", "listId": "i_garden", "reason": "Garden shopping"}]]
     prompt = prompts[0]
     assert 'Lists: "Garden", "Errands"' in prompt
@@ -184,15 +175,15 @@ def test_filing_is_capped_per_night(monkeypatch):
     tasks = [task(f"t{i}", "rest", inbox=True) for i in range(rank.FILE_CAP + 3)]
     client = FakeClient(tasks, lists=LISTS)
     files(monkeypatch, *[("Errands", "errand")] * len(tasks))
-    assert rank.run(FAKE, client, "one-tier") == 0
+    assert rank.run(FAKE, client) == 0
     assert len(client.moves[0]) == rank.FILE_CAP
 
 
 def test_no_inbox_tasks_means_no_filing(monkeypatch):
     client = FakeClient(BOARD, lists=LISTS)
-    answer(monkeypatch, (1, 10, "a", "none"), (2, 20, "b", "none"), (3, 30, "c", "none"))
+    answer(monkeypatch, (1, 10, "a"), (2, 20, "b"), (3, 30, "c"))
     prompts, complete = capture()
-    assert rank.run(FAKE, client, "one-tier", complete=complete) == 0
+    assert rank.run(FAKE, client, complete=complete) == 0
     assert client.list_reads == 0 and client.moves == [[]]
     assert "[Inbox]" not in prompts[0] and "Lists:" not in prompts[0]
     assert rank.build_schema(()) is rank.SCHEMA
@@ -201,7 +192,7 @@ def test_no_inbox_tasks_means_no_filing(monkeypatch):
 def test_dry_run_prints_planned_moves(monkeypatch, capsys):
     client = FakeClient([task("seeds", "rest", inbox=True)], lists=LISTS)
     files(monkeypatch, ("Garden", "Garden shopping"))
-    assert rank.run(FAKE, client, "one-tier", dry_run=True) == 0
+    assert rank.run(FAKE, client, dry_run=True) == 0
     assert client.writes == [] and client.moves == []
     out = capsys.readouterr().out
     assert "\u2192 Garden: Seeds - Garden shopping" in out
@@ -211,9 +202,9 @@ def test_dry_run_prints_planned_moves(monkeypatch, capsys):
 def test_only_the_first_max_tasks_are_sent(monkeypatch):
     monkeypatch.setattr(rank, "MAX_TASKS", 2)
     client = FakeClient(BOARD)
-    answer(monkeypatch, (1, 10, "a", "none"), (2, 20, "b", "none"), (3, 30, "beyond the cap", "none"))
+    answer(monkeypatch, (1, 10, "a"), (2, 20, "b"), (3, 30, "beyond the cap"))
     prompts, complete = capture()
-    assert rank.run(FAKE, client, "one-tier", complete=complete) == 0
+    assert rank.run(FAKE, client, complete=complete) == 0
     assert [r["id"] for r in client.writes[0]] == ["soon", "chore"]
     assert "| Big" not in prompts[0]
 
@@ -221,8 +212,8 @@ def test_only_the_first_max_tasks_are_sent(monkeypatch):
 def test_a_failed_read_after_the_write_still_counts_as_done(monkeypatch, capsys):
     client = FakeClient(BOARD)
     client.fail = "after"
-    answer(monkeypatch, (1, 10, "a", "none"))
-    assert rank.run(FAKE, client, "one-tier") == 0
+    answer(monkeypatch, (1, 10, "a"))
+    assert rank.run(FAKE, client) == 0
     assert len(client.writes) == 1
     out = capsys.readouterr().out
     assert '"rank.after_unavailable"' in out and '"rank.done"' in out and '"rank.failed"' not in out
@@ -230,7 +221,7 @@ def test_a_failed_read_after_the_write_still_counts_as_done(monkeypatch, capsys)
 
 def test_nothing_to_rank_writes_nothing_but_the_log_entry():
     client = FakeClient(BOARD[:2])
-    assert rank.run(FAKE, client, "one-tier") == 0
+    assert rank.run(FAKE, client) == 0
     assert client.writes == []
     assert rank.log_runs(client.log["data"]["doc"])[0]["lines"] == ["No tasks to rank, so none to file."]
 
@@ -239,7 +230,7 @@ def test_filing_log_records_every_inbox_decision_newest_first_and_keeps_30(monke
     tasks = [task("seeds", "rest", inbox=True), task("bins", "rest", inbox=True), task("ink", "rest")]
     client = FakeClient(tasks, lists=LISTS)
     files(monkeypatch, ("Garden", "Garden shopping"), (None, "  no list fits  "), None)
-    assert rank.run(FAKE, client, "one-tier", tz="America/Chicago") == 0
+    assert rank.run(FAKE, client, tz="America/Chicago") == 0
     card = client.log
     assert (card["type"], card["canvasId"], card["data"]["title"]) == ("document", "c_home", "Filing log")
     first = rank.log_runs(card["data"]["doc"])[0]
@@ -251,13 +242,13 @@ def test_filing_log_records_every_inbox_decision_newest_first_and_keeps_30(monke
     assert card["data"]["text"] == "\n".join([first["at"], *first["lines"]])
 
     files(monkeypatch, None, ("Errands", "a bin run"), None)
-    assert rank.run(FAKE, client, "one-tier") == 0
+    assert rank.run(FAKE, client) == 0
     runs = rank.log_runs(client.log["data"]["doc"])
     assert [r["lines"] for r in runs] == [
         ['Left "Seeds" in the Inbox: the model gave no answer for it', 'Moved "Bins" to Errands: a bin run'],
         first["lines"]]
     for _ in range(29):  # 31 runs in all
-        assert rank.run(FAKE, client, "one-tier") == 0
+        assert rank.run(FAKE, client) == 0
     runs = rank.log_runs(client.log["data"]["doc"])
     assert len(runs) == rank.LOG_RUNS and runs[-1]["lines"] != first["lines"]
 
@@ -268,7 +259,7 @@ def test_filing_log_explains_what_was_left(monkeypatch):
     client = FakeClient(tasks, lists=LISTS)
     files(monkeypatch, *[("Errands", "errand")] * (rank.FILE_CAP + 1), ("Garage", "a garage job"))
     client.gone = [{"id": "t0", "reason": "it left the Inbox before the move"}]
-    assert rank.run(FAKE, client, "one-tier") == 0
+    assert rank.run(FAKE, client) == 0
     lines = rank.log_runs(client.log["data"]["doc"])[0]["lines"]
     assert lines[0] == 'Not moved "T0": it left the Inbox before the move'
     assert lines[rank.FILE_CAP] == f'Left "T{rank.FILE_CAP}" in the Inbox: the nightly limit of 10 moves was reached'
@@ -278,17 +269,17 @@ def test_filing_log_explains_what_was_left(monkeypatch):
 
 def test_no_filing_lists_is_logged(monkeypatch):
     client = FakeClient([task("seeds", "rest", inbox=True)])
-    answer(monkeypatch, (1, 10, "a", "none"))
-    assert rank.run(FAKE, client, "one-tier") == 0
+    answer(monkeypatch, (1, 10, "a"))
+    assert rank.run(FAKE, client) == 0
     assert rank.log_runs(client.log["data"]["doc"])[0]["lines"] == ["No list is labelled Filing."]
 
 
 def test_a_blanked_heading_never_becomes_an_empty_text_node(monkeypatch):
     client = FakeClient([task("seeds", "rest", inbox=True)], lists=LISTS)
     files(monkeypatch, ("Garden", "Garden shopping"))
-    assert rank.run(FAKE, client, "one-tier") == 0
+    assert rank.run(FAKE, client) == 0
     client.log["data"]["doc"]["content"][0]["content"] = []  # the owner clears the run's heading
-    assert rank.run(FAKE, client, "one-tier") == 0
+    assert rank.run(FAKE, client) == 0
     doc = client.log["data"]["doc"]["content"]
     texts = [c for n in doc for c in n.get("content", [])]
     assert texts and all(c["text"] for c in texts)
@@ -299,7 +290,7 @@ def test_a_blanked_heading_never_becomes_an_empty_text_node(monkeypatch):
 def test_dry_run_prints_the_log_entry_and_writes_no_log(monkeypatch, capsys):
     client = FakeClient([task("seeds", "rest", inbox=True)], lists=LISTS)
     files(monkeypatch, ("Garden", "Garden shopping"))
-    assert rank.run(FAKE, client, "one-tier", dry_run=True) == 0
+    assert rank.run(FAKE, client, dry_run=True) == 0
     assert client.log is None
     out = capsys.readouterr().out
     assert 'Filing log entry (' in out and '\n  Moved "Seeds" to Garden: Garden shopping' in out
@@ -309,7 +300,7 @@ def test_a_failed_log_write_is_reported(monkeypatch, capsys):
     client = FakeClient([task("seeds", "rest", inbox=True)], lists=LISTS)
     client.fail = "log"
     files(monkeypatch, ("Garden", "Garden shopping"))
-    assert rank.run(FAKE, client, "one-tier") == 1
+    assert rank.run(FAKE, client) == 1
     assert len(client.writes) == 1  # the ranking and the move landed
     failed = [json.loads(line) for line in capsys.readouterr().out.splitlines() if '"rank.log_failed"' in line]
     assert failed[0]["moves"] == ["Seeds -> Garden"]
@@ -352,8 +343,6 @@ def test_main_stays_off_unless_scheduled(monkeypatch):
     monkeypatch.setenv("RANK_SCHEDULE", "on")
     monkeypatch.setenv("TASK_TZ", "Mars/Olympus")
     assert rank.main([]) == 0  # a bad zone stops cleanly instead of crash-looping
-    monkeypatch.setenv("RANK_NUDGE", "lots")
-    assert rank.main([]) == 2
 
 
 def test_cost_for_known_models_only():
@@ -369,17 +358,17 @@ def test_tasks_client_ranking_calls():
         if request.url.path == "/api/tasks/priorities":
             return httpx.Response(200, json={"text": "Focus priorities"})
         if request.method == "PUT":
-            return httpx.Response(400, json={"error": "rankNudge must be -1, 0, 1 or null"})
+            return httpx.Response(400, json={"error": "score must be a number or null"})
         return httpx.Response(200, json={"today": "2026-11-22", "tasks": []})
 
     client = TasksClient("http://app:4321/", "tok", http=httpx.Client(transport=httpx.MockTransport(handler)))
     assert client.focus()["tasks"] == []
     assert client.priorities() == "Focus priorities"
     with pytest.raises(TaskAPIError, match="HTTP 400"):
-        client.write_ranks([{"id": "t1", "rankNudge": 2}])
+        client.write_ranks([{"id": "t1", "score": "x"}])
     assert seen[0][:3] == ("GET", "/api/tasks", "view=focus&limit=all")
     assert seen[2][:2] == ("PUT", "/api/tasks/rank")
-    assert json.loads(seen[2][3]) == {"ranks": [{"id": "t1", "rankNudge": 2}]}
+    assert json.loads(seen[2][3]) == {"ranks": [{"id": "t1", "score": "x"}]}
     with pytest.raises(TaskAPIError):
         client.write_ranks([], [{"id": "t1", "listId": "i_g", "reason": "fits"}])
     assert json.loads(seen[3][3]) == {"ranks": [], "moves": [{"id": "t1", "listId": "i_g", "reason": "fits"}]}

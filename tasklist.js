@@ -22,6 +22,8 @@ const DEFAULTS = {
   noteStyle: {},
   createdAt: null,
   indent: 0,
+  place: null,
+  rank: null,
   movedFrom: null,
   movedAt: null,
   movedBy: null,
@@ -33,8 +35,14 @@ const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 // A task is open, done or stale (set aside by the stale rule), never two at once.
 const STATUSES = ['open', 'done', 'stale'];
 
+// `place` is the owner's ordering on the focus page (focus.js): `{ band, order }`,
+// band "top" (yours) or "bottom" (sent to the bottom). `rank` is the nightly
+// ranking's: `{ score, reason, at }`.
+const BANDS = ['top', 'bottom'];
+const isPlace = p => isObj(p) && BANDS.includes(p.band) && Number.isFinite(p.order);
+
 // The task with every known field present and of the expected type; unknown
-// fields (source, rank*, importId, …) pass through unchanged.
+// fields (source, importId, …) pass through unchanged.
 function normTask(t) {
   const src = isObj(t) ? t : {};
   return {
@@ -50,6 +58,8 @@ function normTask(t) {
     noteStyle: isObj(src.noteStyle) ? src.noteStyle : DEFAULTS.noteStyle,
     createdAt: src.createdAt || null,
     indent: Number.isInteger(src.indent) ? src.indent : DEFAULTS.indent,
+    place: isPlace(src.place) ? src.place : null,
+    rank: isObj(src.rank) ? src.rank : null,
     movedFrom: src.movedFrom || null,
     movedAt: src.movedAt || null,
     movedBy: src.movedBy || null,
@@ -60,16 +70,28 @@ function normTask(t) {
 const isOpen = t => normTask(t).status === 'open';
 const isDone = t => normTask(t).status === 'done';
 
-// A task written with the flags from before `status` (old rows at boot, a tab
-// still running old code, an importer). With no `status`, `done` decides: done
-// (`statusAt` null when unknown) or open. With a `status` (an old tab that
-// loaded after the deploy fills in `done: false` on every task), `done` is
-// ignored. `stale` is dropped either way.
+// A task written with fields from before `status`, `place` and `rank` (old rows
+// at boot, a tab still running old code, an importer).
+// - With no `status`, `done` decides: done (`statusAt` null when unknown) or
+//   open. With a `status` (an old tab that loaded after the deploy fills in
+//   `done: false` on every task), `done` is ignored. `stale` is dropped.
+// - `focusOrder` becomes `place: { band: "top", order }` (F2).
+// - `rankScore`, `rankReason` and `rankedAt` become `rank: { score, reason, at }`
+//   when any of them is set; `rankNudge` is dropped.
+// A `status`, `place` or `rank` already there wins over the old fields.
+const LEGACY = ['done', 'stale', 'focusOrder', 'rankScore', 'rankReason', 'rankedAt', 'rankNudge'];
 function upgradeTask(t) {
-  if (!isObj(t) || !('done' in t || 'stale' in t)) return t;
-  const { done, stale, ...rest } = t; // oxlint-disable-line no-unused-vars -- dropped on purpose
-  if ('status' in rest) return rest;
-  return done ? { ...rest, status: 'done', statusAt: rest.statusAt ?? null } : { ...rest, status: 'open' };
+  if (!isObj(t) || !LEGACY.some(k => k in t)) return t;
+  // oxlint-disable-next-line no-unused-vars -- stale and rankNudge are dropped on purpose
+  const { done, stale, focusOrder, rankScore, rankReason, rankedAt, rankNudge, ...out } = t;
+  if (('done' in t || 'stale' in t) && !('status' in out)) {
+    Object.assign(out, done ? { status: 'done', statusAt: out.statusAt ?? null } : { status: 'open' });
+  }
+  if (Number.isFinite(focusOrder) && !('place' in out)) out.place = { band: 'top', order: focusOrder };
+  if ([rankScore, rankReason, rankedAt].some(v => v != null) && !('rank' in out)) {
+    out.rank = { score: rankScore ?? null, reason: rankReason ?? null, at: rankedAt ?? null };
+  }
+  return out;
 }
 
 // `statusAt` and `statusReason` belong to the server: a write that changes a
@@ -88,6 +110,23 @@ function stampStatus(tasks, before, now) {
   });
 }
 
+// `place` and `rank` belong to the focus page's order route and the nightly
+// ranking (PUT /api/focus/order, PUT /api/tasks/rank), never to a board write:
+// every task keeps the stored ones, whatever the client sent, and a task the
+// stored list doesn't have (a new card, a new task) has none. `before` is the
+// list as stored. Returns a new array.
+function keepOrdering(tasks, before) {
+  const prev = new Map(before.filter(isObj).map(t => [t.id, t]));
+  return tasks.map(t => {
+    if (!isObj(t)) return t;
+    const { place, rank, ...out } = t; // oxlint-disable-line no-unused-vars -- the client's never count
+    const p = prev.get(t.id);
+    if (p && 'place' in p) out.place = p.place;
+    if (p && 'rank' in p) out.rank = p.rank;
+    return out;
+  });
+}
+
 // A server write's status change, stamped like stampStatus. Returns whether it changed.
 function setStatus(task, status, now) {
   if (normTask(task).status === status) return false;
@@ -102,7 +141,7 @@ const isBlank = t => !isObj(t) || typeof t.text !== 'string' || !t.text.trim();
 
 // Rows are keyed by id (reorder, merge, PATCH /api/tasks/:id, /focus), so every
 // task needs an id no other task has. A task given a fresh id loses `importId`
-// and `focusOrder`, which belong to the task that kept the old one. Pass the
+// and `place`, which belong to the task that kept the old one. Pass the
 // same `seen` set across lists to make ids unique across cards. Returns the same
 // array when nothing needed fixing.
 function withIds(tasks, makeId, seen = new Set()) {
@@ -114,7 +153,7 @@ function withIds(tasks, makeId, seen = new Set()) {
       return t;
     }
     changed = true;
-    const { importId, focusOrder, ...rest } = t; // oxlint-disable-line no-unused-vars -- dropped on purpose
+    const { importId, place, ...rest } = t; // oxlint-disable-line no-unused-vars -- dropped on purpose
     const fresh = { ...rest, id: makeId() };
     seen.add(fresh.id);
     return fresh;
@@ -175,30 +214,19 @@ function merge(base, server, mine) {
 }
 
 // The nightly ranking's write (PUT /api/tasks/rank) to one list. `ranks` maps a
-// task id to { rankScore, rankReason, rankNudge }; a listed task gets those and
-// `rankedAt`. Every other task loses `rankNudge`, so last night's moves never
-// pile up. A task the owner placed (`focusOrder`) is never ranked and loses any
-// nudge (N6). Returns the ids written and whether the list changed.
+// task id to { score, reason }; a listed task gets `rank: { score, reason, at }`.
+// The ranking orders only the tasks the owner hasn't placed (R9): a task with a
+// `place` is never ranked, and `place` is never written here. Returns the ids
+// written and whether the list changed.
 function applyRanks(tasks, ranks, now) {
   const written = [];
-  let changed = false;
   for (const t of tasks) {
-    if (!isObj(t)) continue;
-    const r = Number.isFinite(t.focusOrder) ? undefined : ranks.get(t.id);
-    if (r) {
-      t.rankScore = r.rankScore;
-      t.rankReason = r.rankReason;
-      t.rankedAt = now;
-      written.push(t.id);
-      changed = true;
-    }
-    if (r && r.rankNudge) t.rankNudge = r.rankNudge;
-    else if ('rankNudge' in t) {
-      delete t.rankNudge;
-      changed = true;
-    }
+    const r = isObj(t) && !isPlace(t.place) ? ranks.get(t.id) : undefined;
+    if (!r) continue;
+    t.rank = { score: r.score, reason: r.reason, at: now };
+    written.push(t.id);
   }
-  return { written, changed };
+  return { written, changed: written.length > 0 };
 }
 
 module.exports = {
@@ -208,6 +236,7 @@ module.exports = {
   isDone,
   upgradeTask,
   stampStatus,
+  keepOrdering,
   setStatus,
   isBlank,
   withIds,

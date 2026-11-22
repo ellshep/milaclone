@@ -668,12 +668,14 @@ test('tasks: a copied to-do card gets fresh task ids', async () => {
       data: { title: 'Packing', tasks: [{ id: 'p1', text: 'Socks', importId: 'imp-1', focusOrder: 2 }] },
     })
   ).body;
+  // a write from before F2 (a tab or a paste) loses focusOrder, and a board write never places a task
+  assert.equal('focusOrder' in orig.data.tasks[0] || 'place' in orig.data.tasks[0], false);
   const copied = (await send('POST', '/api/item/' + orig.id + '/copy', { canvasId, x: 0, y: 0 })).body;
   assert.notEqual(copied.id, orig.id);
   assert.notEqual(copied.data.tasks[0].id, 'p1');
   assert.equal(copied.data.tasks[0].text, 'Socks');
   assert.equal(copied.data.tasks[0].importId, undefined);
-  assert.equal(copied.data.tasks[0].focusOrder, undefined);
+  assert.equal(copied.data.tasks[0].place, undefined);
 });
 
 test('tasks: the id repair makes ids unique across cards and the oldest card keeps them', async () => {

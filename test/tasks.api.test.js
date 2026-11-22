@@ -92,7 +92,7 @@ test('creates a task in an Inbox list on Home that both screens see', async () =
   assert.equal('done' in t || 'stale' in t, false);
   assert.equal(t.starred, false);
   assert.equal(t.pinned, false);
-  assert.equal(t.rankScore, null);
+  assert.equal('rank' in t || 'rankScore' in t, false); // unranked until the nightly ranking
   assert.equal(t.listTitle, 'Inbox');
   assert.ok(logs.some(l => l.includes('"task.create"') && l.includes('"voice-note"')));
 
@@ -435,19 +435,22 @@ test('a client edit from a stale copy keeps the nightly ranking written since', 
   const t = (await post({ title: 'Rank base' })).body.task;
   const baseTasks = (await plain('/api/todos')).lists.find(l => l.id === t.listId).tasks;
   const ranked = await call('PUT', '/api/tasks/rank', {
-    ranks: [{ id: t.id, rankScore: 77, rankReason: 'Matters', rankNudge: 1 }],
+    ranks: [{ id: t.id, score: 77, reason: 'Matters' }],
   });
   assert.deepEqual(ranked.body, { ranked: 1, skipped: [], moved: 0, movesSkipped: [] });
-  // the client still has the copy from before the ranking (rankScore: null) and renames the task
-  const mine = baseTasks.map(x => (x.id === t.id ? Object.assign({}, x, { text: 'Renamed' }) : x));
+  // the client still has the copy from before the ranking, fills in the defaults
+  // (rank and place null, as Quick notes does) and renames the task
+  const mine = baseTasks.map(x =>
+    x.id === t.id ? Object.assign({}, x, { text: 'Renamed', rank: null, place: null }) : x
+  );
   const saved = await fetch(base + '/api/item/' + t.listId, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ data: { tasks: mine }, baseTasks }),
   }).then(r => r.json());
   const kept = saved.data.tasks.find(x => x.id === t.id);
-  assert.deepEqual([kept.text, kept.rankScore, kept.rankReason, kept.rankNudge], ['Renamed', 77, 'Matters', 1]);
-  assert.equal(typeof kept.rankedAt, 'number');
+  assert.deepEqual([kept.text, kept.rank.score, kept.rank.reason], ['Renamed', 77, 'Matters']);
+  assert.equal(typeof kept.rank.at, 'number');
 });
 
 test('view=digest: the focus three plus overdue and due today, at most 8 lines', async () => {

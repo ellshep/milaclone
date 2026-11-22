@@ -1,6 +1,7 @@
 // Pure helpers for the /focus page (focuspage.js): the due line under a task and
 // the placements a List-mode drag produces. Tasks are the server's focus order
-// (`GET /api/focus`), each with `tier` and `dueIn`.
+// (`GET /api/focus`), each with `tier` (overdue, today, top, rest or bottom) and
+// `dueIn`.
 
 const FIXED = new Set(['overdue', 'today']);
 
@@ -24,26 +25,22 @@ export function dueLabel(task) {
 
 /**
  * The placements after dropping `dragId` before (or `after`) `targetId`, as the
- * ids for `PUT /api/focus/order`; null when the drop changes nothing.
- * `tasks` is the whole focus order. Placed tasks sort above every unplaced
- * one, so the drop places every movable task from the top down to the dropped
- * one (or to the lowest task already placed), which keeps the order as shown.
- * Each id is sent once: lists made through the API can repeat a task id, and
- * the server rejects repeats.
+ * `{ top, bottom }` body for `PUT /api/focus/order`; null when the drop changes
+ * nothing. `tasks` is the whole focus order. A drag places the dragged task
+ * only (R10): into "yours" (tier `top`) at the drop position, or last of yours
+ * when dropped below the last placed task. Every other task keeps its band.
+ * Due-now tasks can't be dragged or dropped on. Each id is sent once: lists
+ * made through the API can repeat a task id, and the server rejects repeats.
  */
 export function placementAfterDrop(tasks, dragId, targetId, after) {
   const movable = tasks.filter(t => !isFixed(t));
-  const moved = movable.find(t => t.id === dragId);
-  if (!moved || dragId === targetId) return null;
-  const order = movable.filter(t => t !== moved);
-  let at = order.findIndex(t => t.id === targetId);
-  if (at < 0) return null;
-  if (after) at++;
-  if (movable[at] === moved) return null;
-  order.splice(at, 0, moved);
-  let last = at;
-  order.forEach((t, i) => {
-    if (t.tier === 'placed') last = Math.max(last, i);
-  });
-  return [...new Set(order.slice(0, last + 1).map(t => t.id))];
+  const target = movable.find(t => t.id === targetId);
+  if (!target || dragId === targetId || !movable.some(t => t.id === dragId)) return null;
+  const band = (tier, skip) => [...new Set(movable.filter(t => t.tier === tier && t.id !== skip).map(t => t.id))];
+  const top = band('top', dragId);
+  const at = target.tier === 'top' ? top.indexOf(target.id) + (after ? 1 : 0) : top.length;
+  top.splice(at, 0, dragId);
+  const next = { top, bottom: band('bottom', dragId) };
+  const now = { top: band('top'), bottom: band('bottom') };
+  return JSON.stringify(next) === JSON.stringify(now) ? null : next;
 }

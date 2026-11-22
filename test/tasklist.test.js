@@ -15,6 +15,8 @@ const {
   upgradeTask,
   stampStatus,
   setStatus,
+  applyRanks,
+  keepOrdering,
 } = require('../tasklist');
 
 let n = 0;
@@ -35,6 +37,8 @@ test('normTask fills every known field and passes unknown ones through', () => {
     noteStyle: {},
     createdAt: null,
     indent: 0,
+    place: null,
+    rank: null,
     movedFrom: null,
     movedAt: null,
     movedBy: null,
@@ -59,6 +63,12 @@ test('normTask fills every known field and passes unknown ones through', () => {
   assert.deepEqual(t.noteStyle, {});
   assert.equal(t.indent, 0);
   assert.equal(normTask(null).text, '');
+  // a place needs a known band and a numeric order
+  assert.deepEqual(normTask({ place: { band: 'bottom', order: 2 } }).place, { band: 'bottom', order: 2 });
+  for (const place of [{ band: 'middle', order: 1 }, { band: 'top' }, 'top', []]) {
+    assert.equal(normTask({ place }).place, null);
+  }
+  assert.equal(normTask({ rank: 'high' }).rank, null);
 });
 
 test('isBlank is true for placeholder rows and junk', () => {
@@ -136,14 +146,15 @@ test('merge: adds and deletes on both sides survive, unknown fields are kept', (
   ]);
 });
 
-test('withIds can make ids unique across lists, and a renamed task drops importId and focusOrder', () => {
+test('withIds can make ids unique across lists, and a renamed task drops importId and place', () => {
   const seen = new Set();
-  const first = withIds([{ id: 'p1', text: 'Socks', importId: 'x', focusOrder: 1 }], makeId, seen);
-  const second = withIds([{ id: 'p1', text: 'Socks', importId: 'x', focusOrder: 1 }], makeId, seen);
-  assert.deepEqual(first, [{ id: 'p1', text: 'Socks', importId: 'x', focusOrder: 1 }]);
+  const place = { band: 'top', order: 1 };
+  const first = withIds([{ id: 'p1', text: 'Socks', importId: 'x', place }], makeId, seen);
+  const second = withIds([{ id: 'p1', text: 'Socks', importId: 'x', place }], makeId, seen);
+  assert.deepEqual(first, [{ id: 'p1', text: 'Socks', importId: 'x', place }]);
   assert.notEqual(second[0].id, 'p1');
   assert.equal(second[0].importId, undefined);
-  assert.equal(second[0].focusOrder, undefined);
+  assert.equal(second[0].place, undefined);
 });
 
 test('copyTasks gives every task a fresh id', () => {
@@ -199,6 +210,60 @@ test('upgradeTask folds the old done flag into status, unless a status is there,
   const current = { id: 'd', status: 'open' };
   assert.equal(upgradeTask(current), current, 'a task already on status is returned as is');
   assert.equal(upgradeTask(null), null);
+});
+
+test('upgradeTask folds focusOrder into place and the rank fields into rank, dropping rankNudge', () => {
+  assert.deepEqual(upgradeTask({ id: 'a', done: true, focusOrder: 3, rankNudge: -1 }), {
+    id: 'a',
+    status: 'done',
+    statusAt: null,
+    place: { band: 'top', order: 3 },
+  });
+  assert.deepEqual(upgradeTask({ id: 'b', rankScore: 70, rankedAt: 9 }), {
+    id: 'b',
+    rank: { score: 70, reason: null, at: 9 },
+  });
+  // the task API's old defaults (all null) carry no rank
+  assert.deepEqual(upgradeTask({ id: 'c', rankScore: null, rankReason: null, rankedAt: null }), { id: 'c' });
+  assert.deepEqual(upgradeTask({ id: 'd', focusOrder: 'x' }), { id: 'd' });
+  // a tab from before the deploy still holds the old fields: the new ones win
+  const place = { band: 'bottom', order: 1 };
+  const rank = { score: 5, reason: 'New', at: 2 };
+  assert.deepEqual(upgradeTask({ id: 'e', place, rank, focusOrder: 1, rankScore: 99 }), { id: 'e', place, rank });
+});
+
+test('keepOrdering keeps the stored place and rank and drops what the client sent', () => {
+  const place = { band: 'top', order: 1 };
+  const rank = { score: 1, reason: 'Stored', at: 1 };
+  const before = [{ id: 'a', place, rank }, { id: 'b' }];
+  const forged = { place: { band: 'bottom', order: 9 }, rank: { score: 99 } };
+  assert.deepEqual(
+    keepOrdering([{ id: 'a', place: null, rank: null }, { id: 'b', ...forged }, { id: 'c', ...forged }, null], before),
+    [{ id: 'a', place, rank }, { id: 'b' }, { id: 'c' }, null]
+  );
+});
+
+test('applyRanks writes rank with the time, skips placed tasks and never touches place', () => {
+  const place = { band: 'top', order: 1 };
+  const tasks = [
+    { id: 'a', text: 'A' },
+    { id: 'p', text: 'Placed', place },
+    { id: 'b', text: 'B', place: { band: 'bottom', order: 1 } },
+    { id: 'c', text: 'Not listed', rank: { score: 1, reason: 'Old', at: 1 } },
+  ];
+  const ranks = new Map([
+    ['a', { score: 80, reason: 'Matters' }],
+    ['p', { score: 99, reason: 'No' }],
+    ['b', { score: 99, reason: 'No' }],
+  ]);
+  assert.deepEqual(applyRanks(tasks, ranks, 50), { written: ['a'], changed: true });
+  assert.deepEqual(tasks, [
+    { id: 'a', text: 'A', rank: { score: 80, reason: 'Matters', at: 50 } },
+    { id: 'p', text: 'Placed', place },
+    { id: 'b', text: 'B', place: { band: 'bottom', order: 1 } },
+    { id: 'c', text: 'Not listed', rank: { score: 1, reason: 'Old', at: 1 } },
+  ]);
+  assert.deepEqual(applyRanks(tasks, new Map(), 60), { written: [], changed: false });
 });
 
 test('stampStatus: the server stamps a status change and keeps its own times otherwise', () => {

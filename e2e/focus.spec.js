@@ -39,11 +39,17 @@ async function hold(page, name, ms) {
 
 test('Three: three tasks at one size; holding a ring marks one done, a tap does not', async ({ page, request }) => {
   await addList(request, 'Focus three', [
-    task('Renew passport', { due: '2000-01-01', rankReason: 'Blocks the trip' }),
+    task('Renew passport', { due: '2000-01-01' }),
     task('Call the plumber', { due: '2000-01-02' }),
     task('Pay the electric bill', { due: '2000-01-03' }),
     task('Book the dentist', { due: '2000-01-04' }),
   ]);
+  // only the nightly ranking writes `rank`, through the task API
+  const ranked = await request.put('/api/tasks/rank', {
+    headers: { Authorization: 'Bearer e2e-task-token' }, // playwright.config.js starts the server with it
+    data: { ranks: [{ id: added[0], score: 50, reason: 'Blocks the trip' }] },
+  });
+  expect(ranked.ok()).toBeTruthy();
   await page.goto('/focus');
   const titles = page.locator('#three .title');
   await expect(titles).toHaveText(['Renew passport', 'Call the plumber', 'Pay the electric bill']);
@@ -81,11 +87,13 @@ test('Three: three tasks at one size; holding a ring marks one done, a tap does 
   await expect(titles.first()).toHaveText('Pay the electric bill');
 });
 
-test('List: drag to reorder saves placements, and Reset clears them', async ({ page, request }) => {
+test('List: a drag places the dragged task only, and Reset clears every place', async ({ page, request }) => {
+  const garage = task('Sort the garage', { createdAt: 2 });
+  const ink = task('Order printer ink', { createdAt: 4 });
   await addList(request, 'Focus list', [
-    task('Sort the garage', { createdAt: 2 }),
+    garage,
     task('Fix the bike light', { createdAt: 3 }),
-    task('Order printer ink', { createdAt: 4 }),
+    ink,
     task('Return library books', { due: '2000-02-01' }),
   ]);
   await page.goto('/focus#list');
@@ -104,13 +112,15 @@ test('List: drag to reorder saves placements, and Reset clears them', async ({ p
     .locator('#list .row', { hasText: 'Order printer ink' })
     .locator('.grip')
     .dragTo(page.locator('#list .row', { hasText: 'Sort the garage' }), { targetPosition: { x: 20, y: 4 } });
-  await saved;
+  const sent = (await saved).request().postDataJSON();
+  expect(sent.top).toContain(ink.id);
+  expect(sent.top).not.toContain(garage.id); // only the dragged task is placed (R10)
   await expect(mine).toHaveText([/Order printer ink/, /Sort the garage/, /Fix the bike light/]);
 
-  // Alt+↓ moves a task down one
-  await page.locator('#list .row', { hasText: 'Order printer ink' }).focus();
-  await page.keyboard.press('Alt+ArrowDown');
-  await expect(mine).toHaveText([/Sort the garage/, /Order printer ink/, /Fix the bike light/]);
+  // Alt+↑ on an unplaced task makes it the last of yours, below the one placed
+  await page.locator('#list .row', { hasText: 'Fix the bike light' }).focus();
+  await page.keyboard.press('Alt+ArrowUp');
+  await expect(mine).toHaveText([/Order printer ink/, /Fix the bike light/, /Sort the garage/]);
 
   await page.getByRole('button', { name: 'Reset order' }).click();
   await expect(mine).toHaveText([/Sort the garage/, /Fix the bike light/, /Order printer ink/]);
@@ -133,6 +143,8 @@ test('List: a finger drags a row by its grip', async ({ page, request }) => {
     const b = await loc.boundingBox();
     return { x: b.x + b.width / 2, y: b.y + dy(b) };
   };
+  // dated tasks from other tests rank above these undated ones (R9), so bring them on screen
+  await mine.nth(1).scrollIntoViewIfNeeded();
   const from = await at(mine.nth(1).locator('.grip'), b => b.height / 2);
   const to = await at(mine.nth(0), () => 4);
   const touch = (type, p) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [p] : [] });

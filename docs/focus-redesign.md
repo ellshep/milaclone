@@ -79,7 +79,7 @@ mockup and this text disagree, the text wins.
 
 ## F2 · Four bands
 
-- [ ] **F2.1 `place`, `rank` and the order.** `focus.js` `orderTasks` ranks by
+- [x] **F2.1 `place`, `rank` and the order.** `focus.js` `orderTasks` ranks by
       R8 and R9. The boot migration turns `focusOrder` into
       `place: { band: "top", order }`, and `rankScore`/`rankReason`/`rankedAt`
       into `rank`, and drops `rankNudge`.

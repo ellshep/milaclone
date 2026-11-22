@@ -100,6 +100,9 @@ const toggleDone = t => {
   t.status = isDone(t) ? 'open' : 'done';
 };
 
+// The focus page's placement (tasklist.js isPlace): band top or bottom, a numeric order.
+const isPlace = p => !!p && ['top', 'bottom'].includes(p.band) && Number.isFinite(p.order);
+
 // Tasks gain their Quick-notes fields on read; blank rows (the canvas editor's
 // "type here" placeholders) are never surfaced as tasks. Keep the defaults in
 // step with the server's tasklist.js normTask.
@@ -117,6 +120,8 @@ function normTask(t) {
     note: typeof t.note === 'string' ? t.note : '',
     noteStyle: t.noteStyle && typeof t.noteStyle === 'object' ? t.noteStyle : {},
     createdAt: t.createdAt || null,
+    place: isPlace(t.place) ? t.place : null,
+    rank: t.rank && typeof t.rank === 'object' && !Array.isArray(t.rank) ? t.rank : null,
     movedFrom: t.movedFrom || null,
     movedAt: t.movedAt || null,
     movedBy: t.movedBy || null,

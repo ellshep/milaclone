@@ -33,7 +33,7 @@ acceptable for you:
   pick out the tasks, along with your existing tags and the titles of lists
   labelled Filing.
 - **With the nightly ranking switched on** (`RANK_SCHEDULE=on`), the titles,
-  due dates, list names and board titles of your open tasks, your Home "Focus
+  due dates, stars, list names and board titles of your open tasks, your Home "Focus
   priorities" note and the titles of lists labelled Filing go to the ranking's
   LLM provider once a night
   ([details](docs/voice-capture.md#nightly-ranking)).

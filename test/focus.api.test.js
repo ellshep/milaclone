@@ -39,20 +39,30 @@ const card = { id: 'i_l', data: { title: 'L' } };
 const t = (id, f = {}) => ({ task: Object.assign({ id, text: id, status: 'open', createdAt: 0 }, f), card });
 const ids = r => r.tasks.map(x => x.id);
 
-test('orderTasks: fixed date tiers, then placed, then soon → starred → rest', () => {
+test('orderTasks: due now, then yours, then everything else, then sent to bottom (R8, R9)', () => {
+  const top = order => ({ place: { band: 'top', order } });
+  const bottom = order => ({ place: { band: 'bottom', order } });
   const r = orderTasks(
     [
       t('rest-old', { createdAt: 1 }),
       t('rest-new', { createdAt: 9 }),
       t('starred', { starred: true }),
-      t('soon-3', { due: '2026-11-23' }),
       t('soon-1', { due: '2026-11-21' }),
       t('later', { due: '2026-11-30', createdAt: 5 }),
+      t('low', { rank: { score: 10, reason: 'Can wait', at: 1 }, due: '2026-11-21' }),
+      t('high', { rank: { score: 90, reason: 'Matters', at: 1 } }),
+      t('tie-undated', { rank: { score: 50 }, starred: true }),
+      t('tie-dated', { rank: { score: 50 }, due: '2026-11-25' }),
+      t('bottom-2', { ...bottom(2), starred: true, rank: { score: 99 } }),
+      t('bottom-1', bottom(1)),
+      t('bottom-late', { ...bottom(1), due: '2026-11-18' }),
+      t('top-2', top(2)),
+      t('top-1', { ...top(1), due: '2026-11-21' }),
+      t('top-today', { ...top(1), due: TODAY, createdAt: 2 }),
       t('today', { due: TODAY }),
       t('over-1', { due: '2026-11-19' }),
       t('over-5', { due: '2026-11-15' }),
-      t('placed-2', { focusOrder: 2 }),
-      t('placed-1', { focusOrder: 1, due: '2026-11-21' }),
+      t('odd-place', { place: { band: 'middle', order: 1 }, createdAt: 3 }),
       t('done', { status: 'done' }),
       t('stale', { status: 'stale' }),
       t('blank', { text: '  ' }),
@@ -61,57 +71,51 @@ test('orderTasks: fixed date tiers, then placed, then soon → starred → rest'
   );
   assert.deepEqual(ids(r), [
     'over-5',
+    'bottom-late',
     'over-1',
     'today',
-    'placed-1',
-    'placed-2',
+    'top-today',
+    'top-1',
+    'top-2',
+    'high',
+    'tie-dated',
+    'tie-undated',
+    'low',
     'soon-1',
-    'soon-3',
+    'later',
     'starred',
     'rest-old',
-    'later',
+    'odd-place',
     'rest-new',
+    'bottom-1',
+    'bottom-2',
   ]);
-  assert.deepEqual(r.counts, { overdue: 2, dueToday: 1, open: 11 });
+  assert.deepEqual([...new Set(r.tasks.map(x => x.tier))], ['overdue', 'today', 'top', 'rest', 'bottom']);
+  assert.deepEqual(r.counts, { overdue: 3, dueToday: 2, open: 19 });
   const over = r.tasks[0];
   assert.equal(over.tier, 'overdue');
   assert.equal(over.dueIn, -5);
   assert.equal(over.listId, 'i_l');
   assert.equal(over.listTitle, 'L');
+  assert.equal(over.place, null);
+  assert.deepEqual(r.tasks.find(x => x.id === 'top-2').place, { band: 'top', order: 2 });
+  assert.equal(r.tasks.find(x => x.id === 'odd-place').place, null);
   assert.equal(r.tasks.find(x => x.id === 'later').dueIn, 10);
   assert.equal(r.tasks.find(x => x.id === 'rest-old').dueIn, null);
 });
 
-test('orderTasks: rankScore within a tier, and nudges move one tier at most', () => {
+test('orderTasks band boundaries: placed below due today and above a high score; bottom below unscored', () => {
   const r = orderTasks(
     [
-      t('low', { rankScore: 10 }),
-      t('none'),
-      t('high', { rankScore: 90 }),
-      t('up', { rankScore: 1, rankNudge: 1 }),
-      t('up-twice', { rankNudge: 5 }),
-      t('starred-down', { starred: true, rankNudge: -1 }),
-      t('soon-down', { due: '2026-11-22', rankNudge: -1 }),
-      t('today-down', { due: TODAY, rankNudge: -1 }),
-      t('placed-nudged', { focusOrder: 0, rankNudge: -1 }),
+      t('scored', { rank: { score: 100, reason: 'Top of the model', at: 1 } }),
+      t('bottom', { place: { band: 'bottom', order: 1 }, starred: true, due: '2026-11-21' }),
+      t('unscored', { createdAt: 99 }),
+      t('placed', { place: { band: 'top', order: 5 } }),
+      t('due-today', { due: TODAY }),
     ],
     TODAY
   );
-  assert.deepEqual(ids(r), [
-    'today-down',
-    'placed-nudged',
-    'up',
-    'up-twice',
-    'soon-down',
-    'high',
-    'low',
-    'none',
-    'starred-down',
-  ]);
-  assert.deepEqual(
-    r.tasks.map(x => x.tier),
-    ['today', 'placed', 'starred', 'starred', 'starred', 'rest', 'rest', 'rest', 'rest']
-  );
+  assert.deepEqual(ids(r), ['due-today', 'placed', 'scored', 'unscored', 'bottom']);
 });
 
 test('parseLimit', () => {
@@ -199,71 +203,120 @@ test('POST /api/focus/:taskId/done marks the task done once', async () => {
   assert.equal((await json('POST', '/api/focus/nope/done')).status, 404);
 });
 
-test('PUT /api/focus/order places tasks across lists, and [] resets', async () => {
+test('PUT /api/focus/order places tasks in both bands across lists, and empty bands reset', async () => {
   const { rootCanvasId } = (await json('GET', '/api/root')).body;
   const mk = (id, f = {}) => Object.assign({ id, text: id, status: 'open', createdAt: 1 }, f);
-  const a = await todo(rootCanvasId, 'Place A', [mk('p-a1'), mk('p-a2', { focusOrder: 7 })]);
-  await todo(rootCanvasId, 'Place B', [mk('p-b1')]);
+  const a = await todo(rootCanvasId, 'Place A', [mk('p-a1'), mk('p-a2')]);
+  await todo(rootCanvasId, 'Place B', [mk('p-b1'), mk('p-b2')]);
+  assert.equal((await json('PUT', '/api/focus/order', { top: ['p-a2'], bottom: [] })).status, 200);
 
-  const r = await json('PUT', '/api/focus/order', { ids: ['p-b1', 'p-a1'] });
+  const r = await json('PUT', '/api/focus/order', { top: ['p-b1', 'p-a1'], bottom: ['p-b2'] });
   assert.equal(r.status, 200);
-  const placed = r.body.tasks.filter(t => t.tier === 'placed').map(t => [t.id, t.focusOrder]);
+  const placed = r.body.tasks.filter(t => t.place).map(t => [t.id, t.tier, t.place.order]);
   assert.deepEqual(placed, [
-    ['p-b1', 1],
-    ['p-a1', 2],
+    ['p-b1', 'top', 1],
+    ['p-a1', 'top', 2],
+    ['p-b2', 'bottom', 1],
   ]);
+  assert.equal(r.body.tasks.at(-1).id, 'p-b2', 'sent to the bottom of everything');
   // a task left out loses its old placement
   const cardA = (await json('GET', '/api/canvas/' + rootCanvasId)).body.items.find(it => it.id === a.id);
-  assert.equal('focusOrder' in cardA.data.tasks[1], false);
+  assert.equal('place' in cardA.data.tasks[1], false);
 
-  const reset = await json('PUT', '/api/focus/order', { ids: [] });
+  const reset = await json('PUT', '/api/focus/order', { top: [], bottom: [] });
   assert.equal(
-    reset.body.tasks.some(t => t.tier === 'placed'),
+    reset.body.tasks.some(t => t.place),
     false
   );
 
-  for (const ids of [undefined, 'p-a1', ['p-a1', 'p-a1'], [''], [3]]) {
-    assert.equal((await json('PUT', '/api/focus/order', { ids })).status, 400, JSON.stringify(ids));
+  for (const body of [
+    { ids: ['p-a1'] },
+    { top: ['p-a1'] },
+    { top: 'p-a1', bottom: [] },
+    { top: ['p-a1', 'p-a1'], bottom: [] },
+    { top: ['p-a1'], bottom: ['p-a1'] },
+    { top: [''], bottom: [] },
+    { top: [3], bottom: [] },
+  ]) {
+    assert.equal((await json('PUT', '/api/focus/order', body)).status, 400, JSON.stringify(body));
   }
 });
 
-test('PUT /api/tasks/rank writes scores in one go, clears old nudges and skips placed tasks', async () => {
+test('PUT /api/tasks/rank writes rank in one go, skips placed tasks and never changes place', async () => {
   const { rootCanvasId } = (await json('GET', '/api/root')).body;
   const mk = (id, f = {}) => Object.assign({ id, text: id, status: 'open', createdAt: 1 }, f);
-  const list = await todo(rootCanvasId, 'Rank me', [
-    mk('r-a'),
-    mk('r-b', { rankNudge: 1, rankScore: 5 }),
-    mk('r-placed', { focusOrder: 1, rankScore: 7, rankNudge: -1 }),
-  ]);
+  const old = { score: 5, reason: 'Old' };
+  const top = { band: 'top', order: 1 };
+  const bottom = { band: 'bottom', order: 1 };
+  const list = await todo(rootCanvasId, 'Rank me', [mk('r-a'), mk('r-b'), mk('r-top'), mk('r-bottom')]);
   const put = body => json('PUT', '/api/tasks/rank', body, TOKEN);
+  const first = await put({ ranks: ['r-b', 'r-top'].map(id => ({ id, score: old.score, reason: old.reason })) });
+  assert.equal(first.status, 200);
+  await json('PUT', '/api/focus/order', { top: ['r-top'], bottom: ['r-bottom'] });
+  const before = Date.now();
   const r = await put({
     ranks: [
-      { id: 'r-a', rankScore: 80, rankReason: 'Unblocks the rest', rankNudge: 1 },
-      { id: 'r-placed', rankScore: 99, rankReason: 'no', rankNudge: 1 },
-      { id: 'gone', rankScore: 1 },
+      { id: 'r-a', score: 80, reason: 'Unblocks the rest' },
+      { id: 'r-top', score: 99, reason: 'no' },
+      { id: 'r-bottom', score: 99, reason: 'no' },
+      { id: 'gone', score: 1 },
     ],
   });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { ranked: 1, skipped: ['r-placed', 'gone'], moved: 0, movesSkipped: [] });
+  assert.deepEqual(r.body, { ranked: 1, skipped: ['r-top', 'r-bottom', 'gone'], moved: 0, movesSkipped: [] });
   const tasks = (await json('GET', '/api/canvas/' + rootCanvasId)).body.items.find(it => it.id === list.id).data.tasks;
-  const [a, b, placed] = tasks;
-  assert.deepEqual([a.rankScore, a.rankReason, a.rankNudge], [80, 'Unblocks the rest', 1]);
-  assert.equal(typeof a.rankedAt, 'number');
-  assert.equal('rankNudge' in b, false); // not listed: nudge cleared, score kept
-  assert.equal(b.rankScore, 5);
-  assert.deepEqual([placed.rankScore, 'rankNudge' in placed], [7, false]);
+  const [a, b, placedTop, placedBottom] = tasks;
+  assert.deepEqual([a.rank.score, a.rank.reason], [80, 'Unblocks the rest']);
+  assert.ok(a.rank.at >= before && a.rank.at <= Date.now(), 'stamped with the server clock');
+  assert.equal('place' in a, false, 'ranking never places a task');
+  assert.deepEqual([b.rank.score, b.rank.reason], [old.score, old.reason]); // not listed: kept
+  assert.deepEqual([placedTop.place, placedTop.rank], [top, b.rank]);
+  assert.deepEqual([placedBottom.place, 'rank' in placedBottom], [bottom, false]);
 
   for (const ranks of [
     undefined,
     [{}],
-    [{ id: 'r-a', rankScore: 'x' }],
-    [{ id: 'r-a', rankNudge: 2 }],
-    [{ id: 'r-a', rankReason: 'x'.repeat(301) }],
-    [{ id: 'r-a' }, { id: 'r-a' }],
+    [{ id: 'r-a' }], // no score: a client on the old field names
+    [{ id: 'r-a', rankScore: 50 }],
+    [{ id: 'r-a', score: 'x' }],
+    [{ id: 'r-a', score: 1, reason: 'x'.repeat(301) }],
+    [
+      { id: 'r-a', score: 1 },
+      { id: 'r-a', score: 2 },
+    ],
   ]) {
     assert.equal((await put({ ranks })).status, 400, JSON.stringify(ranks));
   }
   assert.equal((await json('PUT', '/api/tasks/rank', { ranks: [] })).status, 401);
+});
+
+test('board writes never set place or rank: the stored ones stay, new tasks get none', async () => {
+  const { rootCanvasId } = (await json('GET', '/api/root')).body;
+  const forged = { place: { band: 'top', order: 1 }, rank: { score: 100, reason: 'Me first', at: 1 } };
+  const mk = (id, f = {}) => Object.assign({ id, text: id, status: 'open', createdAt: 1 }, f);
+  const list = await todo(rootCanvasId, 'Forge', [
+    mk('k-a', forged),
+    mk('k-b'),
+    mk('k-c', { focusOrder: 1, rankScore: 9 }),
+  ]);
+  assert.deepEqual(
+    list.data.tasks.map(t => ['place', 'rank', 'focusOrder', 'rankScore'].filter(k => k in t)),
+    [[], [], []],
+    'a new card keeps no place or rank, old or new field names'
+  );
+  await json('PUT', '/api/tasks/rank', { ranks: [{ id: 'k-b', score: 3, reason: 'Real' }] }, TOKEN);
+  await json('PUT', '/api/focus/order', { top: ['k-b'], bottom: [] }); // after: placed tasks aren't ranked
+  const stored = (await json('GET', '/api/canvas/' + rootCanvasId)).body.items.find(it => it.id === list.id).data.tasks;
+  // a client sends forged values on k-a, clears k-b's, and adds a task with its own
+  const mine = [{ ...stored[0], ...forged }, { ...stored[1], place: null, rank: null }, stored[2], mk('k-d', forged)];
+  const r = await json('PATCH', '/api/item/' + list.id, { data: { tasks: mine } });
+  assert.equal(r.status, 200);
+  const [ka, kb, , kd] = r.body.data.tasks;
+  assert.equal('place' in ka || 'rank' in ka, false);
+  assert.deepEqual(kb.place, { band: 'top', order: 1 });
+  assert.deepEqual([kb.rank.score, kb.rank.reason], [3, 'Real']);
+  assert.equal('place' in kd || 'rank' in kd, false);
+  await json('PUT', '/api/focus/order', { top: [], bottom: [] });
 });
 
 test('GET /api/tasks/priorities returns the Home note headed "Focus priorities"', async () => {
@@ -284,16 +337,16 @@ test('view=digest stops at the three when the rest are neither overdue nor due t
   const { rootCanvasId } = (await json('GET', '/api/root')).body;
   const mk = (id, f = {}) => Object.assign({ id, text: id, status: 'open', createdAt: 1 }, f);
   await todo(rootCanvasId, 'Digest mix', [mk('n-over', { due: shift(-30) }), mk('n-p1'), mk('n-p2'), mk('n-p3')]);
-  await json('PUT', '/api/focus/order', { ids: ['n-p1', 'n-p2', 'n-p3'] });
+  await json('PUT', '/api/focus/order', { top: ['n-p1', 'n-p2', 'n-p3'], bottom: [] });
   const focus = (await json('GET', '/api/tasks?view=focus&limit=5', undefined, TOKEN)).body.tasks;
   const digest = (await json('GET', '/api/tasks?view=digest', undefined, TOKEN)).body;
   // n-over and w-over, then the first placed task; later placed tasks are left out
   assert.deepEqual(
     focus.map(t => t.tier),
-    ['overdue', 'overdue', 'placed', 'placed', 'placed']
+    ['overdue', 'overdue', 'top', 'top', 'top']
   );
   assert.deepEqual(digest, { tasks: focus.slice(0, 3), more: 0 });
-  await json('PUT', '/api/focus/order', { ids: [] });
+  await json('PUT', '/api/focus/order', { top: [], bottom: [] });
 });
 
 test('M3.3 nightly filing: the focus view marks Inbox tasks, and PUT /api/tasks/rank moves them', async () => {
@@ -314,7 +367,7 @@ test('M3.3 nightly filing: the focus view marks Inbox tasks, and PUT /api/tasks/
 
   const put = body => json('PUT', '/api/tasks/rank', body, TOKEN);
   const r = await put({
-    ranks: [{ id: a.id, rankScore: 50, rankReason: 'Spring', rankNudge: 0 }],
+    ranks: [{ id: a.id, score: 50, reason: 'Spring' }],
     moves: [
       { id: a.id, listId: errands.id, reason: 'Garden shopping' },
       { id: 't_missing', listId: errands.id, reason: 'x' },
@@ -330,19 +383,19 @@ test('M3.3 nightly filing: the focus view marks Inbox tasks, and PUT /api/tasks/
   const filed = (await json('GET', '/api/focus?limit=all')).body.tasks.find(x => x.id === a.id);
   assert.equal(filed.listId, errands.id);
   assert.deepEqual(
-    [filed.movedFrom, filed.movedBy, filed.moveReason, filed.rankScore],
+    [filed.movedFrom, filed.movedBy, filed.moveReason, filed.rank.score],
     [inboxId, 'ranker', 'Garden shopping', 50]
   );
 
   // a bad target refuses the whole write: no score, no move
   const before = (await json('GET', '/api/focus?limit=all')).body.tasks.find(x => x.id === b.id);
   const refused = await put({
-    ranks: [{ id: b.id, rankScore: 99, rankReason: 'x', rankNudge: 0 }],
+    ranks: [{ id: b.id, score: 99, reason: 'x' }],
     moves: [{ id: b.id, listId: 'i_nope', reason: 'x' }],
   });
   assert.equal(refused.status, 400);
   const after = (await json('GET', '/api/focus?limit=all')).body.tasks.find(x => x.id === b.id);
-  assert.deepEqual([after.listId, after.rankScore], [before.listId, before.rankScore]);
+  assert.deepEqual([after.listId, after.rank], [before.listId, before.rank]);
   for (const moves of ['x', [{ id: b.id }], [{ id: b.id, listId: errands.id, reason: 'r'.repeat(501) }]]) {
     assert.equal((await put({ ranks: [], moves })).status, 400, JSON.stringify(moves));
   }

@@ -127,24 +127,22 @@ function cleanImportId(v) {
   return v;
 }
 
-// The nightly ranking's batch: [{ id, rankScore, rankReason, rankNudge }] →
-// Map id → fields. Score a finite number or null, reason a short string or
-// null, nudge -1, 0 or 1 (null counts as 0).
+// The nightly ranking's batch: [{ id, score, reason }] → Map id → fields. Score
+// a finite number or null, reason a short string or null. `score` must be sent,
+// so a client still on the old field names is refused rather than unscoring
+// every task.
 function cleanRanks(v) {
   if (!Array.isArray(v) || v.length > LIMIT_MAX) bad(`ranks must be an array of at most ${LIMIT_MAX}`);
   const out = new Map();
   for (const r of v) {
     if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id) bad('each rank needs an id');
     if (out.has(r.id)) bad(`task ${r.id} is ranked twice`);
-    const rankScore = r.rankScore ?? null;
-    if (rankScore !== null && !Number.isFinite(rankScore)) bad('rankScore must be a number or null');
-    const rankReason = r.rankReason ?? null;
-    if (rankReason !== null && (typeof rankReason !== 'string' || rankReason.length > RANK_REASON_MAX)) {
-      bad(`rankReason must be a string up to ${RANK_REASON_MAX} characters or null`);
+    if (!('score' in r) || (r.score !== null && !Number.isFinite(r.score))) bad('score must be a number or null');
+    const reason = r.reason ?? null;
+    if (reason !== null && (typeof reason !== 'string' || reason.length > RANK_REASON_MAX)) {
+      bad(`reason must be a string up to ${RANK_REASON_MAX} characters or null`);
     }
-    const rankNudge = r.rankNudge ?? 0;
-    if (![-1, 0, 1].includes(rankNudge)) bad('rankNudge must be -1, 0, 1 or null');
-    out.set(r.id, { rankScore, rankReason, rankNudge });
+    out.set(r.id, { score: r.score, reason });
   }
   return out;
 }
@@ -269,9 +267,6 @@ router.post(
           note,
           source,
           pinned: false,
-          rankScore: null,
-          rankReason: null,
-          rankedAt: null,
           importId,
         },
         id('t_')
@@ -355,8 +350,8 @@ router.get('/api/tasks/priorities', (req, res) => {
 });
 
 // The nightly ranking's write, in one transaction so it lands whole or not at
-// all. Listed tasks get their score, reason and nudge; every other task loses
-// its nudge. Placed tasks and ids no list has are skipped and returned. Then the
+// all. Listed tasks get `rank: { score, reason, at }`; `place` is never touched.
+// Placed tasks and ids no list has are skipped and returned. Then the
 // moves are filed; a move to a list that isn't one refuses the whole write. A
 // move whose task has since left the Inbox, or was last moved by anyone but the
 // ranker, is skipped with its reason: the read it was planned on is stale.

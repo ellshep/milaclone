@@ -206,9 +206,13 @@ router.post('/api/item', (req, res) => {
     createdAt: Date.now(),
   };
   if (RICH_TYPES.has(item.type)) item.data = toRich(item.data);
-  // A new card's tasks keep the status times they come with (a paste, an import).
+  // A new card's tasks keep the status times they come with (a paste, an import),
+  // but never a `place` or `rank` (tasklist.js keepOrdering).
   if (Array.isArray(item.data.tasks)) {
-    item.data.tasks = tasklist.withIds(item.data.tasks.map(tasklist.upgradeTask), () => id('t_'));
+    item.data.tasks = tasklist.keepOrdering(
+      tasklist.withIds(item.data.tasks.map(tasklist.upgradeTask), () => id('t_')),
+      []
+    );
   }
 
   db.transaction(() => {
@@ -258,10 +262,13 @@ router.patch('/api/item/:id', (req, res) => {
       const mine = tasklist.withIds(b.data.tasks.map(tasklist.upgradeTask), () => id('t_'));
       const base = Array.isArray(b.baseTasks) ? b.baseTasks.map(tasklist.upgradeTask) : null;
       const before = Array.isArray(stored) ? stored : [];
-      it.data.tasks = tasklist.stampStatus(
-        base && Array.isArray(stored) ? tasklist.merge(base, stored, mine) : mine,
-        before,
-        Date.now()
+      it.data.tasks = tasklist.keepOrdering(
+        tasklist.stampStatus(
+          base && Array.isArray(stored) ? tasklist.merge(base, stored, mine) : mine,
+          before,
+          Date.now()
+        ),
+        before
       );
     }
   }
@@ -588,16 +595,19 @@ router.post('/api/focus/:taskId/done', (req, res) => {
   if (!markDone(req.params.taskId)) return res.status(404).json({ error: 'no open task with that id' });
   res.json({ ok: true });
 });
-// Body `{ ids }`: the placed tasks, top first; `[]` clears every placement.
+// Body `{ top, bottom }`: the tasks placed in each band, first first (R4); every
+// other task loses its place, so `{ top: [], bottom: [] }` is Reset.
 router.put('/api/focus/order', (req, res) => {
-  const ids = req.body && req.body.ids;
+  const b = req.body || {};
+  const ids = [b.top, b.bottom];
+  const all = ids.flat();
   const ok =
-    Array.isArray(ids) &&
-    ids.length <= LIMIT_MAX &&
-    ids.every(x => typeof x === 'string' && x) &&
-    new Set(ids).size === ids.length;
-  if (!ok) return res.status(400).json({ error: `ids must be up to ${LIMIT_MAX} distinct task ids` });
-  setPlacements(ids);
+    ids.every(Array.isArray) &&
+    all.length <= LIMIT_MAX &&
+    all.every(x => typeof x === 'string' && x) &&
+    new Set(all).size === all.length;
+  if (!ok) return res.status(400).json({ error: `top and bottom must hold up to ${LIMIT_MAX} distinct task ids` });
+  setPlacements({ top: b.top, bottom: b.bottom });
   res.json(focusView({ limit: LIMIT_MAX }));
 });
 

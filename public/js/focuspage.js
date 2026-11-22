@@ -8,8 +8,9 @@
 //                    A quick tap only shows a hint. "N in queue" sits in the
 //                    controls.
 //   List (#list)     every ranked task with its list and board. Drag a row by
-//                    its grip (mouse or touch), or Alt+↑/↓, to reorder; that
-//                    saves placements (focusOrder). Reset clears them.
+//                    its grip (mouse or touch), or Alt+↑/↓, to place it among
+//                    yours (`place`, focus-redesign R10). Reset clears every
+//                    place.
 //
 // The order itself comes from the server (focus.js), so the page, the task API
 // and the digest never disagree. No polling: it refetches when the window
@@ -89,7 +90,7 @@ function meta(task) {
   const p = el('p', 'meta');
   const due = dueLabel(task);
   if (due) p.append(el('span', 'due ' + task.tier, due));
-  if (task.rankReason) p.append(el('span', 'reason', task.rankReason));
+  if (task.rank?.reason) p.append(el('span', 'reason', task.rank.reason));
   return p;
 }
 
@@ -237,15 +238,15 @@ function renderList() {
     return li;
   });
   listEl.replaceChildren(...rows);
-  resetBtn.hidden = !tasks.some(t => t.tier === 'placed');
+  resetBtn.hidden = !tasks.some(t => t.place);
 }
 
-async function saveOrder(ids) {
+async function saveOrder(placements) {
   try {
     const r = await fetch('/api/focus/order', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids }),
+      body: JSON.stringify(placements),
     });
     if (!r.ok) throw new Error(String(r.status));
     tasks = (await r.json()).tasks;
@@ -299,8 +300,8 @@ function endDrag(drop) {
   li.style.transform = '';
   clearMarks();
   if (!drop || !target) return;
-  const ids = placementAfterDrop(tasks, id, target.li.dataset.id, target.after);
-  if (ids) saveOrder(ids);
+  const placements = placementAfterDrop(tasks, id, target.li.dataset.id, target.after);
+  if (placements) saveOrder(placements);
 }
 
 listEl.addEventListener('pointerdown', e => {
@@ -333,13 +334,13 @@ listEl.addEventListener('keydown', async e => {
   const i = movable.findIndex(t => t.id === li.dataset.id);
   const target = movable[e.key === 'ArrowUp' ? i - 1 : i + 1];
   if (!target) return;
-  const ids = placementAfterDrop(tasks, li.dataset.id, target.id, e.key === 'ArrowDown');
-  if (!ids) return;
-  await saveOrder(ids);
+  const placements = placementAfterDrop(tasks, li.dataset.id, target.id, e.key === 'ArrowDown');
+  if (!placements) return;
+  await saveOrder(placements);
   listEl.querySelector(`.row[data-id="${CSS.escape(li.dataset.id)}"]`)?.focus();
 });
 
-resetBtn.addEventListener('click', () => saveOrder([]));
+resetBtn.addEventListener('click', () => saveOrder({ top: [], bottom: [] }));
 
 // ---- Controls and refetching ---------------------------------------------------
 

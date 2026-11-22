@@ -3,6 +3,7 @@
 const { defineConfig, devices } = require('@playwright/test');
 
 const PORT = 4322;
+const TASK_TOKEN = 'e2e-task-token'; // e2e/focus.spec.js sends it
 
 // ponytail: the app auto-saves to SQLite, so tests run against a throwaway
 // DATA_DIR (wiped each run) on a non-default port — never touches real boards.
@@ -28,7 +29,8 @@ module.exports = defineConfig({
     },
   ],
   webServer: {
-    command: `rm -rf .e2e-data && DATA_DIR=.e2e-data PORT=${PORT} node server.js`,
+    // The task API is on so a spec can write the nightly ranking (PUT /api/tasks/rank).
+    command: `rm -rf .e2e-data && DATA_DIR=.e2e-data PORT=${PORT} TASK_API_TOKEN=${TASK_TOKEN} node server.js`,
     url: `http://127.0.0.1:${PORT}/api/health`,
     reuseExistingServer: false,
     timeout: 20000,

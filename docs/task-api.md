@@ -83,24 +83,26 @@ curl -sS "https://mila.your-tailnet.ts.net/api/tasks?status=open" \
 The ranked open tasks the focus page, the watch and the morning digest share
 (`focus.js`). `limit` is 1–1000 or `all` (default 3). Returns
 `{ today, tasks, counts }`: `today` is the date in `TASK_TZ`; each task carries
-`listId`, `listTitle`, `boardTitle` (the board the list sits on), `tier`,
-`dueIn` (days, negative when overdue) and, on Inbox tasks, `inbox: true`;
-`counts` is `{ overdue, dueToday, open }`.
+`listId`, `listTitle`, `boardTitle` (the board the list sits on), `place`
+(`null` when not placed), `tier`, `dueIn` (days, negative when overdue) and, on
+Inbox tasks, `inbox: true`; `counts` is `{ overdue, dueToday, open }`.
 
-The order:
+The order, four bands (`tier` names each task's):
 
-1. Overdue (most overdue first), then due today. Nothing outranks these.
-2. Tasks placed by hand (`focusOrder`, lowest first).
-3. The rest by tier: due within 3 days, then starred, then everything else. A
-   `rankNudge` of `1` or `-1` moves a task one tier; within a tier, higher
-   `rankScore` first, then unscored tasks oldest first.
+1. Due now: overdue (`overdue`, most overdue first), then due today (`today`).
+   Nothing outranks these.
+2. Yours (`top`): tasks the owner placed at the top, by `place.order`.
+3. Everything else (`rest`): higher `rank.score` first; unscored tasks follow,
+   due soonest first, then starred, then oldest.
+4. Sent to bottom (`bottom`): by `place.order`.
 
 Left out: tasks that aren't open (`status` `done` or `stale`), blank tasks,
 to-do lists labelled **Reference**, and lists inside the **Templates** board on
 Home. The board serves the same order without a token at `GET /api/focus` for
 the `/focus` page, which writes back through two more board routes: `POST /api/focus/:taskId/done`, and
-`PUT /api/focus/order` with `{ ids }`, the placed tasks top first (they get
-`focusOrder` 1, 2, …, every other task loses its placement, and `[]` resets).
+`PUT /api/focus/order` with `{ top, bottom }`, the ids placed in each band, first
+first (they get `place: { band, order }` with order 1, 2, …; every other task
+loses its `place`, and two empty lists reset).
 
 ```bash
 curl -sS "https://mila.your-tailnet.ts.net/api/tasks?view=focus&limit=3" \
@@ -132,13 +134,14 @@ so a task can be posted straight to one with `listId`.
 
 ### `PUT /api/tasks/rank` — write the nightly ranking
 
-`{ ranks: [{ id, rankScore, rankReason, rankNudge }] }`, up to 1000. `rankScore`
-is a number or `null`, `rankReason` a string up to 300 characters or `null`,
-`rankNudge` `-1`, `0` or `1` (`null` counts as `0`). One transaction: every
-listed task gets its fields and `rankedAt` (ms), and **every task not listed
-loses its `rankNudge`** (its score and reason stay), so moves never pile up
-night after night. Tasks placed by hand (`focusOrder`) are never ranked: their
-ids are skipped, and they lose any nudge.
+`{ ranks: [{ id, score, reason }] }`, up to 1000. `score` is required, a number
+or `null`; `reason` a string up to 300 characters or `null`. One transaction:
+every listed task gets `rank: { score, reason, at }`, `at` the server's time
+(ms); tasks not listed keep theirs. The ranking orders only the "everything
+else" band: tasks with a `place` are never ranked (their ids are skipped), and
+this route never writes `place`. Nothing else writes `rank`: board item writes
+(`POST`/`PATCH /api/item`) keep the stored `place` and `rank` whatever the
+client sends, and a new card's tasks have none.
 
 Optional `moves: [{ id, listId, reason }]` file tasks in the same transaction
 (M3.3): each task goes to the end of `listId` with `movedBy: "ranker"` and the
@@ -191,11 +194,8 @@ Stored on each task next to the fields the app already uses (`id`, `text`,
 | `statusReason` | the stale rule (not built) | Why it has its status                                                        |
 | `source`       | create                     | Who created the task                                                         |
 | `pinned`       | `PATCH`                    | Locks the task into the focus three (Phase 4)                                |
-| `rankNudge`    | `PUT /api/tasks/rank`      | `1`/`-1`: move one tier up/down in the order                                 |
-| `focusOrder`   | focus page (List mode)     | Placed by hand; ranks above the model's order                                |
-| `rankScore`    | `PUT /api/tasks/rank`      | Model score used within a deterministic tier                                 |
-| `rankReason`   | `PUT /api/tasks/rank`      | One-line reason for the score                                                |
-| `rankedAt`     | `PUT /api/tasks/rank`      | When it was last scored (ms)                                                 |
+| `place`        | `PUT /api/focus/order`     | `{ band, order }`: `top` (yours) or `bottom` (sent to the bottom)            |
+| `rank`         | `PUT /api/tasks/rank`      | `{ score, reason, at }`: orders the "everything else" band                   |
 | `importId`     | create (e.g. a migration)  | Unique id from another system, for idempotency                               |
 | `movedFrom`    | a move (`PATCH`, ranking)  | The list the task was last moved out of                                      |
 | `movedAt`      | a move (`PATCH`, ranking)  | When it was last moved (ms)                                                  |

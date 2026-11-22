@@ -122,7 +122,6 @@ services:
       - APP_URL=http://app:4321
       - TASK_TZ=${TASK_TZ:-UTC}
       - RANK_SCHEDULE=${RANK_SCHEDULE:-off}
-      - RANK_NUDGE=${RANK_NUDGE:-one-tier}
       - RANK_PROVIDER=${RANK_PROVIDER:-}
       - RANK_MODEL=${RANK_MODEL:-}
       - RANK_API_KEY=${RANK_API_KEY:-}
