@@ -12,6 +12,9 @@
         },
         "/ingest/": {
           "Proxy": "http://pipeline:8000/ingest/"
+        },
+        "/mcp": {
+          "Proxy": "http://mcp:8787/mcp"
         }
       }
     }

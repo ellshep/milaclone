@@ -160,6 +160,29 @@ services:
           cpus: '0.25'
           memory: 128M
 
+  # ---- Optional board agents: MCP server (addons/mcp/README.md) --------------
+  # Off unless COMPOSE_PROFILES includes agent. Talks only to the app over the
+  # compose network; sends nothing anywhere else. The Tailscale sidecar serves
+  # /mcp, behind MCP_TOKEN (unset = every request gets 503).
+  mcp:
+    build: ./addons/mcp
+    image: milaclone-mcp:local
+    container_name: milaclone-mcp
+    profiles: ['agent']
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8184:8787'
+    environment:
+      - MCP_TOKEN=${MCP_TOKEN:-}
+      - BOARD_URL=http://app:4321
+    depends_on:
+      - app
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
   # Own tailnet node, so the app answers on https://mila.<tailnet>.ts.net
   # at "/" rather than a path prefix. Reaches the app over the compose network;
   # the loopback port binding above stays as-is for local access.
@@ -179,8 +202,8 @@ services:
       # single-file mount would keep showing the old copy. Tailscale watches
       # this folder and applies a changed serve.json without a restart.
       - ./tailscale:/config:ro
-    # serve.json also routes /ingest/ to the voice add-on; without the add-on
-    # that path just answers 502.
+    # serve.json also routes /ingest/ to the voice add-on and /mcp to the MCP
+    # add-on; without an add-on its path just answers 502.
     depends_on:
       - app
     deploy:
