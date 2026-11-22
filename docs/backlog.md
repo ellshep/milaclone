@@ -16,7 +16,6 @@ Nothing in progress: pick from Next.
 
 ## Next
 
-- **AU6** `PATCH /api/item {canvasId}` moves a board without `/move`'s checks, so a board can be moved into itself and vanish (`routes.js:276`). Fix: drop cross-canvas moves from PATCH (`drag.js:139`, test at `test/api.test.js:670`).
 - **AU10** Copy/duplicate within 400 ms of an edit miss the last words (`clipboard.js:42`). Fix: `await flushAllSaves(false)` at the start of `placeAll`.
 - **V1** Next phases, planned with the owner on 2026-11-20 (decisions N1–N22, work items M1–M5 in `docs/next-phases.md`): Microsoft To Do import (M1, waits for the owner's file), focus order, `/focus` page, nightly ranking and retention (M2), filing into lists (M3), then AG1, then Pebble watch app (M4), morning digest at 7:30 on weekdays, which settles V3 (M5). Replaces V2.
 - **AG1** Board agents, planned with the owner on 2026-11-22 (decisions A1–A22, work items W1–W6 in `docs/agent-addon.md`): `agent` card, board access flag and selection hook (W1; the API key was dropped), the MCP server (W2), the agent service and page (W3), the Home orchestrator (W4), Claude Code briefs (W5). Comes after M3, before M4.
