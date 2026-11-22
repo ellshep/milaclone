@@ -275,8 +275,9 @@ def log_card(runs: list[dict]) -> dict:
     """The Filing log card's data: the TipTap doc the board shows, and its plain
     text for the snippet, search and export (a document card keeps both itself).
     `filingLog` marks the card as the ranker's."""
-    def node(kind, text, **attrs):
-        return {"type": kind, **({"attrs": attrs} if attrs else {}), "content": [{"type": "text", "text": text}]}
+    def node(kind, text, **attrs):  # TipTap rejects an empty text node (an owner-blanked heading)
+        return {"type": kind, **({"attrs": attrs} if attrs else {}),
+                **({"content": [{"type": "text", "text": text}]} if text else {})}
     content, text = [], []
     for r in runs:
         content.append(node("heading", r["at"], level=2))

@@ -140,7 +140,8 @@ typed again is a new task and can be.
 Each run then writes the **Filing log**, a document card on Home: the run's time
 and, for every Inbox task it considered, where it moved or why it stayed. Newest
 run first, the last 30 kept. The dry run prints the planned moves as
-`→ List: task - reason` and the log entry it would write, and writes neither.
+`→ List: task - reason` and the log entry it would write, and writes neither. The ranker rewrites the whole card each night, so edits to it don't last:
+text above the first run, lists and quotes are dropped.
 
 To undo a move: "Back to Inbox" comes with the focus page's row menu (F4.3 in
 `docs/focus-redesign.md`). Until then, move it back with the task API, using the

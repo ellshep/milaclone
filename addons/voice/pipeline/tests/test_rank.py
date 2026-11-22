@@ -283,6 +283,19 @@ def test_no_filing_lists_is_logged(monkeypatch):
     assert rank.log_runs(client.log["data"]["doc"])[0]["lines"] == ["No list is labelled Filing."]
 
 
+def test_a_blanked_heading_never_becomes_an_empty_text_node(monkeypatch):
+    client = FakeClient([task("seeds", "rest", inbox=True)], lists=LISTS)
+    files(monkeypatch, ("Garden", "Garden shopping"))
+    assert rank.run(FAKE, client, "one-tier") == 0
+    client.log["data"]["doc"]["content"][0]["content"] = []  # the owner clears the run's heading
+    assert rank.run(FAKE, client, "one-tier") == 0
+    doc = client.log["data"]["doc"]["content"]
+    texts = [c for n in doc for c in n.get("content", [])]
+    assert texts and all(c["text"] for c in texts)
+    assert [r["lines"] for r in rank.log_runs(client.log["data"]["doc"])] == [
+        ['Moved "Seeds" to Garden: Garden shopping']] * 2
+
+
 def test_dry_run_prints_the_log_entry_and_writes_no_log(monkeypatch, capsys):
     client = FakeClient([task("seeds", "rest", inbox=True)], lists=LISTS)
     files(monkeypatch, ("Garden", "Garden shopping"))
