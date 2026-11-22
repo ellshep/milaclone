@@ -194,6 +194,27 @@ def reprocess(deps: Deps, ingest_id: str) -> tuple[str, dict]:
     return "queued", deps.store.get(ingest_id)
 
 
+AUDIO_KEEP_DAYS = 7  # N15
+
+
+def delete_old_audio(deps: Deps, now: int | None = None) -> int:
+    """Deletes the audio of ingests done more than AUDIO_KEEP_DAYS ago (N15).
+    Failed ingests keep theirs for a retry; rows, transcripts and results stay."""
+    now = now_ms() if now is None else now
+    n = 0
+    for record in deps.store.old_done_audio(now - AUDIO_KEEP_DAYS * 86_400_000):
+        try:
+            (deps.audio_dir / record["audio_filename"]).unlink(missing_ok=True)
+        except OSError as e:
+            log("audio.delete_failed", id=record["id"], error=str(e))
+            continue
+        deps.store.update(record["id"], audio_deleted_at=now)
+        n += 1
+    if n:
+        log("audio.deleted", count=n, keep_days=AUDIO_KEEP_DAYS)
+    return n
+
+
 def _ago(seconds: int) -> str:
     return f"{seconds // 60} min" if seconds >= 60 and seconds % 60 == 0 else f"{seconds} s"
 
