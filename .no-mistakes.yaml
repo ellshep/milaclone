@@ -3,7 +3,7 @@
 commands:
   prepare: 'npm ci --prefer-offline'
   test: 'npm test && npm run test:ui'
-  lint: 'npm run lint && npm run format:check && npm run check:docs'
+  lint: 'npm run lint && npm run format:check && npm run check:docs && npm run deadcode'
   format: 'npm run format'
 review:
   max_fix_rounds: 3
