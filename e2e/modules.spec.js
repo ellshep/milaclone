@@ -1,7 +1,7 @@
 'use strict';
 
 // Behavioral coverage for module features the original ui.spec.js doesn't
-// exercise: clipboard.js (copy/cut/paste), menus.js (color palette), cards.js +
+// exercise: clipboard.js (copy/cut/paste), menus.js (colour palette, icon search), cards.js +
 // util.js (link normalization), drag.js (free move + resize), editing.js
 // (keyboard rename), and viewport.js (pan).
 
@@ -187,4 +187,26 @@ test('board selection chrome replaces the badge with rail actions', async ({ pag
   await page.locator('#railBoardDelete').click();
   await expect(page.locator('.item.type-board')).toHaveCount(0);
   await expect(page.locator('#railCreate')).toBeVisible();
+});
+
+test('board icon picker searches every Lucide icon and saves the pick', async ({ page }) => {
+  await freshCanvas(page);
+  await place(page, 'board');
+  await page.keyboard.press('Escape');
+  const card = page.locator('.item.type-board');
+  await card.locator('.tile').click();
+
+  await page.locator('#railBoardIcon').click();
+  const search = page.locator('#palette .icon-search');
+  await expect(search).toBeFocused();
+  await expect(page.locator('#palette .icon-pick')).toHaveCount(24); // the suggestions
+
+  await page.keyboard.type('rocket'); // not one of the suggestions
+  await expect(page.locator('#palette .icon-pick[title="rocket"] svg')).toHaveCount(1);
+  const saved = page.waitForResponse(PATCH);
+  await page.keyboard.press('Enter');
+  expect((await saved).request().postDataJSON().data.icon).toBe('rocket');
+  await expect(page.locator('#palette.open')).toHaveCount(0);
+  await expect(card.locator('.tile svg.lucide-rocket')).toHaveCount(1);
+  await expect(card.locator('.btitle')).not.toBeFocused(); // Enter picked; it didn't also rename
 });
