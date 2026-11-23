@@ -537,7 +537,7 @@ textarea {
   resize: none;
   min-height: 20px;
 }
-.note .accent {
+.item > .accent {
   position: absolute;
   left: 0;
   top: 12px;
@@ -1328,7 +1328,7 @@ textarea {
 }
 /* children laid out inside a column become static (flow) cards */
 .item.in-column {
-  position: static !important;
+  position: relative !important; /* still in flow; anchors the accent stripe */
   width: 100% !important;
   box-shadow: none;
   border-color: var(--card-border);
