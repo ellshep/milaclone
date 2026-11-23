@@ -140,9 +140,14 @@ test('export: Unicode titles survive, upload links use the page origin, captions
   const board = await post({ canvasId: await root(), type: 'board', data: { title: '日本旅行' } });
   const c = board.data.childCanvasId;
   await post({ canvasId: c, type: 'image', data: { src: '/uploads/shot (1).png', caption: 'Kitchen floor plan' } });
+  const note = { url: 'https://example.com', title: 'Ref', text: 'why it matters\nsecond line' };
+  await post({ canvasId: c, type: 'link', y: 500, data: note });
   const r = await fetch(base + `/api/canvas/${c}/export.md?origin=${encodeURIComponent('https://box.ts.net')}`);
   assert.match(r.headers.get('content-disposition'), /filename\*=UTF-8''%E6%97%A5%E6%9C%AC%E6%97%85%E8%A1%8C\.md/);
-  assert.match(await r.text(), /^!\[Kitchen floor plan\]\(https:\/\/box\.ts\.net\/uploads\/shot%20%281%29\.png\)$/m);
+  const md = await r.text();
+  assert.match(md, /^!\[Kitchen floor plan\]\(https:\/\/box\.ts\.net\/uploads\/shot%20%281%29\.png\)$/m);
+  assert.match(md, /^\[Ref\]\(https:\/\/example\.com\)\nwhy it matters\nsecond line$/m); // a link card's note
+  assert.equal((await search('it matters'))[0].type, 'link');
   const bad = await fetch(base + `/api/canvas/${c}/export.md?origin=${encodeURIComponent('javascript:alert(1)')}`);
   assert.match(await bad.text(), /\]\(http:\/\/127\.0\.0\.1:\d+\/uploads\//); // falls back to the request's own host
   assert.equal((await search('floor plan'))[0].title, 'Kitchen floor plan');

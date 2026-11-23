@@ -4,7 +4,7 @@ import { state } from './state.js';
 import { docToDom, isEmptyDoc, toast } from './util.js';
 import { saveData } from './editing.js';
 
-// Note and comment bodies. Until a card is edited it shows docToDom's static
+// Note, comment and link-card note bodies. Until a card is edited it shows docToDom's static
 // render; editing swaps in TipTap, whose bundle (public/vendor/editor.js, built
 // by server.js) is fetched the first time any card is edited.
 
@@ -47,6 +47,9 @@ export async function startRich(field, it) {
     return;
   }
   field.removeAttribute('data-empty');
+  // A link card also has title/URL inputs: leave the caret where it already is.
+  const a = document.activeElement;
+  if (a !== field && a.matches('input, textarea') && field.closest('.item')?.contains(a)) return;
   field.editor.commands.focus('end');
 }
 
