@@ -92,9 +92,11 @@ describe('util', () => {
     expect(tableText(undefined)).toBe('');
   });
 
-  it('colorVar maps known colours and falls back to slate', () => {
+  it('colorVar maps known colours, passes custom hex and falls back to slate', () => {
     expect(colorVar('blue')).toBe('var(--c-blue)');
     expect(colorVar('nope')).toBe('var(--c-slate)');
+    expect(colorVar('#3A5BD9')).toBe('#3a5bd9'); // a custom colour
+    expect(colorVar('url(https://example.com/x)')).toBe('var(--c-slate)');
   });
 
   it('normalizeUrl adds https to bare hosts', () => {
