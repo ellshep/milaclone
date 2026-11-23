@@ -120,3 +120,63 @@ test('F7.4: opening a search result inside a collapsed column expands it', async
   await expect(page.locator('.item.type-column')).not.toHaveClass(/collapsed/);
   await expect(page.locator('.item.type-note.selected')).toBeVisible();
 });
+
+// Send to parent: cards (a nested board too) move up a level, beside the board they left.
+test('Send to parent moves the selection up beside the board it came from', async ({ page }) => {
+  const id = await freshCanvas(page);
+  const cars = await post(page, { canvasId: id, type: 'board', x: 300, y: 200, w: 152, data: { title: 'Cars' } });
+  const inner = cars.data.childCanvasId;
+  const buick = await post(page, { canvasId: inner, type: 'board', x: 100, y: 100, data: { title: 'Buick' } });
+  const note = await post(page, { canvasId: inner, type: 'note', x: 400, y: 160, data: { body: 'Specs' } });
+  await page.goto('/#' + inner);
+  await expect(page.locator('.item')).toHaveCount(2);
+
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.locator(`[data-id="${note.id}"]`).click({ button: 'right' });
+  const moved = page.waitForResponse(r => r.url().includes(`/api/item/${note.id}/move`));
+  await page.locator('#ctxmenu').getByRole('button', { name: 'Send 2 to fixture' }).click();
+  await moved;
+  await expect(page.locator('.item')).toHaveCount(0);
+
+  const up = await items(page, id);
+  const b = up.find(i => i.id === buick.id);
+  const n = up.find(i => i.id === note.id);
+  expect([b.x, b.y]).toEqual([492, 200]); // right of Cars, layout kept
+  expect([n.x - b.x, n.y - b.y]).toEqual([300, 60]);
+  const view = await (await page.request.get('/api/canvas/' + buick.data.childCanvasId)).json();
+  expect(view.breadcrumb.map(c => c.title).slice(-2)).toEqual(['fixture', 'Buick']);
+});
+
+test('dragging a card onto a breadcrumb moves it to that board', async ({ page }) => {
+  const id = await freshCanvas(page);
+  const cars = await post(page, { canvasId: id, type: 'board', x: 300, y: 200, data: { title: 'Cars' } });
+  const note = await post(page, {
+    canvasId: cars.data.childCanvasId,
+    type: 'note',
+    x: 300,
+    y: 300,
+    data: { body: 'Up' },
+  });
+  await page.goto('/#' + cars.data.childCanvasId);
+  const card = page.locator(`[data-id="${note.id}"]`);
+  const from = await card.boundingBox();
+  const crumb = await page.locator('#crumbs .crumb', { hasText: 'fixture' }).boundingBox();
+
+  await page.mouse.move(from.x + 20, from.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(crumb.x + crumb.width / 2, crumb.y + crumb.height / 2, { steps: 12 });
+  await expect(page.locator('#crumbs .crumb.drop-target')).toHaveText('fixture');
+  const moved = page.waitForResponse(r => r.url().includes(`/api/item/${note.id}/move`));
+  await page.mouse.up();
+  await moved;
+  await expect(card).toHaveCount(0);
+  expect((await items(page, id)).some(i => i.id === note.id)).toBe(true);
+});
+
+test('Home has no Send to parent row', async ({ page }) => {
+  await freshCanvas(page);
+  await page.goto('/');
+  await page.locator('.item').last().click({ button: 'right', force: true }); // fixture boards overlap here
+  await expect(page.locator('#ctxmenu')).toBeVisible();
+  await expect(page.locator('#ctxmenu').getByRole('button', { name: /^Send (\d+ )?to (?!Back$)/ })).toHaveCount(0);
+});

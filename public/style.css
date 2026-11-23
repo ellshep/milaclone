@@ -186,6 +186,11 @@ textarea {
   font-weight: 600;
   cursor: default;
 }
+#crumbs .crumb.drop-target {
+  background: var(--hover-strong);
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
 #crumbs .crumb.current:hover {
   background: none;
 }
