@@ -184,23 +184,23 @@ curl -sS -X PATCH https://mila.your-tailnet.ts.net/api/tasks/t_abc123 \
 Stored on each task next to the fields the app already uses (`id`, `text`,
 `starred`, `due`, `tags`, `note`, `createdAt`):
 
-| Field          | Set by                     | Meaning                                                                      |
-| -------------- | -------------------------- | ---------------------------------------------------------------------------- |
-| `status`       | task writes               | `open` (default), `done` or `stale` (set aside)                                |
-| `statusAt`     | the server                | Server time of the last status change (epoch ms), or `null` if unknown        |
-| `statusReason` | the server                | Optional reason for the current status. Cleared on a status change.          |
-| `source`       | create                     | Who created the task                                                         |
-| `pinned`       | `PATCH`                    | Locks the task into the focus three (Phase 4)                                |
-| `rankNudge`    | `PUT /api/tasks/rank`      | `1`/`-1`: move one tier up/down in the order                                 |
-| `focusOrder`   | focus page (List mode)     | Placed by hand; ranks above the model's order                                |
-| `rankScore`    | `PUT /api/tasks/rank`      | Model score used within a deterministic tier                                 |
-| `rankReason`   | `PUT /api/tasks/rank`      | One-line reason for the score                                                |
-| `rankedAt`     | `PUT /api/tasks/rank`      | When it was last scored (ms)                                                 |
-| `importId`     | create (e.g. a migration)  | Unique id from another system, for idempotency                               |
-| `movedFrom`    | a move (`PATCH`, ranking)  | The list the task was last moved out of                                      |
-| `movedAt`      | a move (`PATCH`, ranking)  | When it was last moved (ms)                                                  |
-| `movedBy`      | a move (`PATCH`, ranking)  | Who moved it                                                                 |
-| `moveReason`   | a move (`PATCH`, ranking)  | Why, if the mover said                                                       |
+| Field          | Set by                    | Meaning                                                                |
+| -------------- | ------------------------- | ---------------------------------------------------------------------- |
+| `status`       | task writes               | `open` (default), `done` or `stale` (set aside)                        |
+| `statusAt`     | the server                | Server time of the last status change (epoch ms), or `null` if unknown |
+| `statusReason` | the server                | Optional reason for the current status. Cleared on a status change.    |
+| `source`       | create                    | Who created the task                                                   |
+| `pinned`       | `PATCH`                   | Locks the task into the focus three (Phase 4)                          |
+| `rankNudge`    | `PUT /api/tasks/rank`     | `1`/`-1`: move one tier up/down in the order                           |
+| `focusOrder`   | focus page (List mode)    | Placed by hand; ranks above the model's order                          |
+| `rankScore`    | `PUT /api/tasks/rank`     | Model score used within a deterministic tier                           |
+| `rankReason`   | `PUT /api/tasks/rank`     | One-line reason for the score                                          |
+| `rankedAt`     | `PUT /api/tasks/rank`     | When it was last scored (ms)                                           |
+| `importId`     | create (e.g. a migration) | Unique id from another system, for idempotency                         |
+| `movedFrom`    | a move (`PATCH`, ranking) | The list the task was last moved out of                                |
+| `movedAt`      | a move (`PATCH`, ranking) | When it was last moved (ms)                                            |
+| `movedBy`      | a move (`PATCH`, ranking) | Who moved it                                                           |
+| `moveReason`   | a move (`PATCH`, ranking) | Why, if the mover said                                                 |
 
 Stored tasks can omit fields that have a default. For example, a newly
 created open task has no recorded status change and the API returns
