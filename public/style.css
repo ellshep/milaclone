@@ -1167,6 +1167,11 @@ textarea {
   background: none;
   text-align: center;
   width: 100%;
+  resize: none;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+  padding: 0;
 }
 .board .bmeta {
   font-size: 11.5px;

@@ -30,7 +30,7 @@
     },
     {
       "files": ["public/js/cards.js"],
-      "rules": { "max-lines": ["error", { "max": 863, "skipBlankLines": true, "skipComments": true }] }
+      "rules": { "max-lines": ["error", { "max": 780, "skipBlankLines": true, "skipComments": true }] }
     },
     {
       "files": ["routes.js"],
