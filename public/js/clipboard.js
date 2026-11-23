@@ -69,8 +69,20 @@ export async function sendUp(ids, crumb = state.view.breadcrumb.at(-2)) {
   const via = (target.items || []).find(i => i.data.childCanvasId === path[at + 1].id && !i.parentItemId);
   const x = via ? via.x + (via.w || 152) + 40 : 80;
   const y = via ? via.y : 80;
-  const placed = await placeAll(ids, true, x, y, crumb.id);
-  if (placed) toast(`Moved ${placed.length === 1 ? '' : placed.length + ' cards '}to ${crumb.title}`);
+  movedTo(await placeAll(ids, true, x, y, crumb.id), crumb.title);
+}
+
+// Moves cards into a board card on this board, to the right of what's already in it.
+export async function sendInto(ids, board) {
+  const target = await api.canvas(board.data.childCanvasId);
+  const free = (target.items || []).filter(i => !i.parentItemId && i.type !== 'line');
+  const x = free.length ? Math.max(...free.map(i => i.x + (i.w || 240))) + 40 : 80;
+  const y = free.length ? Math.min(...free.map(i => i.y)) : 80;
+  movedTo(await placeAll(ids, true, x, y, board.data.childCanvasId), board._childTitle || 'the board');
+}
+
+function movedTo(placed, title) {
+  if (placed) toast(`Moved ${placed.length === 1 ? '' : placed.length + ' cards '}to ${title}`);
 }
 
 export async function pasteClipboard(wx, wy) {

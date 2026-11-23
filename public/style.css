@@ -1306,6 +1306,13 @@ textarea {
   border-radius: 9px;
   padding: 2px;
 }
+.board.drop-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+}
+.item.dropping-in {
+  opacity: 0.6;
+}
 .column.drop-target .col-body {
   outline: 2px dashed var(--accent);
   outline-offset: 2px;
