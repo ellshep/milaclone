@@ -1528,7 +1528,7 @@ textarea {
   display: none;
   grid-template-columns: repeat(6, 1fr);
   gap: 8px;
-  width: 196px;
+  width: 208px; /* six 24px swatches and their gaps, inside the padding */
 }
 #palette.open {
   display: grid;
@@ -3398,6 +3398,29 @@ body.qn-open .toast {
   margin: 0;
 }
 
+/* Palette custom swatch: a colour wheel until a custom colour is chosen; the
+   native colour input inside stays clickable but invisible. */
+#palette .sw-custom {
+  position: relative;
+  background: conic-gradient(
+    var(--c-red),
+    var(--c-yellow),
+    var(--c-green),
+    var(--c-teal),
+    var(--c-blue),
+    var(--c-purple),
+    var(--c-pink),
+    var(--c-red)
+  );
+}
+#palette .sw-custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
 /* Palette "None" swatch: a struck-through blank. */
 #palette .sw-none {
   background: linear-gradient(to top right, transparent 46%, #c4c6cc 46% 54%, transparent 54%), var(--rail-bg);

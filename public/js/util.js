@@ -2,7 +2,9 @@
 
 import { COLORS, dom } from './state.js';
 
-export const colorVar = c => `var(--c-${COLORS.includes(c) ? c : 'slate'})`;
+// A named colour's token, a custom '#rrggbb' as itself, anything else slate
+// (never raw CSS from the API, e.g. url()).
+export const colorVar = c => (COLORS.includes(c) ? `var(--c-${c})` : hexColor(c) || 'var(--c-slate)');
 
 export function lucideEl(name) {
   const i = document.createElement('i');

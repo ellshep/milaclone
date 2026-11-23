@@ -2,7 +2,7 @@
 
 import { state, dom, elMap, COLORS } from './state.js';
 import { api } from './api.js';
-import { colorVar, isLocked, zRange, toast } from './util.js';
+import { colorVar, hexColor, isLocked, zRange, toast } from './util.js';
 import { iconPicker } from './iconpicker.js';
 import { refreshItem, render } from './cards.js';
 import { select, renameSelected, deleteSelection, selectedItems } from './editing.js';
@@ -28,27 +28,43 @@ export function openPalette(it, anchor, mode) {
       })
     );
   } else {
+    // Recolours the whole selection when this card is part of it.
+    const apply = c => {
+      const targets = state.selection.has(it.id) && state.selection.size > 1 ? selectedItems() : [it];
+      for (const t of targets) {
+        t.color = c;
+        if (t.type === 'board') t._childColor = c;
+        api.patch(t.id, { color: c });
+        refreshItem(t);
+      }
+      closePalette();
+    };
+    const current = it.color || it._childColor || null;
     // The 12 colours, then None (null clears the colour) — except on cards that
     // fall back to a default colour, where None would look like a swatch.
     const none = ['todo', 'board', 'column'].includes(it.type) ? [] : [null];
     [...COLORS, ...none].forEach(c => {
       const sw = document.createElement('div');
-      sw.className = 'sw' + (c ? '' : ' sw-none') + ((it.color || it._childColor || null) === c ? ' sel' : '');
+      sw.className = 'sw' + (c ? '' : ' sw-none') + (current === c ? ' sel' : '');
       if (c) sw.style.background = colorVar(c);
       else sw.title = 'None';
-      // Recolours the whole selection when this card is part of it.
-      sw.onclick = () => {
-        const targets = state.selection.has(it.id) && state.selection.size > 1 ? selectedItems() : [it];
-        for (const t of targets) {
-          t.color = c;
-          if (t.type === 'board') t._childColor = c;
-          api.patch(t.id, { color: c });
-          refreshItem(t);
-        }
-        closePalette();
-      };
+      sw.onclick = () => apply(c);
       dom.palette.appendChild(sw);
     });
+    // Any other colour, through the browser's own picker. A custom colour is
+    // saved as '#rrggbb'; this swatch shows it once chosen.
+    const hex = hexColor(current);
+    const custom = document.createElement('label');
+    custom.className = 'sw sw-custom' + (hex ? ' sel' : '');
+    custom.title = 'Custom colour';
+    if (hex) custom.style.background = hex;
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.value = hex || '#888888';
+    input.setAttribute('aria-label', 'Custom colour');
+    input.onchange = () => apply(hexColor(input.value));
+    custom.appendChild(input);
+    dom.palette.appendChild(custom);
   }
 
   // Open below the anchor, or above it when there isn't room (the mobile footer).
