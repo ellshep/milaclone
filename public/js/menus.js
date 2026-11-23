@@ -5,7 +5,7 @@ import { api } from './api.js';
 import { colorVar, lucideEl, refreshIcons, isLocked, zRange, toast } from './util.js';
 import { refreshItem, render } from './cards.js';
 import { select, renameSelected, deleteSelection, selectedItems } from './editing.js';
-import { copySelected, pasteClipboard, duplicateSelected, toggleLock } from './clipboard.js';
+import { copySelected, pasteClipboard, duplicateSelected, toggleLock, sendUp } from './clipboard.js';
 import { setLine, editLabel } from './lines.js';
 import { openLabels } from './labels.js';
 
@@ -91,6 +91,7 @@ export function openCtx(e, it) {
   const locked = isLocked(it);
   const mac = /Mac|iPhone|iPad/.test(navigator.platform);
   const mod = mac ? '⌘' : 'Ctrl+';
+  const parent = state.view.breadcrumb.at(-2); // none on Home
   const trashRow = {
     label: many ? `Move ${state.selection.size} to Trash` : 'Move to Trash',
     hint: 'Delete',
@@ -118,6 +119,19 @@ export function openCtx(e, it) {
           { label: 'Copy', hint: mod + 'C', fn: () => copySelected(false) },
           { label: 'Paste', hint: mod + 'V', fn: () => pasteClipboard(), disabled: !state.clipboard },
           { label: 'Duplicate', hint: mod + 'D', fn: () => duplicateSelected() },
+          ...(parent
+            ? [
+                {
+                  label: `Send ${many ? state.selection.size + ' ' : ''}to ${parent.title}`,
+                  fn: () =>
+                    sendUp(
+                      selectedItems()
+                        .filter(i => i.type !== 'line')
+                        .map(i => i.id)
+                    ),
+                },
+              ]
+            : []),
           { sep: true },
           ...(it.parentItemId
             ? []

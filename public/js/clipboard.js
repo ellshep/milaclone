@@ -36,10 +36,10 @@ export function copySelected(cut, viaEvent = false) {
   closeCtx();
 }
 
-// Copy (or move, for cut) each card to this board, keeping their layout relative
-// to the first one, which lands at (x, y). Cards from another board, whose
-// positions we don't have here, cascade instead.
-async function placeAll(ids, cut, x, y) {
+// Copy (or move, for cut) each card to this board (or `canvasId`), keeping their
+// layout relative to the first one, which lands at (x, y). Cards from another
+// board, whose positions we don't have here, cascade instead.
+async function placeAll(ids, cut, x, y, canvasId = state.view.canvas.id) {
   await flushAllSaves(false); // the server copies what it has: send edits still in the 400 ms debounce
   const src = ids.map(id => state.view.items.find(i => i.id === id));
   const anchor = src.find(s => s && !s.parentItemId);
@@ -48,15 +48,29 @@ async function placeAll(ids, cut, x, y) {
     const s = src[n];
     const free = s && anchor && !s.parentItemId;
     const off = free ? { dx: s.x - anchor.x, dy: s.y - anchor.y } : { dx: (n + 1) * 24, dy: (n + 1) * 24 };
-    const to = { canvasId: state.view.canvas.id, x: Math.round(x + off.dx), y: Math.round(y + off.dy) };
+    const to = { canvasId, x: Math.round(x + off.dx), y: Math.round(y + off.dy) };
     const it = cut ? await api.move(id, to) : await api.copy(id, to);
     if (it) placed.push(it.id); // api already reported a failure
   }
   if (!placed.length) return null;
   await reloadView();
-  selectIds(placed);
+  selectIds(canvasId === state.view.canvas.id ? placed : []);
   closeCtx();
   return placed;
+}
+
+// Moves cards up to a board above this one in the breadcrumb (the parent by
+// default), landing beside the board card they came out of there.
+export async function sendUp(ids, crumb = state.view.breadcrumb.at(-2)) {
+  const path = state.view.breadcrumb;
+  const at = path.findIndex(c => c.id === crumb?.id);
+  if (at < 0 || at === path.length - 1 || !ids.length) return;
+  const target = await api.canvas(crumb.id);
+  const via = (target.items || []).find(i => i.data.childCanvasId === path[at + 1].id && !i.parentItemId);
+  const x = via ? via.x + (via.w || 152) + 40 : 80;
+  const y = via ? via.y : 80;
+  const placed = await placeAll(ids, true, x, y, crumb.id);
+  if (placed) toast(`Moved ${placed.length === 1 ? '' : placed.length + ' cards '}to ${crumb.title}`);
 }
 
 export async function pasteClipboard(wx, wy) {
