@@ -23,7 +23,7 @@ Nothing in progress: pick from Next.
 ## Later
 
 - **FE** Move screens to Preact (roadmap D11), work items FE1–FE3 in `docs/preact-migration.md`: the Focus page after V5's F2/F3 and before F4; Quick notes after DM4, AU16, AU20, AU21 and before F8; dialogs only when next reworked.
-- **DM6** Split `cards.js` (863 code lines) by card type, staying vanilla. Clears its ceiling.
+- **DM6** Split `cards.js` (780 code lines) by card type, staying vanilla; board and shortcut cards are already in `boardcard.js`. Clears its ceiling.
 - **DM7** Split `routes.js` (510 code lines) by area: canvases and items, focus and todos, trash, uploads and backup. Clears its ceiling.
 - **DM4** Move `openCanvas`/`reloadView` out of `main.js` into a navigation module so the 8 modules that import it become unit-testable.
 - **DM5** One board-view module for adding/removing cards; `create.js` doesn't check `it.error`, so a 400 renders an `{error}` card (`capture.js:26`, `create.js:47`, `lines.js:171`, `menus.js:208`).
