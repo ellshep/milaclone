@@ -58,6 +58,9 @@ Nothing is deleted for good: anything an agent trashes is in the board's Trash.
 | `add_todo_task`, `set_todo_task_done` | To-do lists, merged like any other edit                         |
 | `write_brief`                         | A Claude Code brief (goal, files, acceptance, repo) in "Briefs" |
 
+To-do tools return task records with `status`. For `data.tasks` in generic
+card writes, see the [board task status contract](../../docs/focus-redesign.md#f1--one-status-field).
+
 ## Turn it on (server, over the tailnet)
 
 In `.env` next to `docker-compose.yml`:

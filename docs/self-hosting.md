@@ -163,6 +163,11 @@ curl -s localhost:8182/api/health    # {"ok":true}
 docker compose logs -f app           # ctrl-C to stop following
 ```
 
+When rolling back across the [F1 task status upgrade](focus-redesign.md#f1--one-status-field),
+save a copy of the current database and restore the pre-migration snapshot
+before starting the older version. The restored database reflects the board
+at the time of the snapshot.
+
 Roll back by pointing the same loop at the previous commit:
 
 ```bash

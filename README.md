@@ -41,12 +41,13 @@ data, not a copy: tick a task on your phone and it's ticked on the board.
 | :----------------------------------------------------------------: | :---------------------------------------------: | :--------------------------------------------------: |
 | ![Smart views and lists](docs/screenshots/quicknotes-overview.png) | ![A list](docs/screenshots/quicknotes-list.png) | ![Task detail](docs/screenshots/quicknotes-task.png) |
 
-- **Smart views.** _Today_, _Starred_, _All_ and _Completed_ collect tasks
-  from every list, so you can see what's due without opening boards one by
-  one. Each task in a smart view names the list it came from, newest first.
+- **Smart views.** _Today_, _Starred_ and _All_ show open tasks across lists.
+  _Completed_ shows finished tasks. Each task names the list it came from,
+  and the newest tasks appear first.
 - **One list at a time.** Tap a list to see only its tasks. Finished tasks fold
   into a _Completed_ group you can collapse, and **Add a task** stays at the
-  bottom of the screen.
+  bottom of the screen. Stale tasks are hidden from list views, counts and
+  smart views. You can still find them in search or on the board.
 - **Task details.** Each task can have a star, a due date, tags and a note
   (with bullets, numbering, bold, italic and underline).
 - **Tags and search.** Search matches task text and notes. Tap a tag chip to
