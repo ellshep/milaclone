@@ -5,7 +5,7 @@ The one list of open work. Agents and people read it before starting and update 
 - One line per item: ID, what's wrong or wanted, where, and the fix if known. Link a longer spec only when one exists.
 - **Now** is what's being worked on, **Next** is ready to pick up, **Later** is accepted but not soon, **Needs a decision** is blocked on the owner.
 - When an item ships, delete its line in that PR (the PR is the record). **Closed** keeps the last few for reference; trim it past ten lines.
-- IDs never get reused. `AU` = code audit finding, `DM` = deep-module candidate, `V` = voice add-on, `U` = `docs/next-updates.md`, `AG` = board agents (`docs/agent-addon.md`).
+- IDs never get reused. `AU` = code audit finding, `DM` = deep-module candidate, `V` = voice add-on, `U` = `docs/next-updates.md`, `AG` = board agents (`docs/agent-addon.md`), `Q` = test and quality tooling.
 - Word cap 2,000 (`npm run check:docs`). If it doesn't fit, it's too detailed for this file.
 
 Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-codebase-architecture` pass; full write-up kept outside the repo), `docs/next-updates.md`, and the open items from the old voice handoff notes.
@@ -37,6 +37,7 @@ Nothing in progress: pick from Next.
 - **AU23** Cutting two connected cards together leaves their line behind with two free ends: clipboard.js sends one /move per card, so the first move frees the end before the second card follows (`clipboard.js:52`, `db.js` moveItemDeep). Fix: one /move with all ids and a shared inside set.
 - **AU24** A line trashed with one card comes back invisible if its other card was moved away before the restore (`db.js` restore). Fix: run the same free-the-end step on restore.
 - **U1.1, U1.4, U1.5** Milanote migration: backup and inventory, staged import, reconciliation report. Specs in `docs/next-updates.md`.
+- **Q1** Mutation testing for the pure logic modules (`tasklist.js`, `focus.js` ranking, `savequeue.js`, `util.js`), on demand (`npm run mutate`) or a weekly non-required job. StrykerJS 10 covers both runners (Vitest runner; TAP runner for `node --test`). mizchi/mutator (oxc-based, much faster reruns, `--since main` PR mode) needs Vitest 5 and Node 24 and is Vitest-only; revisit after those upgrades.
 
 ## Needs a decision
 
