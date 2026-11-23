@@ -47,7 +47,7 @@ test.describe('dark', () => {
       type: 'todo',
       x: 400,
       y: 100,
-      data: { title: 'List', tasks: [{ id: 't', text: 'a task', done: false }] },
+      data: { title: 'List', tasks: [{ id: 't', text: 'a task', status: 'open' }] },
     });
     await post(page, { canvasId: id, type: 'comment', x: 100, y: 400, data: { body: 'a comment' } });
     const lit = { type: 'text', text: 'lit', marks: [{ type: 'highlight' }] };

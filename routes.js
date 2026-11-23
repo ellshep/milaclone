@@ -181,6 +181,9 @@ router.patch('/api/canvas/:id', (req, res) => {
 });
 
 // ---- Items -----------------------------------------------------------------
+const invalidTaskStatus = tasks => tasks.some(t => 'status' in t && !tasklist.STATUSES.includes(t.status));
+const badTaskStatus = res => res.status(400).json({ error: 'status must be open, done or stale' });
+
 router.post('/api/item', (req, res) => {
   const b = req.body || {};
   if (!stmt.getCanvas.get(b.canvasId)) return res.status(400).json({ error: 'bad canvasId' });
@@ -206,7 +209,11 @@ router.post('/api/item', (req, res) => {
     createdAt: Date.now(),
   };
   if (RICH_TYPES.has(item.type)) item.data = toRich(item.data);
-  if (Array.isArray(item.data.tasks)) item.data.tasks = tasklist.withIds(item.data.tasks, () => id('t_'));
+  if (Array.isArray(item.data.tasks)) {
+    const tasks = tasklist.withIds(item.data.tasks, () => id('t_'));
+    if (item.type === 'todo' && invalidTaskStatus(tasks)) return badTaskStatus(res);
+    item.data.tasks = item.type === 'todo' ? tasklist.stampStatus(tasks.map(tasklist.upgradeTask), [], null) : tasks;
+  }
 
   db.transaction(() => {
     // A board item owns a freshly created child canvas.
@@ -252,9 +259,12 @@ router.patch('/api/item/:id', (req, res) => {
     const stored = it.data.tasks;
     it.data = Object.assign({}, it.data, b.data);
     if (Array.isArray(b.data.tasks)) {
+      const todo = it.type === 'todo';
       const mine = tasklist.withIds(b.data.tasks, () => id('t_'));
-      it.data.tasks =
-        Array.isArray(b.baseTasks) && Array.isArray(stored) ? tasklist.merge(b.baseTasks, stored, mine) : mine;
+      if (todo && invalidTaskStatus(mine)) return badTaskStatus(res);
+      const tasks =
+        Array.isArray(b.baseTasks) && Array.isArray(stored) ? tasklist.merge(b.baseTasks, stored, mine, todo) : mine;
+      it.data.tasks = todo ? tasklist.stampStatus(tasks, Array.isArray(stored) ? stored : [], Date.now()) : tasks;
     }
   }
 

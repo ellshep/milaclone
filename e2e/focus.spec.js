@@ -26,7 +26,7 @@ async function addList(request, title, tasks) {
   return r.json();
 }
 const task = (text, extra = {}) =>
-  Object.assign({ id: `${text}-${Date.now()}-${Math.random()}`, text, done: false, createdAt: 1 }, extra);
+  Object.assign({ id: `${text}-${Date.now()}-${Math.random()}`, text, status: 'open', createdAt: 1 }, extra);
 
 // Hold the pointer down on a task's ring for `ms`.
 async function hold(page, name, ms) {
@@ -71,7 +71,7 @@ test('Three: three tasks at one size; holding a ring marks one done, a tap does 
   expect((await saved).ok()).toBe(true);
   await expect(titles).toHaveText(['Call the plumber', 'Pay the electric bill', 'Book the dentist']);
   const lists = (await (await request.get('/api/todos')).json()).lists;
-  expect(lists.flatMap(l => l.tasks).find(t => t.id === added[0]).done).toBe(true);
+  expect(lists.flatMap(l => l.tasks).find(t => t.id === added[0]).status).toBe('done');
 
   // holding Space works the same from the keyboard
   await page.getByRole('button', { name: 'Hold to finish: Call the plumber' }).focus();

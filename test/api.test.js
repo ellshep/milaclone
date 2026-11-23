@@ -228,7 +228,7 @@ test('quick notes: lists every todo card with its canvas + tasks', async () => {
   const board = (await send('POST', '/api/item', { canvasId, type: 'board', data: { title: 'Nested' } })).body;
   const nested = board.data.childCanvasId;
   const tasks = [
-    { id: 't1', text: 'Floss', done: false, starred: true, due: '2026-08-07', tags: ['routine'], note: 'nightly' },
+    { id: 't1', text: 'Floss', status: 'open', starred: true, due: '2026-08-07', tags: ['routine'], note: 'nightly' },
   ];
   const a = (
     await send('POST', '/api/item', {
@@ -266,14 +266,14 @@ test('quick notes: task edits round-trip through PATCH /api/item', async () => {
     await send('POST', '/api/item', {
       canvasId,
       type: 'todo',
-      data: { title: 'Errands', tasks: [{ id: 't1', text: 'Milk', done: false }] },
+      data: { title: 'Errands', tasks: [{ id: 't1', text: 'Milk', status: 'open' }] },
     })
   ).body;
   const tasks = [
     {
       id: 't1',
       text: 'Milk',
-      done: true,
+      status: 'done',
       starred: true,
       due: '2026-08-07',
       tags: ['life'],
@@ -285,7 +285,9 @@ test('quick notes: task edits round-trip through PATCH /api/item', async () => {
   await send('PATCH', '/api/item/' + list.id, { data: { tags: ['life'] } });
 
   const saved = (await get('/api/todos')).body.lists.find(l => l.id === list.id);
-  assert.deepEqual(saved.tasks, tasks);
+  const { statusAt } = saved.tasks[0];
+  assert.ok(Math.abs(statusAt - Date.now()) < 5000, 'ticking it stamped statusAt');
+  assert.deepEqual(saved.tasks, [{ ...tasks[0], statusAt }]);
   assert.deepEqual(saved.tags, ['life']);
   assert.equal(saved.title, 'Errands'); // shallow data merge keeps the title
 });
@@ -433,28 +435,31 @@ test('AU9 a card whose column is gone frees its line end at its own spot', async
   assert.deepEqual(l.data.to, { x: 400, y: 70 });
 });
 
-test('tasks: concurrent edits from two devices merge instead of overwriting', async () => {
+test('tasks: concurrent edits from two devices merge instead of overwriting', async t => {
   const canvasId = await root();
   const base = [
-    { id: 't1', text: 'Milk', done: false },
-    { id: 't2', text: 'Eggs', done: false },
+    { id: 't1', text: 'Milk', status: 'open' },
+    { id: 't2', text: 'Eggs', status: 'open' },
   ];
   const list = (await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: base } })).body;
 
   // phone: ticks Milk and adds Bread
-  await send('PATCH', '/api/item/' + list.id, {
+  const phone = await send('PATCH', '/api/item/' + list.id, {
     baseTasks: base,
-    data: { tasks: [{ id: 't1', text: 'Milk', done: true }, base[1], { id: 't3', text: 'Bread', done: false }] },
+    data: { tasks: [{ id: 't1', text: 'Milk', status: 'done' }, base[1], { id: 't3', text: 'Bread', status: 'open' }] },
   });
+  const { statusAt } = phone.body.data.tasks[0];
+  assert.equal(typeof statusAt, 'number');
+  t.mock.method(Date, 'now', () => statusAt + 1000);
   // desktop, still holding the old list: renames Eggs and deletes nothing it didn't see
   const r = await send('PATCH', '/api/item/' + list.id, {
     baseTasks: base,
-    data: { tasks: [base[0], { id: 't2', text: 'Free-range eggs', done: false }] },
+    data: { tasks: [base[0], { id: 't2', text: 'Free-range eggs', status: 'open' }] },
   });
   assert.deepEqual(r.body.data.tasks, [
-    { id: 't1', text: 'Milk', done: true },
-    { id: 't2', text: 'Free-range eggs', done: false },
-    { id: 't3', text: 'Bread', done: false },
+    { id: 't1', text: 'Milk', status: 'done', statusAt },
+    { id: 't2', text: 'Free-range eggs', status: 'open' },
+    { id: 't3', text: 'Bread', status: 'open' },
   ]);
 
   // a delete on one side wins over an untouched copy on the other
@@ -473,14 +478,14 @@ test('tasks: concurrent edits from two devices merge instead of overwriting', as
 test('F7.1 tasks: the merge keeps indent levels when both sides edited the list', async () => {
   const canvasId = await root();
   const base = [
-    { id: 'p', text: 'Trip', done: false, indent: 0 },
-    { id: 'c', text: 'Book train', done: false, indent: 1 },
+    { id: 'p', text: 'Trip', status: 'open', indent: 0 },
+    { id: 'c', text: 'Book train', status: 'open', indent: 1 },
   ];
   const list = (await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: base } })).body;
   // canvas: outdents "Book train" and indents a new subtask
   await send('PATCH', '/api/item/' + list.id, {
     baseTasks: base,
-    data: { tasks: [base[0], { ...base[1], indent: 0 }, { id: 'n', text: 'Pack', done: false, indent: 1 }] },
+    data: { tasks: [base[0], { ...base[1], indent: 0 }, { id: 'n', text: 'Pack', status: 'open', indent: 1 }] },
   });
   // Quick notes, still on the old list and unaware of `indent`: renames the trip
   const r = await send('PATCH', '/api/item/' + list.id, {
@@ -500,8 +505,8 @@ test('F7.1 tasks: the merge keeps indent levels when both sides edited the list'
 test('tasks: a stale client that fills in defaults keeps fields set elsewhere', async () => {
   const canvasId = await root();
   const seeded = [
-    { id: 'a', text: 'Milk', done: false },
-    { id: 'b', text: 'Eggs', done: false },
+    { id: 'a', text: 'Milk', status: 'open' },
+    { id: 'b', text: 'Eggs', status: 'open' },
   ];
   const list = (await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: seeded } })).body;
   // another device stars Milk and dates it
@@ -513,13 +518,220 @@ test('tasks: a stale client that fills in defaults keeps fields set elsewhere', 
   const filled = t => ({ ...t, starred: false, due: null, tags: [], note: '', noteStyle: {}, createdAt: null });
   const r = await send('PATCH', '/api/item/' + list.id, {
     baseTasks: seeded,
-    data: { tasks: [filled(seeded[0]), { ...filled(seeded[1]), done: true }] },
+    data: { tasks: [filled(seeded[0]), { ...filled(seeded[1]), status: 'done' }] },
   });
   const [milk, eggs] = r.body.data.tasks;
-  assert.equal(eggs.done, true);
+  assert.equal(eggs.status, 'done');
   assert.equal(milk.starred, true);
   assert.equal(milk.due, '2026-12-01');
   assert.deepEqual(milk.tags, ['shop']);
+});
+
+test('tasks: the server stamps status changes and imports completed tasks without a timestamp', async () => {
+  const canvasId = await root();
+  const seeded = [
+    { id: 'a', text: 'Milk', done: true },
+    { id: 'b', text: 'Eggs', done: false },
+    { id: 'import-done', text: 'Toast', status: 'done', statusAt: 1, statusReason: 'client' },
+  ];
+  const list = (await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: seeded } })).body;
+  assert.deepEqual(list.data.tasks, [
+    { id: 'a', text: 'Milk', status: 'done', statusAt: null },
+    { id: 'b', text: 'Eggs', status: 'open' },
+    { id: 'import-done', text: 'Toast', status: 'done', statusAt: null },
+  ]);
+  const base = list.data.tasks;
+  // ticking Eggs: the server's clock, not the client's
+  const before = Date.now();
+  let r = await send('PATCH', '/api/item/' + list.id, {
+    baseTasks: base,
+    data: { tasks: [base[0], { ...base[1], status: 'done', statusAt: 1, statusReason: 'mine' }, base[2]] },
+  });
+  const eggs = r.body.data.tasks[1];
+  assert.equal(eggs.status, 'done');
+  assert.ok(eggs.statusAt >= before && eggs.statusAt <= Date.now());
+  assert.equal('statusReason' in eggs, false, 'a status change drops the reason');
+  // a text edit doesn't move it
+  const base2 = r.body.data.tasks;
+  r = await send('PATCH', '/api/item/' + list.id, {
+    baseTasks: base2,
+    data: {
+      tasks: [
+        { ...base2[0], text: 'Oat milk', statusAt: 1, statusReason: 'client' },
+        { ...base2[1], text: 'Free-range eggs', statusAt: 1, statusReason: 'client' },
+        base2[2],
+      ],
+    },
+  });
+  assert.deepEqual(r.body.data.tasks[0], { ...base[0], text: 'Oat milk' });
+  assert.deepEqual(r.body.data.tasks[1], { ...eggs, text: 'Free-range eggs' });
+  assert.deepEqual(r.body.data.tasks[2], base[2]);
+  const copied = await send('POST', '/api/item/' + list.id + '/copy', { canvasId });
+  assert.deepEqual(
+    copied.body.data.tasks.map(t => [t.status, t.statusAt]),
+    [
+      ['done', null],
+      ['done', eggs.statusAt],
+      ['done', null],
+    ]
+  );
+});
+
+test('tasks: board autosaves ignore pre-deploy checkbox changes', async t => {
+  const canvasId = await root();
+  const old = [
+    { id: 'legacy-closed', text: 'Archive invoice', done: true },
+    { id: 'legacy-remote', text: 'Send quote', done: false },
+    { id: 'legacy-open', text: 'File receipt', done: false },
+  ];
+  const created = await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: old } });
+  assert.equal(created.status, 200);
+  const url = '/api/item/' + created.body.id;
+  const base = created.body.data.tasks;
+  const doneAt = 1800000000000;
+  let now = doneAt;
+  t.mock.method(Date, 'now', () => now);
+  const completed = await send('PATCH', url, {
+    baseTasks: base,
+    data: { tasks: [base[0], { ...base[1], status: 'done' }, base[2]] },
+  });
+  assert.equal(completed.status, 200);
+
+  // F1.1 requires a reload. Old checkbox flags cannot reopen or complete a task.
+  now += 1000;
+  const expected = [
+    { id: old[0].id, text: old[0].text, status: 'done', statusAt: null },
+    { id: old[1].id, text: old[1].text, status: 'done', statusAt: doneAt },
+    { id: old[2].id, text: old[2].text, status: 'open' },
+  ];
+  const unchecked = [{ ...old[0], done: false }, old[1], old[2]];
+  const checked = [old[0], old[1], { ...old[2], done: true }];
+  for (const baseTasks of [old, undefined]) {
+    for (const tasks of [unchecked, checked]) {
+      const saved = await send('PATCH', url, { baseTasks, data: { tasks } });
+      assert.equal(saved.status, 200);
+      const { body } = await get('/api/canvas/' + canvasId);
+      assert.deepEqual(body.items.find(i => i.id === created.body.id).data.tasks, expected);
+      assert.deepEqual(saved.body.data.tasks, expected);
+    }
+  }
+});
+
+test('tasks: explicit board status wins over legacy flags', async t => {
+  const canvasId = await root();
+  const old = [
+    { id: 'o1', text: 'Milk', done: true },
+    { id: 'o2', text: 'Eggs', done: false },
+    { id: 'o3', text: 'Bread', done: false },
+  ];
+  const created = await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: old } });
+  const url = '/api/item/' + created.body.id;
+  const doneAt = 1800000000000;
+  let now = doneAt;
+  t.mock.method(Date, 'now', () => now);
+  const current = [
+    { id: 'o1', text: 'Milk', status: 'done', statusAt: null },
+    { id: 'o2', text: 'Eggs', status: 'done', statusAt: doneAt },
+    { id: 'o3', text: 'Bread', status: 'open' },
+  ];
+  const completed = await send('PATCH', url, {
+    baseTasks: created.body.data.tasks,
+    data: { tasks: current.map(({ id, text, status }) => ({ id, text, status })) },
+  });
+  assert.deepEqual(completed.body.data.tasks, current);
+  now += 1000;
+
+  const edited = await send('PATCH', url, {
+    baseTasks: current,
+    data: {
+      tasks: [
+        { ...current[0], done: false },
+        { ...current[1], text: 'Free-range eggs', done: false },
+        { ...current[2], done: true },
+      ],
+    },
+  });
+  assert.equal(edited.status, 200);
+  assert.deepEqual(edited.body.data.tasks, [current[0], { ...current[1], text: 'Free-range eggs' }, current[2]]);
+});
+
+test('tasks: item create and edit reject invalid statuses before writing', async () => {
+  const canvasId = await root();
+  const created = await send('POST', '/api/item', {
+    canvasId,
+    type: 'todo',
+    data: { tasks: [{ id: 'valid', text: 'Mail', status: 'stale', done: true }] },
+  });
+  assert.equal(created.status, 200);
+  const list = created.body;
+  assert.equal(list.data.tasks[0].status, 'stale');
+  for (const status of ['complete', null]) {
+    const tasks = [{ ...list.data.tasks[0], status, done: true }];
+    assert.equal((await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks } })).status, 400);
+    const patch = await send('PATCH', '/api/item/' + list.id, {
+      baseTasks: list.data.tasks,
+      data: { tasks },
+    });
+    assert.equal(patch.status, 400);
+  }
+  const canvas = (await get('/api/canvas/' + canvasId)).body;
+  const matches = canvas.items.filter(i => Array.isArray(i.data.tasks) && i.data.tasks.some(t => t.id === 'valid'));
+  assert.deepEqual(
+    matches.map(i => [i.id, i.data]),
+    [[list.id, list.data]]
+  );
+});
+
+test('tasks: old invalid statuses read as open and their lists can still be edited', async () => {
+  const { db } = require('../db');
+  const canvasId = await root();
+  const created = await send('POST', '/api/item', { canvasId, type: 'todo', data: { title: 'Older import' } });
+  const id = created.body.id;
+  const tasks = [
+    { id: 'import-pending', text: 'Milk', status: 'pending' },
+    { id: 'import-null', text: 'Eggs', status: null },
+    { id: 'import-stale', text: 'Bread', status: 'stale', statusAt: 123 },
+  ];
+  db.prepare('UPDATE items SET data = ? WHERE id = ?').run(JSON.stringify({ title: 'Older import', tasks }), id);
+
+  const expected = [{ ...tasks[0], status: 'open' }, { ...tasks[1], status: 'open' }, tasks[2]];
+  const canvas = (await get('/api/canvas/' + canvasId)).body;
+  const baseTasks = canvas.items.find(it => it.id === id).data.tasks;
+  assert.deepEqual(baseTasks, expected);
+  const quickNotes = (await get('/api/todos')).body.lists.find(list => list.id === id);
+  assert.deepEqual(quickNotes.tasks, expected);
+  assert.deepEqual(JSON.parse(db.prepare('SELECT data FROM items WHERE id = ?').get(id).data).tasks, tasks);
+
+  const mine = [baseTasks[0], { ...baseTasks[1], text: 'Free-range eggs' }, baseTasks[2]];
+  const saved = await send('PATCH', '/api/item/' + id, { baseTasks, data: { tasks: mine } });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(saved.body.data.tasks, [expected[0], { ...expected[1], text: 'Free-range eggs' }, expected[2]]);
+});
+
+test('tasks: document checklist fields keep their generic item behavior', async () => {
+  const canvasId = await root();
+  const checklist = [
+    {
+      id: 'a',
+      text: 'Checklist entry',
+      done: true,
+      stale: true,
+      status: 'review',
+      statusAt: 'pending',
+      statusReason: 'editor',
+    },
+    { id: 'b', text: 'Another entry' },
+  ];
+  const doc = (await send('POST', '/api/item', { canvasId, type: 'document', data: { tasks: checklist } })).body;
+  assert.deepEqual(doc.data.tasks, checklist);
+  const checked = { ...checklist[1], done: true };
+  await send('PATCH', '/api/item/' + doc.id, { data: { tasks: [checklist[0], checked] } });
+  const edited = { ...checklist[0], status: 'approved', statusAt: 'today', statusReason: 'reviewer' };
+  const saved = await send('PATCH', '/api/item/' + doc.id, {
+    baseTasks: checklist,
+    data: { tasks: [edited, { ...checklist[1], done: false }] },
+  });
+  assert.deepEqual(saved.body.data.tasks, [edited, checked]);
 });
 
 test('tasks: every task gets a unique id when written', async () => {
@@ -565,15 +777,15 @@ test('tasks: a tab opened before the id repair saves without duplicating the lis
     data: {
       tasks: [
         { id: 'r1', text: 'Milk' },
-        { id: 'r2', text: 'Eggs', done: true },
+        { id: 'r2', text: 'Eggs', status: 'done' },
       ],
     },
   });
   assert.deepEqual(
-    r.body.data.tasks.map(t => [t.text, !!t.done]),
+    r.body.data.tasks.map(t => [t.text, t.status || 'open']),
     [
-      ['Milk', false],
-      ['Eggs', true],
+      ['Milk', 'open'],
+      ['Eggs', 'done'],
     ]
   );
 });

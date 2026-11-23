@@ -333,7 +333,7 @@ export function registerTools(server, board, agent = null) {
     async a => {
       const { item, board: b } = await todo(a.item_id);
       const before = new Set((item.data.tasks || []).map(t => t.id));
-      const task = { text: a.text.trim(), done: false, createdAt: Date.now() };
+      const task = { text: a.text.trim(), status: 'open', createdAt: Date.now() };
       if (a.due) task.due = a.due;
       if (a.starred) task.starred = true;
       const out = await writeTasks(item, (item.data.tasks || []).concat([task]));
@@ -353,7 +353,7 @@ export function registerTools(server, board, agent = null) {
       if (!tasks.some(t => t.id === a.task_id)) throw new BoardError(`no task ${a.task_id} on card ${item.id}`);
       const out = await writeTasks(
         item,
-        tasks.map(t => (t.id === a.task_id ? Object.assign({}, t, { done: a.done }) : t))
+        tasks.map(t => (t.id === a.task_id ? Object.assign({}, t, { status: a.done ? 'done' : 'open' }) : t))
       );
       log('set_todo_task_done', { boardId: b.canvas.id, itemId: item.id, taskId: a.task_id, done: a.done });
       return out.data.tasks.find(t => t.id === a.task_id);

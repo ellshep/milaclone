@@ -88,7 +88,7 @@ test('create.defaultsFor returns the right shape per card type', async ({ page }
   expect(out.note).toEqual({ w: 240, data: {} }); // the server fills in doc + text
   expect(out.todo.w).toBe(240);
   expect(out.todo.data.tasks).toHaveLength(1);
-  expect(out.todo.data.tasks[0]).toMatchObject({ text: '', done: false });
+  expect(out.todo.data.tasks[0]).toMatchObject({ text: '', status: 'open' });
   expect(out.link).toMatchObject({ w: 240, color: 'blue', data: { url: '', title: '' } });
   expect(out.column.w).toBe(252);
   expect(out.board.w).toBe(152);

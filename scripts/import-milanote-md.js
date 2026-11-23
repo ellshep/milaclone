@@ -73,7 +73,7 @@ function flushTodo(blocks, title, tasks) {
   blocks.push({
     kind: 'todo',
     title: title || 'To-do',
-    tasks: tasks.map(t => ({ id: rid(), text: t.text, done: t.done })),
+    tasks: tasks.map(t => ({ id: rid(), text: t.text, status: t.done ? 'done' : 'open' })),
   });
 }
 

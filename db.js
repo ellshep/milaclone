@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
-const { withIds, copyTasks } = require('./tasklist');
+const { STATUSES, withIds, copyTasks } = require('./tasklist');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'board.db');
@@ -131,7 +131,15 @@ process.on('SIGTERM', () => {
 // the API (and the frontend) always work with it as an object.
 // ---------------------------------------------------------------------------
 function rowToItem(row) {
-  return Object.assign({}, row, { data: row.data ? JSON.parse(row.data) : {} });
+  const data = row.data ? JSON.parse(row.data) : {};
+  if (row.type === 'todo' && Array.isArray(data?.tasks)) {
+    for (const task of data.tasks) {
+      if (task && typeof task === 'object' && 'status' in task && !STATUSES.includes(task.status)) {
+        task.status = 'open';
+      }
+    }
+  }
+  return { ...row, data };
 }
 
 // ---------------------------------------------------------------------------
@@ -321,22 +329,54 @@ function toRich(data) {
   return { ...rest, doc: { type: 'doc', content }, text: [title, text].filter(Boolean).join('\n') };
 }
 
-// Converts every note/comment still on title + body (trashed ones too), after
-// a backup copy of the database. Returns the backup path, or null if nothing to do.
+// A boot migration: rewrites each row's data with `fix` in one transaction, after
+// a backup copy of the database (board.pre-<name>-<time>.db). Returns the backup
+// path, or null when there are no rows (nothing to do, no backup).
+function migrateRows(name, rows, fix) {
+  if (!rows.length) return null;
+  const backup = path.join(DATA_DIR, `board.pre-${name}-${Date.now()}.db`);
+  db.prepare('VACUUM INTO ?').run(backup); // consistent snapshot, synchronous (unlike db.backup())
+  const update = db.prepare('UPDATE items SET data = ? WHERE id = ?');
+  db.transaction(() => {
+    for (const r of rows) update.run(JSON.stringify(fix(JSON.parse(r.data || '{}'))), r.id);
+  })();
+  return backup;
+}
+
+// Converts every note/comment still on title + body (trashed ones too).
 function migrateRichText() {
   const rows = db
     .prepare("SELECT id, data FROM items WHERE type IN ('note', 'comment') AND json_extract(data, '$.doc') IS NULL")
     .all();
-  if (!rows.length) return null;
-  const backup = path.join(DATA_DIR, `board.pre-richtext-${Date.now()}.db`);
-  db.prepare('VACUUM INTO ?').run(backup); // consistent snapshot, synchronous (unlike db.backup())
-  const update = db.prepare('UPDATE items SET data = ? WHERE id = ?');
-  db.transaction(() => {
-    for (const r of rows) update.run(JSON.stringify(toRich(JSON.parse(r.data || '{}'))), r.id);
-  })();
-  return backup;
+  return migrateRows('richtext', rows, toRich);
 }
 migrateRichText();
+
+// Tasks from before `status` (focus-redesign F1): a truthy `done` becomes
+// `status: "done"` with `statusAt` null (when it was done is unknown), any other
+// `status: "open"`; `done` and `stale` are dropped. Every to-do card, trashed
+// ones too.
+function migrateTaskStatus() {
+  const rows = db
+    .prepare(
+      `SELECT id, data FROM items WHERE type = 'todo' AND json_type(data, '$.tasks') = 'array'
+        AND EXISTS (SELECT 1 FROM json_each(items.data, '$.tasks') AS t WHERE t.type = 'object'
+          AND (json_type(t.value, '$.done') IS NOT NULL OR json_type(t.value, '$.stale') IS NOT NULL))`
+    )
+    .all();
+  return migrateRows('status', rows, data => ({
+    ...data,
+    tasks: data.tasks.map(t => {
+      if (!t || typeof t !== 'object' || Array.isArray(t) || !('done' in t || 'stale' in t)) return t;
+      const out = { ...t, status: t.done ? 'done' : 'open' };
+      delete out.done;
+      delete out.stale;
+      if (t.done) out.statusAt = null;
+      return out;
+    }),
+  }));
+}
+migrateTaskStatus();
 
 // Older rows (imports, early canvas cards, copied cards) can hold tasks with no
 // id, or an id another task also has, in the same list or another card. The
@@ -395,6 +435,7 @@ module.exports = {
   RICH_TYPES,
   toRich,
   migrateRichText,
+  migrateTaskStatus,
   migrateTaskIds,
   db,
   stmt,

@@ -42,7 +42,7 @@ mockup and this text disagree, the text wins.
 | R11 | Send to               | **The three**: first in "yours". Disabled while three or more tasks are due now. **Top of queue**: directly after the current three; an unplaced task in the three is placed too, to hold its spot. **Bottom**: last of the bottom band               |
 | R12 | Reset order           | Clears every `place`                                                                                                                                                                                                                                  |
 | R13 | Focus page shape      | One vertical stack, no modes and no mode switch: Done earlier, Done today, the three, the Queue. It opens on the three. Pulling down shows Done today and snaps there; older history scrolls freely. The Queue repeats the three at its top           |
-| R14 | Done history          | Tasks with `status` `done` or `stale`, by `statusAt` day in `TASK_TZ`: Today, Yesterday, Earlier this week, Earlier this month, then one section per month. A task with no `statusAt` (done before F1) is not listed                                  |
+| R14 | Done history          | Tasks with `status` `done` or `stale`, by `statusAt` day in `TASK_TZ`: Today, Yesterday, Earlier this week, Earlier this month, then one section per month. Only tasks with a recorded `statusAt` appear.                                             |
 | R15 | Stale rule            | As planned in M2.3, fixed, never the model's call: more than 30 days old with no upcoming due date and not starred, or more than 14 days overdue. Age counts from the later of `createdAt` and `statusAt`, so a put-back task gets a fresh 30 days    |
 | R16 | Stale in the history  | In the same timeline as done tasks, on the day it was set aside. Marked so it can't read as finished: an amber icon, full-strength text and its age ("34 days overdue", "Added 3 months ago"). The heading counts them apart ("8 done · 1 set aside") |
 | R17 | Acting on a stale row | **Put back** (a tap): `status` `open`, placed at the top of the queue. **Complete** and **Delete**: press and hold                                                                                                                                    |
@@ -58,24 +58,27 @@ mockup and this text disagree, the text wins.
 
 ## F1 · One status field
 
-- [ ] **F1.1 `status`, `statusAt`, `statusReason`.** `tasklist.js` defines them
-      (default `open`, `null`, `null`) and stamps `statusAt` when a write
-      changes `status`, in the merge and in every server write. Quick notes'
-      `normTask` follows.
-  - A boot migration (after a `VACUUM INTO` backup, like `migrateRichText`)
-    turns `done: true` into `status: "done"` with `statusAt: null`, and drops
-    `done` and `stale`.
-  - Every reader moves over: `focus.js`, `tasks-api.js`, `export-md.js`,
-    `scripts/import-milanote-md.js`, `public/js/cards.js`, `quicknotes.js`,
-    `focuspage.js`, and the voice add-on where it reads `done`.
-  - Task API: responses carry `status` and `statusAt`. `PATCH` accepts
-    `status`; `{ "done": true }` stays as input shorthand for
-    `status: "done"`. `GET /api/tasks?status=` also takes `stale`.
-  - The Markdown export keeps `- [x]`: the round trip with the importer is
-    unchanged.
-  - Acceptance: the migration test converts old rows and is a no-op on a second
-    boot; a merge test marks a task done on one device while another edits its
-    text and keeps both; `statusAt` is the server's clock, not the client's.
+- [x] **F1.1 `status`, `statusAt`, `statusReason`.** `tasklist.js` implements
+      R2 and R3. See the [Task API reference](task-api.md#task-fields) for the
+      fields and token-authenticated endpoints.
+  - At boot, the status migration looks for tasks with a `done` or `stale` key
+    in live and trashed to-do cards. It takes a `VACUUM INTO` snapshot named
+    `board.pre-status-<timestamp>.db` in the data directory before rewriting
+    the affected rows in one transaction. A truthy `done` becomes `done` with
+    `statusAt: null` because the completion time is unknown. Other affected
+    tasks become `open`. The migration removes both old keys, skips invalid
+    task lists and leaves everything else alone. With no affected rows, it
+    skips both the snapshot and the rewrite.
+  - Reload open tabs after deploying F1. `PATCH /api/item/:id` uses `status`
+    for to-do tasks and ignores `done` and `stale` flags. `POST /api/item`
+    accepts legacy `done` when creating to-do cards from imports. An explicit
+    `status` takes precedence, and imported completed tasks start with
+    `statusAt: null`. Both board writes reject invalid `status` values and
+    ignore client-supplied `statusAt` and `statusReason`.
+  - Markdown export writes `- [x]` for completed tasks and `- [ ]` for open
+    and stale tasks. Import reads unchecked rows as open.
+  - See the [migration tests](../test/taskstatus.test.js) and the [board save
+    tests](../test/api.test.js), which cover concurrent text and status edits.
 
 ## F2 · Four bands
 

@@ -30,7 +30,7 @@ function cardLines(it, origin) {
     if (!tasks.length) return [];
     return [
       '## ' + (oneLine(d.title) || 'To-do'),
-      ...tasks.map(t => `- [${t.done ? 'x' : ' '}] ${oneLine(t.text)}`),
+      ...tasks.map(t => `- [${t.status === 'done' ? 'x' : ' '}] ${oneLine(t.text)}`),
       '',
     ];
   }

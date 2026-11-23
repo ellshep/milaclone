@@ -1,7 +1,7 @@
 'use strict';
 
 const { stmt, itemsForCanvas } = require('./db');
-const { isBlank } = require('./tasklist');
+const { isBlank, isDone } = require('./tasklist');
 
 // A board as Markdown in the shape scripts/import-milanote-md.js reads back:
 // `# board` sections, `## first line` + lines for notes and comments, `## title`
@@ -40,7 +40,7 @@ function cardLines(it, origin) {
     if (!tasks.length) return [];
     return [
       '## ' + (oneLine(d.title) || 'To-do'),
-      ...tasks.map(t => `- [${t.done ? 'x' : ' '}] ${oneLine(t.text)}`),
+      ...tasks.map(t => `- [${isDone(t) ? 'x' : ' '}] ${oneLine(t.text)}`),
       '',
     ];
   }

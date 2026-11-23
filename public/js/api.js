@@ -52,13 +52,30 @@ const KEEPALIVE_MAX = 60000;
 const utf8 = new TextEncoder();
 let keepaliveBytes = 0;
 
+function normalizeReadTasks(data) {
+  if (!Array.isArray(data.tasks)) return;
+  data.tasks = data.tasks.map(task => {
+    if (!task || typeof task !== 'object') return task;
+    if (!('done' in task || 'stale' in task)) {
+      return 'status' in task && !['open', 'done', 'stale'].includes(task.status) ? { ...task, status: 'open' } : task;
+    }
+    const out = { ...task, status: task.done ? 'done' : 'open' };
+    delete out.done;
+    delete out.stale;
+    if (task.done) out.statusAt = null;
+    return out;
+  });
+}
+
 // Thin wrappers over the JSON endpoints exposed by the Node backend.
 export const api = {
   async root() {
     return (await fetch('/api/root')).json();
   },
   async canvas(id) {
-    return (await fetch('/api/canvas/' + id)).json();
+    const view = await (await fetch('/api/canvas/' + id)).json();
+    for (const item of view.items || []) if (item.type === 'todo') normalizeReadTasks(item.data);
+    return view;
   },
   // Never throws: a failed search just shows no results.
   async search(q) {
@@ -69,7 +86,9 @@ export const api = {
     }
   },
   async todos() {
-    return (await fetch('/api/todos')).json();
+    const view = await (await fetch('/api/todos')).json();
+    for (const list of view.lists || []) normalizeReadTasks(list);
+    return view;
   },
   patchCanvas(id, body) {
     return write('/api/canvas/' + id, json('PATCH', body));

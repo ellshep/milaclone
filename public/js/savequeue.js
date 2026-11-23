@@ -22,6 +22,29 @@
 // app passes `api.patch`, tests pass an in-memory stand-in.
 
 const clone = v => JSON.parse(JSON.stringify(v));
+const statusMetadata = ['statusAt', 'statusReason'];
+const taskFields = task =>
+  Object.keys(task)
+    .filter(key => !statusMetadata.includes(key))
+    .sort()
+    .map(key => [key, task[key]]);
+
+export function adoptTaskMetadata(tasks, saved) {
+  if (
+    tasks.length !== saved.length ||
+    tasks.some((task, i) => JSON.stringify(taskFields(task)) !== JSON.stringify(taskFields(saved[i])))
+  ) {
+    return false;
+  }
+  for (const [i, task] of tasks.entries()) {
+    for (const key of statusMetadata) {
+      if (key in saved[i]) task[key] = saved[i][key];
+      else delete task[key];
+    }
+  }
+  return true;
+}
+
 // Six tries, 2 s doubling to 60 s (about two minutes), then stop. The app
 // passes api.js retryDelay, which is the same and also tells the user.
 const defaultRetryDelay = n => (n <= 6 ? Math.min(60000, 1000 * 2 ** n) : null);
@@ -81,12 +104,12 @@ export function createSaveQueue({ send, delay, current, onSaved = () => {}, retr
     if (!saved) return;
     // The base is the list the surface's copy grew from. Only a to-do save moves it
     // (a title or label save must not make a stale list look like deletions): to
-    // the merged list, which the surface then shows, or while more edits are
-    // pending and the surface keeps its own copy, to the list this save sent.
+    // the merged list if the surface adopts it, or the list this save sent
+    // while more edits are pending and the surface keeps its own copy.
+    const adopted = onSaved(id, saved, patch) === true;
     if (patch.tasks && Array.isArray(saved.data?.tasks)) {
-      bases.set(id, isPending(id) ? sentTasks : clone(saved.data.tasks));
+      bases.set(id, adopted || !isPending(id) ? clone(saved.data.tasks) : sentTasks);
     }
-    onSaved(id, saved, patch);
   }
 
   return {

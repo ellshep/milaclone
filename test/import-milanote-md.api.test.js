@@ -82,10 +82,10 @@ Intro paragraph.
 
   const todo = nested.items.find(i => i.type === 'todo');
   assert.deepEqual(
-    todo.data.tasks.map(t => [t.text, t.done]),
+    todo.data.tasks.map(t => [t.text, t.status, t.statusAt]),
     [
-      ['first', false],
-      ['done', true],
+      ['first', 'open', undefined],
+      ['done', 'done', null], // imported: when it was done is unknown
     ]
   );
   const image = nested.items.find(i => i.type === 'image');

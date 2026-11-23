@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { Board } from '../src/board.js';
+import { Board, label } from '../src/board.js';
 import { httpHandler } from '../src/server.js';
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
@@ -176,7 +176,10 @@ test('every tool works on readable boards and refuses a blocked one', async () =
   assert.match(task.id, /^t_/);
   assert.equal(task.due, '2026-12-01');
   const done = await call('set_todo_task_done', { item_id: list.id, task_id: task.id });
-  assert.equal(done.done, true);
+  assert.equal(done.status, 'done');
+  assert.equal(typeof done.statusAt, 'number'); // stamped by the board
+  const undone = await call('set_todo_task_done', { item_id: list.id, task_id: task.id, done: false });
+  assert.equal(undone.status, 'open');
 
   const hits = await call('search', { query: 'zebra' });
   assert.deepEqual(
@@ -214,7 +217,7 @@ test('every tool works on readable boards and refuses a blocked one', async () =
     after.items.map(i => i.id),
     [privTodo.id]
   );
-  assert.notEqual(after.items[0].data.tasks[0].done, true);
+  assert.notEqual(after.items[0].data.tasks[0].status, 'done');
 
   // other refusals are plain errors, not crashes
   assert.match((await raw('get_item', { item_id: 'i_nope' })).content[0].text, /no card with id i_nope/);
@@ -232,6 +235,50 @@ test('every tool works on readable boards and refuses a blocked one', async () =
     'set_todo_task_done',
     'update_item',
   ]);
+});
+
+test('todo creation tools respect server-owned status metadata and count only open tasks', async () => {
+  const { rootCanvasId } = await api('GET', '/api/root');
+  const board_id = await boardOn(rootCanvasId, 'Status tools', { allow: true });
+  const data = {
+    title: 'Jobs',
+    tasks: [
+      { text: 'Finished', status: 'done', statusAt: 1, statusReason: 'client' },
+      { text: 'Set aside', status: 'stale' },
+      { text: 'To do' },
+    ],
+  };
+  const card = { type: 'todo', data };
+  const one = await call('create_item', { board_id, ...card });
+  const [many] = await call('create_items', { board_id, items: [card] });
+  const outline = await call('get_board_outline', { board_id });
+  for (const list of [one, many]) {
+    const finished = list.data.tasks.find(t => t.text === 'Finished');
+    assert.deepEqual([finished.status, finished.statusAt, finished.statusReason], ['done', null, undefined]);
+    assert.ok(outline.includes(`[todo ${list.id}] Jobs (1 open)`));
+  }
+  const invalid = { type: 'todo', data: { tasks: [{ text: 'Invalid', status: 'complete' }] } };
+  assert.equal((await raw('create_item', { board_id, ...invalid })).isError, true);
+  assert.equal((await raw('create_items', { board_id, items: [invalid] })).isError, true);
+});
+
+test('the board outline counts unrecognized statuses as open', () => {
+  assert.equal(
+    label({
+      type: 'todo',
+      data: {
+        title: 'Import',
+        tasks: [
+          { text: 'Old value', status: 'pending' },
+          { text: 'No status' },
+          { text: 'Open', status: 'open' },
+          { text: 'Finished', status: 'done' },
+          { text: 'Set aside', status: 'stale' },
+        ],
+      },
+    }),
+    'Import (3 open)'
+  );
 });
 
 test('agent cards, and blocked boards below an open one, stay out of reach', async () => {

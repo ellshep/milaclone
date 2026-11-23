@@ -56,9 +56,9 @@ async function sampleBoard(title) {
     data: {
       title: 'Errands',
       tasks: [
-        { id: 'a', text: 'post office', done: true },
-        { id: 'b', text: 'groceries', done: false },
-        { id: 'c', text: '', done: false },
+        { id: 'a', text: 'post office', status: 'done' },
+        { id: 'b', text: 'groceries', status: 'open' },
+        { id: 'c', text: '', status: 'open' },
       ],
     },
   });
@@ -116,7 +116,7 @@ test('F5.2 export then import gives back the same titles, text and tasks', async
         .filter(i => i.type === 'note')
         .map(i => i.data.text)
         .sort(),
-      todos: items.filter(i => i.type === 'todo').map(i => [i.data.title, i.data.tasks.map(t => [t.text, t.done])]),
+      todos: items.filter(i => i.type === 'todo').map(i => [i.data.title, i.data.tasks.map(t => [t.text, t.status])]),
       links: items.filter(i => i.type === 'link').map(i => [i.data.title, decodeURI(i.data.url)]), // parens arrive %-encoded
       boards: items.filter(i => i.type === 'board').map(i => i._childTitle),
     };

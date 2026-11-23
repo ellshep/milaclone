@@ -2,7 +2,7 @@
 
 import { state } from './state.js';
 import { api, retryDelay } from './api.js';
-import { createSaveQueue } from './savequeue.js';
+import { adoptTaskMetadata, createSaveQueue } from './savequeue.js';
 import { autoGrow, colorVar, lucideEl, refreshIcons, toast, rid, daysUntil, dueInfo } from './util.js';
 import { screenToWorld } from './viewport.js';
 import { createAt, defaultsFor } from './create.js';
@@ -31,11 +31,13 @@ const h = (tag, cls, text) => {
   return n;
 };
 
+const isOpen = t => t.status === 'open';
+const isDone = t => t.status === 'done';
 const SMART = {
-  today: { label: 'Today', color: '#4C7CBE', icon: 'calendar', f: t => t.due && daysUntil(t.due) === 0 && !t.done },
-  starred: { label: 'Starred', color: '#E8B94A', icon: 'star', f: t => t.starred && !t.done },
-  all: { label: 'All', color: '#3D4A5C', icon: 'inbox', f: t => !t.done },
-  completed: { label: 'Completed', color: '#6E8B74', icon: 'check', f: t => t.done },
+  today: { label: 'Today', color: '#4C7CBE', icon: 'calendar', f: t => isOpen(t) && t.due && daysUntil(t.due) === 0 },
+  starred: { label: 'Starred', color: '#E8B94A', icon: 'star', f: t => isOpen(t) && t.starred },
+  all: { label: 'All', color: '#3D4A5C', icon: 'inbox', f: isOpen },
+  completed: { label: 'Completed', color: '#6E8B74', icon: 'check', f: isDone },
 };
 const SMART_KEYS = ['today', 'starred', 'all', 'completed'];
 
@@ -93,6 +95,12 @@ function saveSettings() {
 // Data
 // ---------------------------------------------------------------------------
 
+// A task is open, done or stale (set aside by the stale rule); the checkbox
+// completes it or puts it back to open.
+const toggleDone = t => {
+  t.status = isDone(t) ? 'open' : 'done';
+};
+
 // Tasks gain their Quick-notes fields on read; blank rows (the canvas editor's
 // "type here" placeholders) are never surfaced as tasks. Keep the defaults in
 // step with the server's tasklist.js normTask.
@@ -101,7 +109,9 @@ function normTask(t) {
     ...t, // keep fields Quick notes doesn't use (the canvas's `indent`)
     id: t.id || rid(),
     text: typeof t.text === 'string' ? t.text : '',
-    done: !!t.done,
+    status: ['open', 'done', 'stale'].includes(t.status) ? t.status : 'open',
+    statusAt: Number.isFinite(t.statusAt) ? t.statusAt : null,
+    statusReason: typeof t.statusReason === 'string' ? t.statusReason : null,
     starred: !!t.starred,
     due: t.due || null,
     tags: Array.isArray(t.tags) ? t.tags.slice() : [],
@@ -150,7 +160,8 @@ const saves = createSaveQueue({
     const list = listById(id);
     if (!list || !patch.tasks || !Array.isArray(saved.data.tasks)) return;
     const merged = saved.data.tasks.map(normTask);
-    if (saves.pending(id) || JSON.stringify(merged) === JSON.stringify(list.tasks)) return;
+    if (adoptTaskMetadata(list.tasks, merged)) return true;
+    if (saves.pending(id)) return;
     list.tasks = merged;
     render();
   },
@@ -175,7 +186,7 @@ const saveMeta = list => save(list, { title: list.title, tags: list.tags });
 
 const listById = id => qn.lists.find(l => l.id === id) || null;
 const tasksOf = list => list.tasks.filter(t => t.text.trim());
-const openCount = list => tasksOf(list).filter(t => !t.done).length;
+const openCount = list => tasksOf(list).filter(isOpen).length;
 const listHasTag = (list, tag) => list.tags.includes(tag) || tasksOf(list).some(t => t.tags.includes(tag));
 
 // Smart views are computed filters over every list, so their rows carry the
@@ -475,13 +486,18 @@ function renderListScreen() {
   }
 
   const all = tasksOf(list);
-  const open = all.filter(t => !t.done);
-  const done = all.filter(t => t.done);
-  meta.appendChild(h('span', null, done.length + ' of ' + all.length));
+  const open = all.filter(isOpen);
+  const done = all.filter(isDone);
+  const listed = open.length + done.length;
+  meta.appendChild(h('span', null, done.length + ' of ' + listed));
   for (const tag of list.tags) meta.appendChild(h('span', 'qn-tag', '#' + tag));
 
   for (const task of open) tasksEl.appendChild(taskRow(list, task));
-  if (!all.length) tasksEl.appendChild(h('div', 'qn-empty', 'No tasks yet — add the first one below.'));
+  if (!listed) {
+    tasksEl.appendChild(
+      h('div', 'qn-empty', all.length ? 'No tasks to show.' : 'No tasks yet — add the first one below.')
+    );
+  }
 
   if (done.length) {
     const head = h('button', 'qn-comphead' + (qn.compOpen ? '' : ' closed'));
@@ -503,15 +519,15 @@ function renderListScreen() {
 
 // One row anatomy for list detail, smart views and search results.
 function taskRow(list, task, sub) {
-  const row = h('div', 'qn-task' + (task.done ? ' done' : ''));
+  const row = h('div', 'qn-task' + (isDone(task) ? ' done' : ''));
   row.dataset.task = task.id;
 
-  const box = h('button', 'qn-box' + (task.done ? ' on' : ''));
-  box.setAttribute('aria-label', task.done ? 'Mark not done' : 'Mark done');
+  const box = h('button', 'qn-box' + (isDone(task) ? ' on' : ''));
+  box.setAttribute('aria-label', isDone(task) ? 'Mark not done' : 'Mark done');
   box.appendChild(lucideEl('check'));
   box.onclick = e => {
     e.stopPropagation();
-    task.done = !task.done;
+    toggleDone(task);
     saveTasks(list);
     render();
   };
@@ -520,7 +536,7 @@ function taskRow(list, task, sub) {
   mid.appendChild(h('span', 'qn-task-text', task.text));
   if (sub) mid.appendChild(h('span', 'qn-task-sub', sub));
   const due = dueInfo(task.due);
-  if (due && !task.done) {
+  if (due && !isDone(task)) {
     const line = h('span', 'qn-task-due');
     line.style.color = due.color;
     line.appendChild(lucideEl('calendar'));
@@ -550,11 +566,11 @@ function renderTaskScreen() {
   const { list, task } = found;
 
   el('qnTaskBackLabel').textContent = activeTitle() || list.title;
-  el('qnTaskBox').classList.toggle('on', task.done);
+  el('qnTaskBox').classList.toggle('on', isDone(task));
   el('qnTaskStar').classList.toggle('on', task.starred);
 
   const title = el('qnTaskTitle');
-  title.classList.toggle('done', task.done);
+  title.classList.toggle('done', isDone(task));
   if (document.activeElement !== title) title.textContent = task.text;
 
   // details card: due row + tags row
@@ -1080,7 +1096,7 @@ export function initQuickNotes() {
   el('qnTaskBox').onclick = () => {
     const f = findTask(qn.taskRef);
     if (!f) return;
-    f.task.done = !f.task.done;
+    toggleDone(f.task);
     saveTasks(f.list);
     render();
   };

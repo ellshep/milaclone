@@ -14,7 +14,7 @@ export function defaultsFor(type) {
     case 'note':
       return { w: 240, data: {} };
     case 'todo':
-      return { w: 240, data: { title: 'To-do', tasks: [{ id: rid(), text: '', done: false }] } };
+      return { w: 240, data: { title: 'To-do', tasks: [{ id: rid(), text: '', status: 'open' }] } };
     case 'link':
       return { w: 240, color: 'blue', data: { url: '', title: '' } };
     case 'column':

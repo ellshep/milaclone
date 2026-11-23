@@ -68,10 +68,10 @@ curl -sS https://mila.your-tailnet.ts.net/api/tasks \
 
 ### `GET /api/tasks?status=open` — list tasks
 
-`status` is `open` (default), `done` or `all`. Tasks from every to-do card,
-sorted by due date (undated last), then oldest first. Each task carries
-`listId` and `listTitle`. The canvas editor's empty placeholder rows are left
-out.
+`status` selects one state (`open` by default, `done` or `stale`). Use `all`
+to include all three. Tasks from every live to-do card are sorted by due date
+(undated last), then oldest first. Each task carries `status`, `statusAt`,
+`listId` and `listTitle`. Empty canvas placeholder rows are left out.
 
 ```bash
 curl -sS "https://mila.your-tailnet.ts.net/api/tasks?status=open" \
@@ -82,10 +82,10 @@ curl -sS "https://mila.your-tailnet.ts.net/api/tasks?status=open" \
 
 The ranked open tasks the focus page, the watch and the morning digest share
 (`focus.js`). `limit` is 1–1000 or `all` (default 3). Returns
-`{ today, tasks, counts }`: `today` is the date in `TASK_TZ`; each task carries
-`listId`, `listTitle`, `boardTitle` (the board the list sits on), `tier`,
-`dueIn` (days, negative when overdue) and, on Inbox tasks, `inbox: true`;
-`counts` is `{ overdue, dueToday, open }`.
+`{ today, tasks, counts }`. `today` is the date in `TASK_TZ`. Each task
+carries `status: "open"`, `statusAt`, `listId`, `listTitle`, `boardTitle`
+(the board the list sits on), `tier`, `dueIn` (days, negative when overdue)
+and, on Inbox tasks, `inbox: true`. `counts` is `{ overdue, dueToday, open }`.
 
 The order:
 
@@ -95,12 +95,13 @@ The order:
    `rankNudge` of `1` or `-1` moves a task one tier; within a tier, higher
    `rankScore` first, then unscored tasks oldest first.
 
-Left out: done, blank and `stale` tasks, to-do lists labelled **Reference**,
-and lists inside the **Templates** board on Home. The board serves the same
-order without a token at `GET /api/focus` for the `/focus` page, which writes
-back through two more board routes: `POST /api/focus/:taskId/done`, and
-`PUT /api/focus/order` with `{ ids }`, the placed tasks top first (they get
-`focusOrder` 1, 2, …, every other task loses its placement, and `[]` resets).
+The view skips blank tasks, to-do lists labelled **Reference**, and lists
+inside the **Templates** board on Home. The board serves the same order
+without a token at `GET /api/focus` for the `/focus` page. The page completes
+tasks with `POST /api/focus/:taskId/done` and saves placements with
+`PUT /api/focus/order`. Send `{ ids }` in placement order starting at the top.
+Listed tasks get `focusOrder` 1, 2, … and all other tasks lose their placement.
+An empty array resets the order.
 
 ```bash
 curl -sS "https://mila.your-tailnet.ts.net/api/tasks?view=focus&limit=3" \
@@ -154,8 +155,13 @@ A bad body is a `400` and changes nothing.
 
 ### `PATCH /api/tasks/:id` — mark done, pin, edit, move
 
-Any of `title`, `notes`, `tags`, `dueDate`, `done`, `starred`, `priority`,
-`pinned`. Returns `{ task }`, or `404` if no list has that task.
+Any of `title`, `notes`, `tags`, `dueDate`, `status`, `done`, `starred`,
+`priority`, `pinned`. Returns `{ task }`, or `404` if no list has that task.
+
+Use `status` to set the task's state. `{ "done": true }` is shorthand for
+`status: "done"` and `{ "done": false }` for `status: "open"`. `status` wins
+when both are sent. Repeating the current `status` preserves `statusAt` and
+`statusReason`.
 
 `listId` moves the task to the end of another to-do list (`400` if it isn't a
 live to-do card, or sits under the Templates board). The move is recorded on the
@@ -176,27 +182,29 @@ curl -sS -X PATCH https://mila.your-tailnet.ts.net/api/tasks/t_abc123 \
 ## Task fields
 
 Stored on each task next to the fields the app already uses (`id`, `text`,
-`done`, `starred`, `due`, `tags`, `note`, `createdAt`):
+`starred`, `due`, `tags`, `note`, `createdAt`):
 
-| Field        | Set by                    | Meaning                                        |
-| ------------ | ------------------------- | ---------------------------------------------- |
-| `source`     | create                    | Who created the task                           |
-| `pinned`     | `PATCH`                   | Locks the task into the focus three (Phase 4)  |
-| `stale`      | stale rule (not built)    | Looks abandoned; hidden from the focus view    |
-| `rankNudge`  | `PUT /api/tasks/rank`     | `1`/`-1`: move one tier up/down in the order   |
-| `focusOrder` | focus page (List mode)    | Placed by hand; ranks above the model's order  |
-| `rankScore`  | `PUT /api/tasks/rank`     | Model score used within a deterministic tier   |
-| `rankReason` | `PUT /api/tasks/rank`     | One-line reason for the score                  |
-| `rankedAt`   | `PUT /api/tasks/rank`     | When it was last scored (ms)                   |
-| `importId`   | create (e.g. a migration) | Unique id from another system, for idempotency |
-| `movedFrom`  | a move (`PATCH`, ranking) | The list the task was last moved out of        |
-| `movedAt`    | a move (`PATCH`, ranking) | When it was last moved (ms)                    |
-| `movedBy`    | a move (`PATCH`, ranking) | Who moved it                                   |
-| `moveReason` | a move (`PATCH`, ranking) | Why, if the mover said                         |
+| Field          | Set by                    | Meaning                                                                |
+| -------------- | ------------------------- | ---------------------------------------------------------------------- |
+| `status`       | task writes               | `open` (default), `done` or `stale` (set aside)                        |
+| `statusAt`     | the server                | Server time of the last status change (epoch ms), or `null` if unknown |
+| `statusReason` | the server                | Optional reason for the current status. Cleared on a status change.    |
+| `source`       | create                    | Who created the task                                                   |
+| `pinned`       | `PATCH`                   | Locks the task into the focus three (Phase 4)                          |
+| `rankNudge`    | `PUT /api/tasks/rank`     | `1`/`-1`: move one tier up/down in the order                           |
+| `focusOrder`   | focus page (List mode)    | Placed by hand; ranks above the model's order                          |
+| `rankScore`    | `PUT /api/tasks/rank`     | Model score used within a deterministic tier                           |
+| `rankReason`   | `PUT /api/tasks/rank`     | One-line reason for the score                                          |
+| `rankedAt`     | `PUT /api/tasks/rank`     | When it was last scored (ms)                                           |
+| `importId`     | create (e.g. a migration) | Unique id from another system, for idempotency                         |
+| `movedFrom`    | a move (`PATCH`, ranking) | The list the task was last moved out of                                |
+| `movedAt`      | a move (`PATCH`, ranking) | When it was last moved (ms)                                            |
+| `movedBy`      | a move (`PATCH`, ranking) | Who moved it                                                           |
+| `moveReason`   | a move (`PATCH`, ranking) | Why, if the mover said                                                 |
 
-They were added now so the later phases need no data migration. Tasks made in
-the app don't have them until something sets them, and readers treat a missing
-field as its default.
+Stored tasks can omit fields that have a default. For example, a newly
+created open task has no recorded status change and the API returns
+`statusAt: null`.
 
 ## Logging
 

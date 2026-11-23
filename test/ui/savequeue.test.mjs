@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createSaveQueue } from '../../public/js/savequeue.js';
+import { adoptTaskMetadata, createSaveQueue } from '../../public/js/savequeue.js';
 import tasklist from '../../tasklist.js';
 
 // The save protocol through its interface, against an in-memory server.
@@ -28,6 +28,18 @@ function setup({ replies = [] } = {}) {
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
+
+it('adopts only server status metadata in place if the displayed tasks agree', () => {
+  const task = { id: 'a', text: 'Milk', status: 'done', statusReason: 'set aside' };
+  const tasks = [task];
+  const saved = { text: 'Milk', id: 'a', status: 'done', statusAt: 1000 };
+  expect(adoptTaskMetadata(tasks, [saved])).toBe(true);
+  expect(tasks[0]).toBe(task);
+  expect(task).toEqual(saved);
+  expect(adoptTaskMetadata(tasks, [{ ...saved, text: 'Eggs', statusAt: 2000 }])).toBe(false);
+  expect(adoptTaskMetadata(tasks, [])).toBe(false);
+  expect(task).toEqual(saved);
+});
 
 describe('save queue', () => {
   it('sends every field edited inside the debounce window as one save', async () => {
@@ -60,6 +72,43 @@ describe('save queue', () => {
     q.edit('a', { title: 'x' });
     await q.flush('a');
     expect(sent[0].body).toEqual({ data: { title: 'x' } });
+  });
+
+  it.each(['queued', 'in flight'])('keeps task metadata when a list rename is %s', async renameState => {
+    const tasks = [{ id: 't1', text: 'Milk', status: 'done' }];
+    const savedTasks = [{ ...tasks[0], statusAt: 1000 }];
+    let acknowledgeTasks, acknowledgeTitle;
+    const send = vi
+      .fn()
+      .mockImplementationOnce(
+        () => new Promise(resolve => (acknowledgeTasks = () => resolve({ data: { tasks: savedTasks } })))
+      )
+      .mockImplementationOnce(
+        () => new Promise(resolve => (acknowledgeTitle = () => resolve({ data: { title: 'Renamed' } })))
+      )
+      .mockResolvedValue(false);
+    const q = createSaveQueue({
+      send,
+      delay: 400,
+      current: () => tasks,
+      onSaved: (_id, saved, patch) => patch.tasks && adoptTaskMetadata(tasks, saved.data.tasks),
+    });
+    q.track('a', [{ ...tasks[0], status: 'open' }]);
+    q.edit('a', { tasks });
+    const taskSave = q.flush('a');
+    q.edit('a', { title: 'Renamed' });
+    const titleSave = renameState === 'in flight' ? q.flush('a') : null;
+    expect(q.pending('a')).toBe(true);
+
+    acknowledgeTasks();
+    await taskSave;
+    expect(tasks).toEqual(savedTasks);
+    const rename = titleSave || q.flush('a');
+    acknowledgeTitle();
+    await rename;
+    q.edit('a', { tasks: [{ ...tasks[0], text: 'Oat milk' }] });
+    await q.flush('a');
+    expect(send.mock.lastCall[1].baseTasks).toEqual(savedTasks);
   });
 
   it('retries a failed save with the current values, backing off', async () => {
@@ -213,7 +262,7 @@ describe('save queue', () => {
     });
     q.edit('a', { title: 'Shopping' });
     await q.flush('a');
-    q.edit('a', { tasks: [{ id: 't1', text: 'Milk', done: true }] });
+    q.edit('a', { tasks: [{ id: 't1', text: 'Milk', status: 'done' }] });
     await q.flush('a');
     expect(sent[1].body.baseTasks).toEqual([{ id: 't1', text: 'Milk' }]); // so Eggs isn't read as deleted
   });
@@ -259,21 +308,21 @@ describe('save queue', () => {
   it('the next save does not undo an edit made elsewhere after the first one landed', async () => {
     const out = await whileInFlight(
       [
-        { id: 'f', text: 'Floss', done: false },
+        { id: 'f', text: 'Floss', status: 'open' },
         { id: 's', text: 'Stretch' },
       ],
       [
-        { id: 'f', text: 'Floss', done: true },
+        { id: 'f', text: 'Floss', status: 'done' },
         { id: 's', text: 'Stretch' },
       ],
-      s => s.map(t => (t.id === 'f' ? { ...t, done: false } : t)), // the laptop unticks Floss
+      s => s.map(t => (t.id === 'f' ? { ...t, status: 'open' } : t)), // the laptop unticks Floss
       tasks => {
         tasks[1].text = 'Stretch more'; // the same list, edited in place
         return tasks;
       }
     );
     expect(out).toEqual([
-      { id: 'f', text: 'Floss', done: false },
+      { id: 'f', text: 'Floss', status: 'open' },
       { id: 's', text: 'Stretch more' },
     ]);
   });

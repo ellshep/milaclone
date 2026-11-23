@@ -36,7 +36,7 @@ test.after(() => {
 
 const TODAY = '2026-11-20';
 const card = { id: 'i_l', data: { title: 'L' } };
-const t = (id, f = {}) => ({ task: Object.assign({ id, text: id, done: false, createdAt: 0 }, f), card });
+const t = (id, f = {}) => ({ task: Object.assign({ id, text: id, status: 'open', createdAt: 0 }, f), card });
 const ids = r => r.tasks.map(x => x.id);
 
 test('orderTasks: fixed date tiers, then placed, then soon → starred → rest', () => {
@@ -53,8 +53,8 @@ test('orderTasks: fixed date tiers, then placed, then soon → starred → rest'
       t('over-5', { due: '2026-11-15' }),
       t('placed-2', { focusOrder: 2 }),
       t('placed-1', { focusOrder: 1, due: '2026-11-21' }),
-      t('done', { done: true }),
-      t('stale', { stale: true }),
+      t('done', { status: 'done' }),
+      t('stale', { status: 'stale' }),
       t('blank', { text: '  ' }),
     ],
     TODAY
@@ -150,7 +150,7 @@ async function todo(canvasId, title, tasks, extra = {}) {
 
 test('GET /api/focus and view=focus share one order; Reference lists and Templates are left out', async () => {
   const { rootCanvasId } = (await json('GET', '/api/root')).body;
-  const mk = (id, f = {}) => Object.assign({ id, text: id, done: false, createdAt: 1 }, f);
+  const mk = (id, f = {}) => Object.assign({ id, text: id, status: 'open', createdAt: 1 }, f);
   await todo(rootCanvasId, 'Work', [mk('w-over', { due: shift(-2) }), mk('w-rest'), mk('w-star', { starred: true })]);
   await todo(rootCanvasId, 'Goals', [mk('g-over', { due: shift(-9) })], { labels: ['reference'] });
   const tpl = (await json('POST', '/api/item', { canvasId: rootCanvasId, type: 'board', data: { title: 'Templates' } }))
@@ -190,17 +190,38 @@ test('limit and view validation; the task API view needs the token', async () =>
 
 test('POST /api/focus/:taskId/done marks the task done once', async () => {
   const { rootCanvasId } = (await json('GET', '/api/root')).body;
-  const list = await todo(rootCanvasId, 'Done list', [{ id: 'd-1', text: 'Finish me', done: false, createdAt: 1 }]);
+  const list = await todo(rootCanvasId, 'Done list', [{ id: 'd-1', text: 'Finish me', status: 'open', createdAt: 1 }]);
   assert.deepEqual((await json('POST', '/api/focus/d-1/done')).body, { ok: true });
   const card = (await json('GET', '/api/canvas/' + rootCanvasId)).body.items.find(it => it.id === list.id);
-  assert.equal(card.data.tasks[0].done, true);
+  assert.equal(card.data.tasks[0].status, 'done');
+  assert.ok(Math.abs(card.data.tasks[0].statusAt - Date.now()) < 5000, 'stamped with the server clock');
   assert.equal((await json('POST', '/api/focus/d-1/done')).status, 404); // already done
   assert.equal((await json('POST', '/api/focus/nope/done')).status, 404);
 });
 
+test('Focus can complete a task that was set aside while the page showed it', async context => {
+  const { rootCanvasId } = (await json('GET', '/api/root')).body;
+  const list = await todo(rootCanvasId, 'Set aside', [
+    { id: 'stale-while-visible', text: 'Finish me', status: 'open' },
+  ]);
+  const focus = async () => ids((await json('GET', '/api/focus?limit=all')).body);
+  assert.ok((await focus()).includes('stale-while-visible'));
+  const stale = await json('PATCH', '/api/tasks/stale-while-visible', { status: 'stale' }, TOKEN);
+  assert.equal(stale.body.task.status, 'stale');
+  assert.ok(!(await focus()).includes('stale-while-visible'));
+  const now = 1800000000000;
+  context.mock.method(Date, 'now', () => now);
+  assert.deepEqual((await json('POST', '/api/focus/stale-while-visible/done')).body, { ok: true });
+  const saved = (await json('GET', '/api/canvas/' + rootCanvasId)).body.items.find(it => it.id === list.id).data
+    .tasks[0];
+  assert.deepEqual([saved.status, saved.statusAt], ['done', now]);
+  assert.equal((await json('POST', '/api/focus/stale-while-visible/done')).status, 404);
+  await json('DELETE', '/api/item/' + list.id);
+});
+
 test('PUT /api/focus/order places tasks across lists, and [] resets', async () => {
   const { rootCanvasId } = (await json('GET', '/api/root')).body;
-  const mk = (id, f = {}) => Object.assign({ id, text: id, done: false, createdAt: 1 }, f);
+  const mk = (id, f = {}) => Object.assign({ id, text: id, status: 'open', createdAt: 1 }, f);
   const a = await todo(rootCanvasId, 'Place A', [mk('p-a1'), mk('p-a2', { focusOrder: 7 })]);
   await todo(rootCanvasId, 'Place B', [mk('p-b1')]);
 
@@ -228,7 +249,7 @@ test('PUT /api/focus/order places tasks across lists, and [] resets', async () =
 
 test('PUT /api/tasks/rank writes scores in one go, clears old nudges and skips placed tasks', async () => {
   const { rootCanvasId } = (await json('GET', '/api/root')).body;
-  const mk = (id, f = {}) => Object.assign({ id, text: id, done: false, createdAt: 1 }, f);
+  const mk = (id, f = {}) => Object.assign({ id, text: id, status: 'open', createdAt: 1 }, f);
   const list = await todo(rootCanvasId, 'Rank me', [
     mk('r-a'),
     mk('r-b', { rankNudge: 1, rankScore: 5 }),
@@ -281,7 +302,7 @@ test('GET /api/tasks/priorities returns the Home note headed "Focus priorities"'
 
 test('view=digest stops at the three when the rest are neither overdue nor due today', async () => {
   const { rootCanvasId } = (await json('GET', '/api/root')).body;
-  const mk = (id, f = {}) => Object.assign({ id, text: id, done: false, createdAt: 1 }, f);
+  const mk = (id, f = {}) => Object.assign({ id, text: id, status: 'open', createdAt: 1 }, f);
   await todo(rootCanvasId, 'Digest mix', [mk('n-over', { due: shift(-30) }), mk('n-p1'), mk('n-p2'), mk('n-p3')]);
   await json('PUT', '/api/focus/order', { ids: ['n-p1', 'n-p2', 'n-p3'] });
   const focus = (await json('GET', '/api/tasks?view=focus&limit=5', undefined, TOKEN)).body.tasks;
