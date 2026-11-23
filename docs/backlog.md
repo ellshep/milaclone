@@ -5,7 +5,7 @@ The one list of open work. Agents and people read it before starting and update 
 - One line per item: ID, what's wrong or wanted, where, and the fix if known. Link a longer spec only when one exists.
 - **Now** is what's being worked on, **Next** is ready to pick up, **Later** is accepted but not soon, **Needs a decision** is blocked on the owner.
 - When an item ships, delete its line in that PR (the PR is the record). **Closed** keeps the last few for reference; trim it past ten lines.
-- IDs never get reused. `AU` = code audit finding, `DM` = deep-module candidate, `V` = voice add-on, `U` = `docs/next-updates.md`, `AG` = board agents (`docs/agent-addon.md`), `Q` = test and quality tooling.
+- IDs never get reused. `AU` = code audit finding, `DM` = deep-module candidate, `V` = voice add-on, `U` = `docs/next-updates.md`, `AG` = board agents (`docs/agent-addon.md`), `Q` = test and quality tooling, `FE` = moving screens to Preact (roadmap D11).
 - Word cap 2,000 (`npm run check:docs`). If it doesn't fit, it's too detailed for this file.
 
 Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-codebase-architecture` pass; full write-up kept outside the repo), `docs/next-updates.md`, and the open items from the old voice handoff notes.
@@ -22,6 +22,10 @@ Nothing in progress: pick from Next.
 
 ## Later
 
+- **FE1** Move the Focus page (`focuspage.js`, its own entry point) to Preact: add `preact` and the JSX build to `server.js`'s esbuild step, keep `focusorder.js` as is. Do it before V5's F4 rebuilds the page, so F4 is built in Preact rather than converted after.
+- **FE2** Move Quick notes to Preact, split into overview, list, task and search components under 400 lines each, keeping `savequeue.js` as is. Its hand-written "keep the caret through a re-render" goes away. Before V5's F8. Clears the `quicknotes.js` ceiling.
+- **DM6** Split `cards.js` (863 code lines) by card type, staying vanilla. Clears its ceiling.
+- **DM7** Split `routes.js` (510 code lines) by area: canvases and items, focus and todos, trash, uploads and backup. Clears its ceiling.
 - **DM4** Move `openCanvas`/`reloadView` out of `main.js` into a navigation module so the 8 modules that import it become unit-testable.
 - **DM5** One board-view module for adding/removing cards; `create.js` doesn't check `it.error`, so a 400 renders an `{error}` card (`capture.js:26`, `create.js:47`, `lines.js:171`, `menus.js:208`).
 - **AU12** The 11-field `stmt.updateItem` write is copied three times (`routes.js:319`, `routes.js:353`, `tasks-api.js:174`) and the `_child*` projection twice. Fix: `saveItem(it)` in `db.js`. Overlaps DM3.

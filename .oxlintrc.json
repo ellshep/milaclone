@@ -3,7 +3,8 @@
   "env": { "node": true, "es2024": true },
   "ignorePatterns": [".claude/**", "public/vendor/**", "coverage/**", "playwright-report/**"],
   "rules": {
-    "no-undef": "error"
+    "no-undef": "error",
+    "max-lines": ["error", { "max": 400, "skipBlankLines": true, "skipComments": true }]
   },
   "overrides": [
     {
@@ -22,6 +23,30 @@
     {
       "files": ["e2e/**", "test/**"],
       "env": { "browser": true }
+    },
+    {
+      "files": ["public/js/quicknotes.js"],
+      "rules": { "max-lines": ["error", { "max": 1029, "skipBlankLines": true, "skipComments": true }] }
+    },
+    {
+      "files": ["public/js/cards.js"],
+      "rules": { "max-lines": ["error", { "max": 863, "skipBlankLines": true, "skipComments": true }] }
+    },
+    {
+      "files": ["routes.js"],
+      "rules": { "max-lines": ["error", { "max": 510, "skipBlankLines": true, "skipComments": true }] }
+    },
+    {
+      "files": ["test/api.test.js"],
+      "rules": { "max-lines": ["error", { "max": 1095, "skipBlankLines": true, "skipComments": true }] }
+    },
+    {
+      "files": ["test/tasks.api.test.js"],
+      "rules": { "max-lines": ["error", { "max": 463, "skipBlankLines": true, "skipComments": true }] }
+    },
+    {
+      "files": ["addons/mcp/test/mcp.test.js"],
+      "rules": { "max-lines": ["error", { "max": 427, "skipBlankLines": true, "skipComments": true }] }
     }
   ]
 }

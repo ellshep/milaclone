@@ -2,7 +2,9 @@
 
 Loaded when you work under `public/`. Rules and invariants only; feature detail belongs in each module's header comment. 1,500-word cap (`npm run check:docs`).
 
-`public/js/*.js` are ES modules loaded via `<script type="module" src="/js/main.js">` from `index.html`. No framework and no bundling, except `editor.js` (TipTap), which `server.js` bundles into `public/vendor/editor.js` at boot.
+`public/js/*.js` are ES modules loaded via `<script type="module" src="/js/main.js">` from `index.html`. No bundling, except `editor.js` (TipTap), which `server.js` bundles into `public/vendor/editor.js` at boot.
+
+**Preact, one screen at a time** (roadmap D11): the Focus page, then Quick notes, then dialogs move when they're next reworked, each a whole screen in one PR. These stay vanilla: the canvas (`cards.js`, `drag.js`, `viewport.js`, `lines.js`, `tools.js`, selection), TipTap (`editor.js`, `rich.js`, `document.js`) and the shared modules (`api.js`, `savequeue.js`, `state.js`, `util.js`), which Preact screens import as they are. Never mix both styles in one screen.
 
 ## State and navigation
 
