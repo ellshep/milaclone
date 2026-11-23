@@ -577,7 +577,65 @@ test('tasks: the server stamps status changes and imports completed tasks withou
   );
 });
 
-test('tasks: board edits ignore legacy flags and preserve status metadata', async t => {
+test('tasks: a pre-deploy tab can untick tasks across saves', async t => {
+  const canvasId = await root();
+  const old = [
+    { id: 'legacy-closed', text: 'Archive invoice', done: true },
+    { id: 'legacy-open', text: 'Send quote', done: false },
+  ];
+  const created = await send('POST', '/api/item', { canvasId, type: 'todo', data: { tasks: old } });
+  const url = '/api/item/' + created.body.id;
+  const readTasks = async () => {
+    const { body } = await get('/api/canvas/' + canvasId);
+    return body.items.find(i => i.id === created.body.id).data.tasks;
+  };
+  const base = created.body.data.tasks;
+  const doneAt = 1800000000000;
+  let now = doneAt;
+  t.mock.method(Date, 'now', () => now);
+  const completed = await send('PATCH', url, {
+    baseTasks: base,
+    data: { tasks: [base[0], { ...base[1], status: 'done' }] },
+  });
+  assert.equal(completed.status, 200);
+
+  // F1.1 preserves the checkbox edit and the completion the old tab hasn't seen.
+  now += 1000;
+  const expected = [
+    { id: old[0].id, text: old[0].text, status: 'open', statusAt: now },
+    { id: old[1].id, text: old[1].text, status: 'done', statusAt: doneAt },
+  ];
+  const saved = await send('PATCH', url, {
+    baseTasks: old,
+    data: { tasks: [{ ...old[0], done: false }, old[1]] },
+  });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(await readTasks(), expected);
+
+  // The tab uses the acknowledgement as its next merge base. A text edit
+  // should leave the other device's task checked until the user unticks it.
+  const savedTasks = saved.body.data.tasks;
+  assert.deepEqual(savedTasks.map(task => task.done), [false, true]);
+  now += 1000;
+  const edited = await send('PATCH', url, {
+    baseTasks: savedTasks,
+    data: { tasks: [{ ...savedTasks[0], text: 'Archive receipt' }, savedTasks[1]] },
+  });
+  assert.equal(edited.status, 200);
+  const editedTask = { ...expected[0], text: 'Archive receipt' };
+  assert.deepEqual(await readTasks(), [editedTask, expected[1]]);
+
+  now += 1000;
+  const editedTasks = edited.body.data.tasks;
+  const unchecked = await send('PATCH', url, {
+    baseTasks: editedTasks,
+    data: { tasks: [editedTasks[0], { ...editedTasks[1], done: false }] },
+  });
+  assert.equal(unchecked.status, 200);
+  assert.deepEqual(await readTasks(), [editedTask, { ...expected[1], status: 'open', statusAt: now }]);
+});
+
+test('tasks: explicit board status wins over legacy flags', async t => {
   const canvasId = await root();
   const old = [
     { id: 'o1', text: 'Milk', done: true },
@@ -601,13 +659,6 @@ test('tasks: board edits ignore legacy flags and preserve status metadata', asyn
   assert.deepEqual(completed.body.data.tasks, current);
   now += 1000;
 
-  const tasks = old.map(task => ({ ...task, done: false, stale: true }));
-  for (const baseTasks of [old, current, undefined]) {
-    const saved = await send('PATCH', url, { baseTasks, data: { tasks } });
-    assert.equal(saved.status, 200);
-    assert.deepEqual(saved.body.data.tasks, current);
-  }
-
   const edited = await send('PATCH', url, {
     baseTasks: current,
     data: {
@@ -618,6 +669,7 @@ test('tasks: board edits ignore legacy flags and preserve status metadata', asyn
       ],
     },
   });
+  assert.equal(edited.status, 200);
   assert.deepEqual(edited.body.data.tasks, [current[0], { ...current[1], text: 'Free-range eggs' }, current[2]]);
 });
 

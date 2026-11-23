@@ -243,6 +243,7 @@ router.patch('/api/item/:id', (req, res) => {
   if (!row) return res.status(404).json({ error: 'not found' });
   const it = rowToItem(row);
   const b = req.body || {};
+  let legacyTaskReply = false;
   for (const k of ['x', 'y', 'w', 'h', 'z']) {
     if (b[k] != null) it[k] = Math.round(b[k]);
   }
@@ -262,8 +263,17 @@ router.patch('/api/item/:id', (req, res) => {
       const todo = it.type === 'todo';
       const mine = tasklist.withIds(b.data.tasks, () => id('t_'));
       if (todo && invalidTaskStatus(mine)) return badTaskStatus(res);
+      const base = b.baseTasks;
+      if (todo && Array.isArray(base)) {
+        const sent = base.concat(mine).filter(t => t && typeof t === 'object');
+        legacyTaskReply = sent.some(t => 'done' in t) && sent.every(t => !('status' in t));
+      }
       const tasks =
-        Array.isArray(b.baseTasks) && Array.isArray(stored) ? tasklist.merge(b.baseTasks, stored, mine, todo) : mine;
+        Array.isArray(base) && Array.isArray(stored)
+          ? tasklist.merge(base, stored, mine, todo)
+          : todo
+            ? mine.map(tasklist.upgradeTask)
+            : mine;
       it.data.tasks = todo ? tasklist.stampStatus(tasks, Array.isArray(stored) ? stored : [], Date.now()) : tasks;
     }
   }
@@ -311,6 +321,8 @@ router.patch('/api/item/:id', (req, res) => {
     });
   })();
 
+  // A pre-deploy tab uses this reply as both its display and its next merge base.
+  if (legacyTaskReply) it.data.tasks = it.data.tasks.map(({ status, ...t }) => ({ ...t, done: status === 'done' }));
   res.json(it);
 });
 
