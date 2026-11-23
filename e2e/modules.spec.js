@@ -75,6 +75,25 @@ test('link card normalizes a bare host to an https open URL', async ({ page }) =
   await expect(link.locator('a.open')).toHaveAttribute('href', 'https://example.com');
 });
 
+test('link card keeps a note under its URL, with Open on the URL row', async ({ page }) => {
+  const id = await freshCanvas(page);
+  await place(page, 'link');
+  const link = page.locator('.item.type-link');
+  await expect(link.locator('.ltitle')).toBeFocused(); // the note editor mounting doesn't steal the caret
+  await expect(link.locator('.lrow .lurl + a.open')).toHaveCount(1);
+
+  await link.locator('.lurl').fill('example.com');
+  await link.locator('.lnote').click();
+  await expect(link.locator('.lnote .ProseMirror')).toBeFocused();
+  const saved = page.waitForResponse(r => PATCH(r) && (r.request().postData() || '').includes('Read later'));
+  await page.keyboard.type('Read later');
+  await saved;
+  await leaveEdit(page);
+
+  await page.goto('/#' + id);
+  await expect(page.locator('.item.type-link .lnote')).toHaveText('Read later');
+});
+
 test('free-dragging a note persists its new position across reload', async ({ page }) => {
   const id = await freshCanvas(page);
   await place(page, 'note', 600, 380);

@@ -1064,23 +1064,42 @@ textarea {
   border: none;
   width: 100%;
   background: none;
+  padding: 0;
   margin-bottom: 4px;
 }
+.link .lrow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
 .link .lurl {
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
   color: var(--accent);
-  word-break: break-all;
+  text-overflow: ellipsis;
   outline: none;
   border: none;
-  width: 100%;
   background: none;
+  padding: 0;
 }
 .link a.open {
+  flex: none;
   font-size: 12px;
   color: var(--accent);
   text-decoration: none;
-  display: inline-block;
-  margin-top: 6px;
+}
+.link .lnote {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--card-border);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-body);
+}
+/* an empty note only shows while editing */
+.link:not(.editing) .lnote[data-empty] {
+  display: none;
 }
 
 /* ---------- image ---------- */

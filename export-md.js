@@ -5,8 +5,8 @@ const { isBlank, isDone } = require('./tasklist');
 
 // A board as Markdown in the shape scripts/import-milanote-md.js reads back:
 // `# board` sections, `## first line` + lines for notes and comments, `## title`
-// + `- [ ]` tasks for to-dos, and `[title](url)` / `![name](url)` lines for links,
-// files and images. Formatting is dropped: notes export their plain `data.text`.
+// + `- [ ]` tasks for to-dos, `[title](url)` (+ note lines) for links, and
+// `![name](url)` / `[name](url)` lines for images and files. Formatting is dropped: notes export their plain `data.text`.
 // ponytail: the importer nests boards one level deep, so every board below this
 // one becomes a flat `#` section; a note line that itself looks like Markdown
 // syntax (`# x`, `- [ ] x`, `[a](b)`) is re-read as that syntax.
@@ -44,7 +44,14 @@ function cardLines(it, origin) {
       '',
     ];
   }
-  if (it.type === 'link' && d.url) return [`[${label(d.title) || label(d.url)}](${url(d.url)})`, ''];
+  if (it.type === 'link' && d.url) {
+    // ponytail: a link's note follows as plain lines, which the importer reads back as a separate note
+    const note = String(d.text || '')
+      .split('\n')
+      .map(l => l.trim())
+      .filter(Boolean);
+    return [`[${label(d.title) || label(d.url)}](${url(d.url)})`, ...note, ''];
+  }
   if ((it.type === 'image' || it.type === 'file') && d.src) {
     const href = url(d.src.startsWith('/') ? origin + d.src : d.src);
     return [`${it.type === 'image' ? '!' : ''}[${label(d.caption || d.name) || 'file'}](${href})`, ''];

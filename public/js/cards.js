@@ -227,7 +227,7 @@ function buildNote(el, it) {
   el.appendChild(richField('nbody', it, 'Write a note…'));
 }
 
-// A note/comment body: the static render of data.doc; editing the card swaps
+// A note/comment/link body: the static render of data.doc; editing the card swaps
 // in TipTap (rich.js).
 function richField(cls, it, placeholder) {
   const f = document.createElement('div');
@@ -442,9 +442,9 @@ function buildLink(el, it) {
   const bar = document.createElement('div');
   bar.className = 'lbar';
   bar.style.background = colorVar(it.color || 'blue');
-  el.appendChild(bar);
   const body = document.createElement('div');
   body.className = 'lbody';
+  el.append(bar, body);
   const title = makeField('input', 'ltitle', it.data.title, 'Link title');
   const url = makeField('input', 'lurl', it.data.url, 'https://…');
   title.addEventListener('input', () => saveData(it, { title: title.value }));
@@ -459,10 +459,9 @@ function buildLink(el, it) {
   open.textContent = 'Open ↗';
   open.href = normalizeUrl(it.data.url || '#');
   open.setAttribute('data-nodrag', '');
-  body.appendChild(title);
-  body.appendChild(url);
-  body.appendChild(open);
-  el.appendChild(body);
+  const row = Object.assign(document.createElement('div'), { className: 'lrow' });
+  row.append(url, open);
+  body.append(title, row, richField('lnote', it, 'Add a note…'));
 }
 
 function buildImage(el, it) {
