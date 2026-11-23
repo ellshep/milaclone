@@ -2,12 +2,14 @@
 
 import { state, dom, elMap } from './state.js';
 import { api } from './api.js';
-import { isLocked, zRange, snap } from './util.js';
+import { isLocked, zRange, snap, autoGrow } from './util.js';
 import { screenToWorld } from './viewport.js';
 import { select, enterEdit, toggleSelect, selectedItems } from './editing.js';
 import { render } from './cards.js';
+import { sendUp } from './clipboard.js';
 
 // Dragging cards (free-move + in/out of columns, several at once) and resizing.
+// Dropping onto a breadcrumb above this board moves the cards up to that board.
 
 export function onItemPointerDown(e, it, el) {
   if (e.button !== 0) return; // middle-drag falls through to the stage and pans
@@ -74,7 +76,9 @@ export function onItemPointerDown(e, it, el) {
       o.el.style.left = o.x + wx - startWorld.x + 'px';
       o.el.style.top = o.y + wy - startWorld.y + 'px';
     }
-    if (!others.length) highlightColumn(ev, it);
+    state.drag.dropCrumb = highlightCrumb(ev);
+    if (!others.length && !state.drag.dropCrumb) highlightColumn(ev, it);
+    else clearColumnHighlight();
   };
 
   const up = ev => {
@@ -127,9 +131,37 @@ function highlightColumn(ev, it) {
   if (body) body.closest('.column').classList.add('drop-target');
 }
 
-async function finishDrag(ev) {
-  const { it, el } = state.drag;
+// The breadcrumb under the pointer, if it names a board above this one.
+function highlightCrumb(ev) {
+  let hit = null;
+  dom.crumbs.querySelectorAll('.crumb').forEach((b, i) => {
+    const r = b.getBoundingClientRect();
+    const on =
+      !b.classList.contains('current') &&
+      ev.clientX >= r.left &&
+      ev.clientX <= r.right &&
+      ev.clientY >= r.top - 6 &&
+      ev.clientY <= r.bottom + 6;
+    b.classList.toggle('drop-target', on);
+    if (on) hit = state.view.breadcrumb[i];
+  });
+  return hit;
+}
+
+function clearColumnHighlight() {
+  state.drag.dropCol = null;
   dom.world.querySelectorAll('.column.drop-target').forEach(c => c.classList.remove('drop-target'));
+}
+
+async function finishDrag(ev) {
+  const { it, el, dropCrumb, others } = state.drag;
+  dom.world.querySelectorAll('.column.drop-target').forEach(c => c.classList.remove('drop-target'));
+  dom.crumbs.querySelectorAll('.crumb.drop-target').forEach(c => c.classList.remove('drop-target'));
+  if (dropCrumb) {
+    state.drag = null;
+    await sendUp([it.id, ...others.map(o => o.it.id)], dropCrumb);
+    return;
+  }
   if (state.drag.dropCol) {
     const order = insertOrder(state.drag.dropCol, ev.clientY, it.id);
     it.parentItemId = state.drag.dropCol;
@@ -206,6 +238,7 @@ export function startResize(e, it, el) {
     w = Math.max(120, Math.min(900, w));
     el.style.width = w + 'px';
     it.w = Math.round(w);
+    el.querySelectorAll('textarea').forEach(autoGrow); // wrapped text reflows to the new width
   };
   const up = () => {
     el.releasePointerCapture(e.pointerId);

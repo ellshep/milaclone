@@ -1,24 +1,33 @@
 'use strict';
 
-import { state, dom, elMap, COLORS, BOARD_ICONS } from './state.js';
+import { state, dom, elMap, COLORS } from './state.js';
 import { api } from './api.js';
-import { colorVar, lucideEl, refreshIcons, isLocked, zRange, toast } from './util.js';
+import { colorVar, isLocked, zRange, toast } from './util.js';
+import { iconPicker } from './iconpicker.js';
 import { refreshItem, render } from './cards.js';
 import { select, renameSelected, deleteSelection, selectedItems } from './editing.js';
-import { copySelected, pasteClipboard, duplicateSelected, toggleLock } from './clipboard.js';
+import { copySelected, pasteClipboard, duplicateSelected, toggleLock, sendUp } from './clipboard.js';
 import { setLine, editLabel } from './lines.js';
 import { openLabels } from './labels.js';
 
 // The floating color/icon palette and the right-click context menu.
 
-// mode: 'color' | 'icon' | 'auto' (auto = colors, plus icons for boards — legacy badge path)
-export function openPalette(it, anchor, mode = 'auto') {
-  while (dom.palette.firstChild) dom.palette.removeChild(dom.palette.firstChild);
-  const showColor = mode === 'color' || mode === 'auto';
-  const showIcon = mode === 'icon' || (mode === 'auto' && it.type === 'board');
-  dom.palette.className = 'open' + (showIcon ? ' board-palette' : '') + (mode === 'icon' ? ' icon-only' : '');
+// mode: 'color' (swatches) | 'icon' (a board's icon search, iconpicker.js)
+export function openPalette(it, anchor, mode) {
+  const icon = mode === 'icon';
+  dom.palette.replaceChildren();
+  dom.palette.className = 'open' + (icon ? ' icon-only' : '');
 
-  if (showColor) {
+  if (icon) {
+    dom.palette.appendChild(
+      iconPicker(it._childIcon || 'layout-grid', name => {
+        it._childIcon = name;
+        api.patch(it.id, { data: { icon: name } });
+        refreshItem(it);
+        closePalette();
+      })
+    );
+  } else {
     // The 12 colours, then None (null clears the colour) — except on cards that
     // fall back to a default colour, where None would look like a swatch.
     const none = ['todo', 'board', 'column'].includes(it.type) ? [] : [null];
@@ -42,44 +51,23 @@ export function openPalette(it, anchor, mode = 'auto') {
     });
   }
 
-  if (showIcon) {
-    if (showColor) {
-      const sep = document.createElement('div');
-      sep.className = 'pal-sep';
-      dom.palette.appendChild(sep);
-    }
-    const grid = document.createElement('div');
-    grid.className = 'icon-grid';
-    const current = it._childIcon || 'layout-grid';
-    BOARD_ICONS.forEach(name => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'icon-pick' + (name === current ? ' sel' : '');
-      btn.title = name;
-      btn.appendChild(lucideEl(name));
-      btn.onclick = () => {
-        it._childIcon = name;
-        api.patch(it.id, { data: { icon: name } });
-        refreshItem(it);
-        closePalette();
-      };
-      grid.appendChild(btn);
-    });
-    dom.palette.appendChild(grid);
-  }
-
+  // Open below the anchor, or above it when there isn't room (the mobile footer).
+  // On a touch screen the keyboard covers the lower half, so icon search opens at the top.
+  const touch = matchMedia('(hover: none)').matches;
   const r = anchor.getBoundingClientRect();
-  const w = showIcon ? 280 : 210;
-  let left = Math.min(r.left, window.innerWidth - w - 8);
+  const w = icon ? 280 : 210;
+  const h = dom.palette.offsetHeight;
   let top = r.bottom + 8;
-  if (top + 220 > window.innerHeight) top = Math.max(8, r.top - 228);
-  dom.palette.style.left = Math.max(8, left) + 'px';
+  if (icon && touch) top = 8;
+  else if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 8);
+  dom.palette.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
   dom.palette.style.top = top + 'px';
-  refreshIcons(dom.palette);
+  // Type to search straight away, but don't pop a phone keyboard before it's asked for.
+  if (icon && !touch) dom.palette.querySelector('.icon-search').focus();
 }
 
 export function closePalette() {
-  dom.palette.classList.remove('open', 'board-palette', 'icon-only');
+  dom.palette.classList.remove('open', 'icon-only');
   while (dom.palette.firstChild) dom.palette.removeChild(dom.palette.firstChild);
 }
 
@@ -91,6 +79,7 @@ export function openCtx(e, it) {
   const locked = isLocked(it);
   const mac = /Mac|iPhone|iPad/.test(navigator.platform);
   const mod = mac ? '⌘' : 'Ctrl+';
+  const parent = state.view.breadcrumb.at(-2); // none on Home
   const trashRow = {
     label: many ? `Move ${state.selection.size} to Trash` : 'Move to Trash',
     hint: 'Delete',
@@ -118,6 +107,19 @@ export function openCtx(e, it) {
           { label: 'Copy', hint: mod + 'C', fn: () => copySelected(false) },
           { label: 'Paste', hint: mod + 'V', fn: () => pasteClipboard(), disabled: !state.clipboard },
           { label: 'Duplicate', hint: mod + 'D', fn: () => duplicateSelected() },
+          ...(parent
+            ? [
+                {
+                  label: `Send ${many ? state.selection.size + ' ' : ''}to ${parent.title}`,
+                  fn: () =>
+                    sendUp(
+                      selectedItems()
+                        .filter(i => i.type !== 'line')
+                        .map(i => i.id)
+                    ),
+                },
+              ]
+            : []),
           { sep: true },
           ...(it.parentItemId
             ? []

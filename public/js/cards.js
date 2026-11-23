@@ -20,7 +20,7 @@ import {
   dueInfo,
   clampIndents,
 } from './util.js';
-import { select, enterEdit, exitEdit, saveData, deleteItem, trackTasks } from './editing.js';
+import { enterEdit, exitEdit, saveData, deleteItem, trackTasks } from './editing.js';
 import { openPalette, openCtx } from './menus.js';
 import { updateSelectionChrome } from './boardchrome.js';
 import { onItemPointerDown, startResize } from './drag.js';
@@ -32,6 +32,7 @@ import { openDocument } from './document.js';
 import { drawLines } from './lines.js';
 import { labelChips, applyFilter } from './labels.js';
 import { buildAgent } from './agentcard.js';
+import { buildBoard, buildShortcut } from './boardcard.js';
 
 // Rendering of the canvas and every card type. This module owns the DOM for
 // items; other modules ask it to (re)render when data changes.
@@ -153,7 +154,7 @@ function renderItem(it) {
   else if (it.type === 'image') buildImage(el, it);
   else if (it.type === 'file') buildFile(el, it);
   else if (it.type === 'comment') buildComment(el, it);
-  else if (it.type === 'board') buildBoard(el, it);
+  else if (it.type === 'board') buildBoard(el, it, makeField);
   else if (it.type === 'column') buildColumn(el, it);
   else if (it.type === 'swatch') buildSwatch(el, it);
   else if (it.type === 'table') buildTable(el, it);
@@ -212,7 +213,7 @@ function renderItem(it) {
     el.appendChild(lockBadge);
   }
 
-  if (it.type !== 'board' && !it.parentItemId && !isLocked(it)) {
+  if (!it.parentItemId && !isLocked(it)) {
     const rz = document.createElement('div');
     rz.className = 'resize';
     rz.setAttribute('data-nodrag', '');
@@ -230,7 +231,7 @@ function buildNote(el, it) {
   el.appendChild(richField('nbody', it, 'Write a note…'));
 }
 
-// A note/comment body: the static render of data.doc; editing the card swaps
+// A note/comment/link body: the static render of data.doc; editing the card swaps
 // in TipTap (rich.js).
 function richField(cls, it, placeholder) {
   const f = document.createElement('div');
@@ -445,9 +446,9 @@ function buildLink(el, it) {
   const bar = document.createElement('div');
   bar.className = 'lbar';
   bar.style.background = colorVar(it.color || 'blue');
-  el.appendChild(bar);
   const body = document.createElement('div');
   body.className = 'lbody';
+  el.append(bar, body);
   const title = makeField('input', 'ltitle', it.data.title, 'Link title');
   const url = makeField('input', 'lurl', it.data.url, 'https://…');
   title.addEventListener('input', () => saveData(it, { title: title.value }));
@@ -462,10 +463,9 @@ function buildLink(el, it) {
   open.textContent = 'Open ↗';
   open.href = normalizeUrl(it.data.url || '#');
   open.setAttribute('data-nodrag', '');
-  body.appendChild(title);
-  body.appendChild(url);
-  body.appendChild(open);
-  el.appendChild(body);
+  const row = Object.assign(document.createElement('div'), { className: 'lrow' });
+  row.append(url, open);
+  body.append(title, row, richField('lnote', it, 'Add a note…'));
 }
 
 function buildImage(el, it) {
@@ -518,97 +518,6 @@ function buildFile(el, it) {
     el.classList.add('has-media');
     el.appendChild(media);
   }
-}
-
-function buildBoard(el, it) {
-  el.classList.add('board');
-  const tile = document.createElement('div');
-  tile.className = 'tile';
-  tile.style.background = colorVar(it.color || it._childColor || 'slate');
-  tile.appendChild(lucideEl(it._childIcon || 'layout-grid'));
-  el.appendChild(tile);
-  const title = makeField('input', 'btitle', it._childTitle || 'Untitled board', 'Board name');
-  title.setAttribute('data-nodrag', '');
-  title.addEventListener('input', () => saveData(it, { title: title.value }));
-  title.addEventListener('click', e => {
-    e.stopPropagation();
-    // A touch double-tap opens the board on pointerup; don't fall through into rename.
-    if (el.dataset.suppressTitleClick) {
-      delete el.dataset.suppressTitleClick;
-      return;
-    }
-    if (state.selectedId !== it.id) {
-      select(it.id);
-      return;
-    }
-    enterEdit(el);
-    title.focus();
-    title.select();
-  });
-  el.appendChild(title);
-  const meta = document.createElement('div');
-  meta.className = 'bmeta';
-  const n = it._childCount || 0;
-  meta.textContent = n + (n === 1 ? ' card' : ' cards');
-  el.appendChild(meta);
-  bindBoardOpen(el, it);
-}
-
-// An alias of another board: opens it, and reads as broken once it's trashed.
-function buildShortcut(el, it) {
-  el.classList.add('board', 'shortcut');
-  const t = it._target;
-  el.classList.toggle('broken', !t);
-  const tile = document.createElement('div');
-  tile.className = 'tile';
-  tile.style.background = t ? colorVar(t.color || 'slate') : 'var(--hover-strong)';
-  tile.appendChild(lucideEl(t ? t.icon : 'unlink'));
-  const badge = document.createElement('span');
-  badge.className = 'sc-badge';
-  badge.appendChild(lucideEl('corner-up-right'));
-  tile.appendChild(badge);
-  el.appendChild(tile);
-  const title = document.createElement('div');
-  title.className = 'btitle';
-  title.textContent = t ? t.title : 'Missing board';
-  el.appendChild(title);
-  const meta = document.createElement('div');
-  meta.className = 'bmeta';
-  meta.textContent = t ? 'Shortcut' : 'Board in trash';
-  el.appendChild(meta);
-  bindBoardOpen(el, it, t ? it.data.targetCanvasId : null);
-}
-
-// Desktop mouse gets a real dblclick; mobile Safari/WebKit does not synthesize
-// one from a double-tap, so we also detect a second quick, unmoved pointerup.
-function bindBoardOpen(el, it, target = it.data.childCanvasId) {
-  let lastTap = -Infinity,
-    lastX = 0,
-    lastY = 0;
-  const open = () => {
-    exitEdit();
-    if (target) openCanvas(target);
-    else toast('The board this shortcut opens is in the trash');
-  };
-  el.addEventListener('dblclick', e => {
-    if (el.classList.contains('editing') && e.target.closest('[data-edit]')) return;
-    open();
-  });
-  el.addEventListener('pointerup', e => {
-    if (e.pointerType === 'mouse') return; // mouse keeps using dblclick
-    if (state.drag && state.drag.moved) return; // was a drag, not a tap
-    if (state.drag && state.drag.it && state.drag.it.id !== it.id) return;
-    const now = performance.now();
-    if (now - lastTap < 350 && Math.hypot(e.clientX - lastX, e.clientY - lastY) < 28) {
-      lastTap = -Infinity;
-      el.dataset.suppressTitleClick = '1';
-      open();
-      return;
-    }
-    lastTap = now;
-    lastX = e.clientX;
-    lastY = e.clientY;
-  });
 }
 
 // A colour chip plus its hex; clicking the chip copies the hex.
