@@ -2,6 +2,9 @@
 # Claude Code PreToolUse hook (.claude/settings.json). The scanner checks
 # leading words in shell segments to catch direct pushes and PR creation.
 # See CONTRIBUTING.md "Shipping a change" for the shipping rule.
+# Claude Code cloud sessions (CLAUDE_CODE_REMOTE=true) can't run Treehouse or
+# the gate, so they are exempt: they push and open PRs directly, and CI is the gate.
+[ "$CLAUDE_CODE_REMOTE" = "true" ] && exit 0
 if jq -e '
   def push_remote:
     if length == 0 then null

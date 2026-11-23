@@ -5,7 +5,7 @@ The one list of open work. Agents and people read it before starting and update 
 - One line per item: ID, what's wrong or wanted, where, and the fix if known. Link a longer spec only when one exists.
 - **Now** is what's being worked on, **Next** is ready to pick up, **Later** is accepted but not soon, **Needs a decision** is blocked on the owner.
 - When an item ships, delete its line in that PR (the PR is the record). **Closed** keeps the last few for reference; trim it past ten lines.
-- IDs never get reused. `AU` = code audit finding, `DM` = deep-module candidate, `V` = voice add-on, `U` = `docs/next-updates.md`, `AG` = board agents (`docs/agent-addon.md`).
+- IDs never get reused. `AU` = code audit finding, `DM` = deep-module candidate, `V` = voice add-on, `U` = `docs/next-updates.md`, `AG` = board agents (`docs/agent-addon.md`), `Q` = test and quality tooling, `FE` = moving screens to Preact (roadmap D11).
 - Word cap 2,000 (`npm run check:docs`). If it doesn't fit, it's too detailed for this file.
 
 Sources: the code audit of 2026-11-20 (Ponytail audit + Matt Pocock's `improve-codebase-architecture` pass; full write-up kept outside the repo), `docs/next-updates.md`, and the open items from the old voice handoff notes.
@@ -22,6 +22,9 @@ Nothing in progress: pick from Next.
 
 ## Later
 
+- **FE** Move screens to Preact (roadmap D11), work items FE1–FE3 in `docs/preact-migration.md`: the Focus page after V5's F2/F3 and before F4; Quick notes after DM4, AU16, AU20, AU21 and before F8; dialogs only when next reworked.
+- **DM6** Split `cards.js` (863 code lines) by card type, staying vanilla. Clears its ceiling.
+- **DM7** Split `routes.js` (510 code lines) by area: canvases and items, focus and todos, trash, uploads and backup. Clears its ceiling.
 - **DM4** Move `openCanvas`/`reloadView` out of `main.js` into a navigation module so the 8 modules that import it become unit-testable.
 - **DM5** One board-view module for adding/removing cards; `create.js` doesn't check `it.error`, so a 400 renders an `{error}` card (`capture.js:26`, `create.js:47`, `lines.js:171`, `menus.js:208`).
 - **AU12** The 11-field `stmt.updateItem` write is copied three times (`routes.js:319`, `routes.js:353`, `tasks-api.js:174`) and the `_child*` projection twice. Fix: `saveItem(it)` in `db.js`. Overlaps DM3.
@@ -37,6 +40,7 @@ Nothing in progress: pick from Next.
 - **AU23** Cutting two connected cards together leaves their line behind with two free ends: clipboard.js sends one /move per card, so the first move frees the end before the second card follows (`clipboard.js:52`, `db.js` moveItemDeep). Fix: one /move with all ids and a shared inside set.
 - **AU24** A line trashed with one card comes back invisible if its other card was moved away before the restore (`db.js` restore). Fix: run the same free-the-end step on restore.
 - **U1.1, U1.4, U1.5** Milanote migration: backup and inventory, staged import, reconciliation report. Specs in `docs/next-updates.md`.
+- **Q1** Mutation testing for the pure logic modules (`tasklist.js`, `focus.js` ranking, `savequeue.js`, `util.js`), on demand (`npm run mutate`) or a weekly non-required job. StrykerJS 10 covers both runners (Vitest runner; TAP runner for `node --test`). mizchi/mutator (oxc-based, much faster reruns, `--since main` PR mode) needs Vitest 5 and Node 24 and is Vitest-only; revisit after those upgrades.
 
 ## Needs a decision
 
