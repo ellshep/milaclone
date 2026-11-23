@@ -2,7 +2,7 @@
 
 import { state, dom, elMap } from './state.js';
 import { api } from './api.js';
-import { isLocked, zRange, snap } from './util.js';
+import { isLocked, zRange, snap, autoGrow } from './util.js';
 import { screenToWorld } from './viewport.js';
 import { select, enterEdit, toggleSelect, selectedItems } from './editing.js';
 import { render } from './cards.js';
@@ -262,6 +262,7 @@ export function startResize(e, it, el) {
     w = Math.max(120, Math.min(900, w));
     el.style.width = w + 'px';
     it.w = Math.round(w);
+    el.querySelectorAll('textarea').forEach(autoGrow); // wrapped text reflows to the new width
   };
   const up = () => {
     el.releasePointerCapture(e.pointerId);

@@ -1,7 +1,7 @@
 'use strict';
 
 // Behavioral coverage for module features the original ui.spec.js doesn't
-// exercise: clipboard.js (copy/cut/paste), menus.js (color palette), cards.js +
+// exercise: clipboard.js (copy/cut/paste), menus.js (colour palette, icon search), cards.js +
 // util.js (link normalization), drag.js (free move + resize), editing.js
 // (keyboard rename), and viewport.js (pan).
 
@@ -117,6 +117,52 @@ test('resizing a note persists its new width across reload', async ({ page }) =>
   expect(after.width - before.width).toBeGreaterThan(80);
 });
 
+test('a long board name wraps, Enter ends the rename, and the board card resizes', async ({ page }) => {
+  const id = await freshCanvas(page);
+  const name = 'A very long board name that would never fit on one line of a board card';
+  await page.evaluate(
+    ([canvasId, title]) =>
+      fetch('/api/item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canvasId, type: 'board', x: 300, y: 200, w: 152, data: { title } }),
+      }),
+    [id, name]
+  );
+  await page.reload();
+  const board = page.locator('.item.type-board');
+  const title = board.locator('.btitle');
+  await expect(title).toHaveValue(name);
+  const box = await board.boundingBox();
+  const tb = await title.boundingBox();
+  expect(tb.height).toBeGreaterThan(40); // wrapped onto several lines, not clipped
+  expect(tb.width).toBeLessThanOrEqual(box.width);
+
+  // Enter ends the rename instead of adding a line break.
+  await board.locator('.tile').click();
+  await page.keyboard.press('Enter');
+  await expect(title).toBeFocused();
+  await page.keyboard.press('End');
+  const saved = page.waitForResponse(PATCH);
+  await page.keyboard.type('!');
+  await saved;
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.item.editing')).toHaveCount(0);
+  await expect(title).toHaveValue(name + '!');
+
+  // The resize handle widens the board, so the name takes fewer lines.
+  const hb = await board.locator('.resize').boundingBox();
+  const resized = page.waitForResponse(PATCH);
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb.x + hb.width / 2 + 300, hb.y + hb.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await resized;
+  await page.reload();
+  expect((await board.boundingBox()).width - box.width).toBeGreaterThan(250);
+  expect((await title.boundingBox()).height).toBeLessThan(tb.height);
+});
+
 test('Enter renames the selected board and the name persists', async ({ page }) => {
   const id = await freshCanvas(page);
   await place(page, 'board');
@@ -187,4 +233,26 @@ test('board selection chrome replaces the badge with rail actions', async ({ pag
   await page.locator('#railBoardDelete').click();
   await expect(page.locator('.item.type-board')).toHaveCount(0);
   await expect(page.locator('#railCreate')).toBeVisible();
+});
+
+test('board icon picker searches every Lucide icon and saves the pick', async ({ page }) => {
+  await freshCanvas(page);
+  await place(page, 'board');
+  await page.keyboard.press('Escape');
+  const card = page.locator('.item.type-board');
+  await card.locator('.tile').click();
+
+  await page.locator('#railBoardIcon').click();
+  const search = page.locator('#palette .icon-search');
+  await expect(search).toBeFocused();
+  await expect(page.locator('#palette .icon-pick')).toHaveCount(24); // the suggestions
+
+  await page.keyboard.type('rocket'); // not one of the suggestions
+  await expect(page.locator('#palette .icon-pick[title="rocket"] svg')).toHaveCount(1);
+  const saved = page.waitForResponse(PATCH);
+  await page.keyboard.press('Enter');
+  expect((await saved).request().postDataJSON().data.icon).toBe('rocket');
+  await expect(page.locator('#palette.open')).toHaveCount(0);
+  await expect(card.locator('.tile svg.lucide-rocket')).toHaveCount(1);
+  await expect(card.locator('.btitle')).not.toBeFocused(); // Enter picked; it didn't also rename
 });
