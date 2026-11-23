@@ -65,8 +65,8 @@ mockup and this text disagree, the text wins.
   - A boot migration (after a `VACUUM INTO` backup, like `migrateRichText`)
     turns `done: true` into `status: "done"` with `statusAt: null`, and drops
     `done` and `stale`.
-  - Board autosaves use `status`. Tabs holding a pre-deploy task list can
-    still save checkbox edits using `done`. Card creation accepts `done` for imports.
+  - Reload open tabs after this deploy. Board autosaves use `status`; card
+    creation still accepts legacy `done` for imports.
   - Every reader moves over: `focus.js`, `tasks-api.js`, `export-md.js`,
     `scripts/import-milanote-md.js`, `public/js/cards.js`, `quicknotes.js`,
     `focuspage.js`, and the voice add-on where it reads `done`.

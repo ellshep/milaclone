@@ -155,18 +155,17 @@ const normChecklistTask = t => ({ ...normFields(t), done: !!t.done });
 // star, and only fields the client sent count, so one it doesn't know about
 // (e.g. `indent` from an older Quick notes) isn't a deletion.
 function merge(base, server, mine, todo = true) {
-  const edited = todo ? mine.map(upgradeTask) : mine;
   // A base with missing or repeated ids comes from a page loaded before ids were
   // repaired: it can't be matched to the server's tasks, so the client's list wins.
   const baseIds = base.map(t => isObj(t) && t.id);
-  if (!baseIds.every(Boolean) || new Set(baseIds).size !== baseIds.length) return edited;
+  if (!baseIds.every(Boolean) || new Set(baseIds).size !== baseIds.length) return mine;
   const normalize = todo ? normTask : normChecklistTask;
   const byId = list => new Map(list.map(t => [t.id, t]));
   const B = byId(base),
     S = byId(server),
-    M = byId(edited);
+    M = byId(mine);
   const out = [];
-  for (const t of edited) {
+  for (const t of mine) {
     const b = B.get(t.id),
       s = S.get(t.id);
     if (b && !s) continue; // deleted elsewhere
@@ -175,9 +174,12 @@ function merge(base, server, mine, todo = true) {
       continue;
     }
     const nt = normalize(t),
-      nb = normalize(todo ? upgradeTask(b) : b);
+      nb = normalize(b);
     const merged = { ...s };
-    for (const k of Object.keys(t)) if (!same(nt[k], nb[k])) merged[k] = t[k];
+    for (const k of Object.keys(t)) {
+      if (todo && (k === 'done' || k === 'stale')) continue;
+      if (!same(nt[k], nb[k])) merged[k] = t[k];
+    }
     out.push(merged);
   }
   for (const t of server) if (!B.has(t.id) && !M.has(t.id)) out.push(t); // added elsewhere
