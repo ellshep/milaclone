@@ -6,10 +6,11 @@ import { isLocked, zRange, snap, autoGrow } from './util.js';
 import { screenToWorld } from './viewport.js';
 import { select, enterEdit, toggleSelect, selectedItems } from './editing.js';
 import { render } from './cards.js';
-import { sendUp } from './clipboard.js';
+import { sendUp, sendInto } from './clipboard.js';
 
 // Dragging cards (free-move + in/out of columns, several at once) and resizing.
-// Dropping onto a breadcrumb above this board moves the cards up to that board.
+// Dropping onto a breadcrumb above this board moves the cards up to that board;
+// dropping onto a board card moves them into it.
 
 export function onItemPointerDown(e, it, el) {
   if (e.button !== 0) return; // middle-drag falls through to the stage and pans
@@ -77,7 +78,9 @@ export function onItemPointerDown(e, it, el) {
       o.el.style.top = o.y + wy - startWorld.y + 'px';
     }
     state.drag.dropCrumb = highlightCrumb(ev);
-    if (!others.length && !state.drag.dropCrumb) highlightColumn(ev, it);
+    state.drag.dropBoard = state.drag.dropCrumb ? null : highlightBoard(ev);
+    el.classList.toggle('dropping-in', !!state.drag.dropBoard);
+    if (!others.length && !state.drag.dropCrumb && !state.drag.dropBoard) highlightColumn(ev, it);
     else clearColumnHighlight();
   };
 
@@ -148,18 +151,39 @@ function highlightCrumb(ev) {
   return hit;
 }
 
+// The topmost free board card under the pointer that isn't being dragged.
+function highlightBoard(ev) {
+  const dragged = new Set([state.drag.it.id, ...state.drag.others.map(o => o.it.id)]);
+  let hit = null;
+  for (const b of state.view.items) {
+    if (b.type !== 'board' || b.parentItemId || dragged.has(b.id)) continue;
+    const r = elMap.get(b.id)?.getBoundingClientRect();
+    const on = r && ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+    if (on && (!hit || (b.z || 0) >= (hit.z || 0))) hit = b;
+  }
+  dom.world.querySelectorAll('.board.drop-target').forEach(c => c.classList.remove('drop-target'));
+  if (hit) elMap.get(hit.id).classList.add('drop-target');
+  return hit;
+}
+
 function clearColumnHighlight() {
   state.drag.dropCol = null;
   dom.world.querySelectorAll('.column.drop-target').forEach(c => c.classList.remove('drop-target'));
 }
 
 async function finishDrag(ev) {
-  const { it, el, dropCrumb, others } = state.drag;
-  dom.world.querySelectorAll('.column.drop-target').forEach(c => c.classList.remove('drop-target'));
+  const { it, el, dropCrumb, dropBoard, others } = state.drag;
+  el.classList.remove('dropping-in');
+  dom.world.querySelectorAll('.drop-target').forEach(c => c.classList.remove('drop-target'));
   dom.crumbs.querySelectorAll('.crumb.drop-target').forEach(c => c.classList.remove('drop-target'));
   if (dropCrumb) {
     state.drag = null;
     await sendUp([it.id, ...others.map(o => o.it.id)], dropCrumb);
+    return;
+  }
+  if (dropBoard) {
+    state.drag = null;
+    await sendInto([it.id, ...others.map(o => o.it.id)], dropBoard);
     return;
   }
   if (state.drag.dropCol) {

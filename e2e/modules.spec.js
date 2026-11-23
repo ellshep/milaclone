@@ -1,7 +1,7 @@
 'use strict';
 
 // Behavioral coverage for module features the original ui.spec.js doesn't
-// exercise: clipboard.js (copy/cut/paste), menus.js (colour palette, icon search), cards.js +
+// exercise: clipboard.js (copy/cut/paste), menus.js (colour palette and custom colours, icon search), cards.js +
 // util.js (link normalization), cards.js accent stripes, drag.js (free move + resize), editing.js
 // (keyboard rename), and viewport.js (pan).
 
@@ -300,4 +300,22 @@ test('board icon picker searches every Lucide icon and saves the pick', async ({
   await expect(page.locator('#palette.open')).toHaveCount(0);
   await expect(card.locator('.tile svg.lucide-rocket')).toHaveCount(1);
   await expect(card.locator('.btitle')).not.toBeFocused(); // Enter picked; it didn't also rename
+});
+
+test('colour palette saves a custom colour from the colour wheel', async ({ page }) => {
+  await freshCanvas(page);
+  await place(page, 'board');
+  await page.keyboard.press('Escape');
+  const card = page.locator('.item.type-board');
+  await card.locator('.tile').click();
+
+  await page.locator('#railBoardColor').click();
+  const saved = page.waitForResponse(PATCH);
+  await page.locator('#palette .sw-custom input').fill('#123456'); // the native picker's commit
+  expect((await saved).request().postDataJSON().color).toBe('#123456');
+  await expect(page.locator('#palette.open')).toHaveCount(0);
+  await expect(card.locator('.tile')).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+
+  await page.locator('#railBoardColor').click(); // reopened: the custom swatch shows it, selected
+  await expect(page.locator('#palette .sw-custom.sel')).toHaveCSS('background-color', 'rgb(18, 52, 86)');
 });

@@ -180,3 +180,34 @@ test('Home has no Send to parent row', async ({ page }) => {
   await expect(page.locator('#ctxmenu')).toBeVisible();
   await expect(page.locator('#ctxmenu').getByRole('button', { name: /^Send (\d+ )?to (?!Back$)/ })).toHaveCount(0);
 });
+
+test('dragging cards onto a board card moves them into that board', async ({ page }) => {
+  const id = await freshCanvas(page);
+  const buick = await post(page, { canvasId: id, type: 'board', x: 500, y: 200, w: 152, data: { title: 'Buick' } });
+  const inner = buick.data.childCanvasId;
+  await post(page, { canvasId: inner, type: 'note', x: 100, y: 120, w: 240, data: { body: 'Already here' } });
+  const a = await post(page, { canvasId: id, type: 'note', x: 100, y: 200, data: { body: 'A' } });
+  const b = await post(page, { canvasId: id, type: 'note', x: 100, y: 320, data: { body: 'B' } });
+  await page.reload();
+  await page.locator(`[data-id="${a.id}"]`).click({ modifiers: ['Shift'] });
+  await page.locator(`[data-id="${b.id}"]`).click({ modifiers: ['Shift'] });
+  await expect(page.locator('.item.selected')).toHaveCount(2);
+
+  const from = await page.locator(`[data-id="${a.id}"]`).boundingBox();
+  const to = await page.locator(`[data-id="${buick.id}"]`).boundingBox();
+  await page.mouse.move(from.x + 20, from.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+  await expect(page.locator(`[data-id="${buick.id}"]`)).toHaveClass(/drop-target/);
+  const moved = page.waitForResponse(r => r.url().includes(`/api/item/${b.id}/move`));
+  await page.mouse.up();
+  await moved;
+  await expect(page.locator('.item.type-note')).toHaveCount(0);
+  await expect(page.locator(`[data-id="${buick.id}"] .bmeta`)).toHaveText('3 cards');
+
+  const got = await items(page, inner);
+  const na = got.find(i => i.id === a.id);
+  const nb = got.find(i => i.id === b.id);
+  expect([na.x, na.y]).toEqual([380, 120]); // right of what was there, layout kept
+  expect([nb.x - na.x, nb.y - na.y]).toEqual([0, 120]);
+});

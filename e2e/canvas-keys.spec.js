@@ -182,6 +182,7 @@ test('palette offers None only where it visibly clears the colour', async ({ pag
   await freshCanvas(page);
   await place(page, 'todo');
   await page.locator('.item.type-todo .card-tools .swatch').click();
-  await expect(page.locator('#palette .sw')).toHaveCount(12);
+  await expect(page.locator('#palette .sw:not(.sw-custom)')).toHaveCount(12);
+  await expect(page.locator('#palette .sw-custom')).toHaveCount(1);
   await expect(page.locator('#palette .sw-none')).toHaveCount(0);
 });
