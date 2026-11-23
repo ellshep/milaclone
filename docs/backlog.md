@@ -48,6 +48,9 @@ Nothing in progress: pick from Next.
 
 ## Closed
 
+- **Board names wrap** Board card names wrap and board cards resize; board and shortcut cards moved to `boardcard.js` (#113).
+- **Send to parent** Context menu "Send to ‹parent›" (multi-select) and dropping cards on a breadcrumb move them up a board (#114).
+- **Drop into board** Dragging cards onto a board card moves them into it (#115).
 - **DM2** `public/js/savequeue.js` is the one client save protocol (debounce, base, retry, adopt) for the canvas and Quick notes, unit-tested in Vitest.
 - **AU5** Copied to-do cards get fresh task ids; the boot repair makes ids unique across cards (#71).
 - **DM1** `tasklist.js` owns the task shape, blank rule, ids and the merge; the merge compares with defaults filled in.
