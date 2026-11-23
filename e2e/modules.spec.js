@@ -2,7 +2,7 @@
 
 // Behavioral coverage for module features the original ui.spec.js doesn't
 // exercise: clipboard.js (copy/cut/paste), menus.js (color palette), cards.js +
-// util.js (link normalization), drag.js (free move + resize), editing.js
+// util.js (link normalization), cards.js accent stripes, drag.js (free move + resize), editing.js
 // (keyboard rename), and viewport.js (pan).
 
 const { test, expect } = require('@playwright/test');
@@ -62,6 +62,32 @@ test('color palette recolors a note and the color survives reload', async ({ pag
 
   await page.goto('/#' + id);
   await expect(page.locator('.item.type-note .accent')).toHaveCount(1);
+});
+
+test('a coloured to-do, comment, column, table and document gets the accent stripe', async ({ page }) => {
+  const id = await freshCanvas(page);
+  const types = ['todo', 'comment', 'column', 'table', 'document'];
+  await page.evaluate(
+    ([canvasId, types]) =>
+      Promise.all(
+        types.flatMap((type, i) =>
+          [null, 'green'].map(color =>
+            fetch('/api/item', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ canvasId, type, color, x: i * 300, y: color ? 0 : 400, data: {} }),
+            })
+          )
+        )
+      ),
+    [id, types]
+  );
+  await page.reload();
+  for (const type of types) {
+    const cards = page.locator(`#world > .item.type-${type}`);
+    await expect(cards).toHaveCount(2);
+    await expect(cards.locator('> .accent')).toHaveCount(1); // only the coloured one
+  }
 });
 
 test('link card normalizes a bare host to an https open URL', async ({ page }) => {

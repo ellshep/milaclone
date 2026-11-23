@@ -130,6 +130,8 @@ function makeField(tag, cls, value, placeholder) {
   return f;
 }
 
+const ACCENTED = new Set(['note', 'todo', 'comment', 'column', 'table', 'document']);
+
 function renderItem(it) {
   const el = document.createElement('div');
   el.className = 'item type-' + it.type;
@@ -159,6 +161,13 @@ function renderItem(it) {
   else if (it.type === 'sketch') buildSketch(el, it);
   else if (it.type === 'shortcut') buildShortcut(el, it);
   else if (it.type === 'agent') buildAgent(el, it, { field: makeField, save: patch => saveData(it, patch) });
+
+  // A chosen colour shows as a stripe down the card's left edge.
+  if (it.color && ACCENTED.has(it.type)) {
+    const a = Object.assign(document.createElement('div'), { className: 'accent' });
+    a.style.background = colorVar(it.color);
+    el.appendChild(a);
+  }
 
   const chips = labelChips(it);
   if (chips) (el.querySelector('.col-head') || el).appendChild(chips);
@@ -218,12 +227,6 @@ function renderItem(it) {
 
 function buildNote(el, it) {
   el.classList.add('note');
-  if (it.color) {
-    const a = document.createElement('div');
-    a.className = 'accent';
-    a.style.background = colorVar(it.color);
-    el.appendChild(a);
-  }
   el.appendChild(richField('nbody', it, 'Write a note…'));
 }
 
