@@ -3,6 +3,24 @@
 const { test, expect } = require('@playwright/test');
 const { freshCanvas } = require('./helpers');
 
+// Taps the centre of an element once it's visible and holding still.
+// locator.tap() and click() wait for the element to keep its box across two
+// animation frames, and headless WebKit under CI load can render no frame for
+// 20 s or more while the page sits idle (AU26: requestAnimationFrame silent,
+// timers and the server fine), so those taps ran into the 30 s test timeout.
+// Here "holding still" is the same box twice 100 ms apart, which needs no
+// frame, and page.touchscreen.tap needs none either (as in the double-tap test).
+async function tap(locator) {
+  await expect(locator).toBeVisible();
+  let box = await locator.boundingBox();
+  for (let prev = null; JSON.stringify(box) !== JSON.stringify(prev);) {
+    prev = box;
+    await locator.page().waitForTimeout(100);
+    box = await locator.boundingBox();
+  }
+  await locator.page().touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+}
+
 // WebKit/Safari does not synthesize dblclick from touch double-taps, so board
 // open has to be driven by our own pointer double-tap detection.
 
@@ -80,26 +98,26 @@ test('board selection footer offers color icon rename and delete', async ({ page
   await page.goto('/#' + canvasId);
   const card = page.locator(`.item.type-board[data-id="${board.id}"]`);
   await expect(card).toBeVisible();
-  await card.locator('.tile').tap();
+  await tap(card.locator('.tile'));
 
   await expect(card.locator('.card-tools')).toHaveCount(0);
   await expect(page.locator('#mfBoard')).toBeVisible();
   await expect(page.locator('#mfNav')).toBeHidden();
 
-  await page.locator('#mfBoardRename').tap();
+  await tap(page.locator('#mfBoardRename'));
   await expect(page.locator('.item.type-board .btitle')).toBeFocused();
   await page.keyboard.type('Mobile');
-  await page.locator('#mfBoardDone').tap();
+  await tap(page.locator('#mfBoardDone'));
   await expect(page.locator('#mfNav')).toBeVisible();
   await expect(page.locator('.item.type-board .btitle')).toHaveValue('Mobile');
 
   // Wait out the board double-tap window so this re-select does not navigate in.
   await page.waitForTimeout(400);
-  await card.locator('.tile').tap();
+  await tap(card.locator('.tile'));
   await expect(page.locator('#mfBoard')).toBeVisible();
-  await page.locator('#mfBoardMore').tap();
+  await tap(page.locator('#mfBoardMore'));
   await expect(page.locator('#mBoardSheet')).toBeVisible();
-  await page.locator('#mBoardSheet [data-act="delete"]').tap();
+  await tap(page.locator('#mBoardSheet [data-act="delete"]'));
   await expect(page.locator('.item.type-board')).toHaveCount(0);
 });
 
@@ -133,14 +151,14 @@ test('Quick notes lifts the page touch lock while open, so its lists can scroll'
   expect(await touch('html')).toBe('none');
   expect(await touch('body')).toBe('none');
 
-  await page.click('#mNotes');
+  await tap(page.locator('#mNotes'));
   await expect(page.locator('#quicknotes')).toBeVisible();
   expect(await touch('html')).toBe('auto');
   expect(await touch('body')).toBe('auto');
   expect(await touch('.qn-home-scroll')).toBe('pan-y');
   expect(await page.locator('.qn-home-scroll').evaluate(el => getComputedStyle(el).overflowY)).toBe('auto');
 
-  await page.click('#qnBoards');
+  await tap(page.locator('#qnBoards'));
   await expect(page.locator('#quicknotes')).toBeHidden();
   expect(await touch('html')).toBe('none');
   expect(await touch('body')).toBe('none');

@@ -36,7 +36,6 @@ Nothing in progress: pick from Next.
 - **AU22** Trashed images stay cached on the phone after Trash is emptied; the service worker never evicts /uploads entries (`sw.js`). Fix: evict cached uploads not referenced by any live item, e.g. on the warm message.
 - **AU23** Cutting two connected cards together leaves their line behind with two free ends: clipboard.js sends one /move per card, so the first move frees the end before the second card follows (`clipboard.js:52`, `db.js` moveItemDeep). Fix: one /move with all ids and a shared inside set.
 - **AU24** A line trashed with one card comes back invisible if its other card was moved away before the restore (`db.js` restore). Fix: run the same free-the-end step on restore.
-- **AU26** The mobile-webkit test "board selection footer offers color icon rename and delete" (`e2e/mobile-board.spec.js:68`) times out or hits "Page closed" under full-suite load, and blocked CI on #83, #89, #94 and #98 until re-run. Fix: find what it waits on under load (tap targets, footer animation) and make it deterministic; never skip it.
 - **U1.1, U1.4, U1.5** Milanote migration: backup and inventory, staged import, reconciliation report. Specs in `docs/next-updates.md`.
 
 ## Needs a decision
